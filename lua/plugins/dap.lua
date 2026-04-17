@@ -13,15 +13,15 @@ return {
             dap.adapters.cppdbg = {
                 id = 'cppdbg',
                 type = 'executable',
-                command =
-                '/home/zkrallah/.local/share/nvim/mason/packages/cpptools/extension/debugAdapters/bin/OpenDebugAD7',
+                command = vim.fn.stdpath("data") ..
+                "/mason/packages/cpptools/extension/debugAdapters/bin/OpenDebugAD7",
             }
 
             dap.adapters.codelldb = {
                 type = 'server',
                 port = "${port}",
                 executable = {
-                    command = '/home/zkrallah/.local/share/nvim/mason/bin/codelldb', -- Path to lldb-vscode
+                    command = vim.fn.stdpath("data") .. "/mason/bin/codelldb",
                     args = { "--port", "${port}" },
                 },
                 name = "lldb"
@@ -56,7 +56,7 @@ return {
                     request = 'launch',
                     MIMode = 'gdb',
                     miDebuggerServerAddress = 'localhost:1234',
-                    miDebuggerPath = '/usr/bin/gdb',
+                    miDebuggerPath = vim.fn.exepath("gdb"),
                     cwd = '${workspaceFolder}',
                     program = function()
                         return vim.fn.input('Path to executable: ', vim.fn.getcwd() .. '/', 'file')
