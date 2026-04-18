@@ -7,6 +7,8 @@ return {
         flavour = "mocha",
         transparent_background = false,
         term_colors = true,
+        default_integrations = false,
+        auto_integrations = true,
         lsp_styles = {
             virtual_text = {
                 errors = { "italic" },
@@ -25,16 +27,6 @@ return {
             inlay_hints = {
                 background = true,
             },
-        },
-        integrations = {
-            cmp = true,
-            dap = true,
-            dap_ui = true,
-            gitsigns = true,
-            mason = true,
-            neotree = true,
-            telescope = { enabled = true },
-            which_key = true,
         },
     },
     config = function(_, opts)
