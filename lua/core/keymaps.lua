@@ -59,19 +59,9 @@ map("n", "<C-Up>", "<C-w>+", "Window: taller")
 map("n", "<C-Down>", "<C-w>-", "Window: shorter")
 
 
--- NeoTree — <leader>e*
-map("n", "<leader>e", "<CMD>Neotree toggle<CR>", "NeoTree: toggle")
-map("n", "<leader>E", "<CMD>Neotree focus<CR>", "NeoTree: focus")
-map("n", "<leader>eh", function()
-    local state = require("neo-tree.sources.manager").get_state("filesystem")
-    if state then
-        local filters = state.filtered_items
-        filters.visible = not filters.visible
-        filters.hide_dotfiles = not filters.hide_dotfiles
-        filters.hide_gitignored = not filters.hide_gitignored
-        require("neo-tree.sources.filesystem")._navigate_internal(state, nil, nil)
-    end
-end, "NeoTree: toggle hidden files")
+-- Explorer (snacks) — <leader>e
+map("n", "<leader>e", function() Snacks.explorer() end, "Explorer: toggle")
+-- Inside the explorer window, `H` toggles hidden/ignored files (snacks default).
 
 
 -- Picker (snacks) — <leader>f* (find)
@@ -88,7 +78,7 @@ map("n", "<leader>fc", picker("colorschemes"), "Find: colorscheme")
 
 
 -- Git — <leader>g*
-map("n", "<leader>ge", "<CMD>Neotree toggle git_status<CR>", "Git: NeoTree status view")
+map("n", "<leader>ge", picker("git_status"), "Git: status")
 map("n", "<leader>gf", picker("git_files"), "Git: files")
 map("n", "<leader>gb", picker("git_branches"), "Git: branches")
 map("n", "<leader>gs", picker("git_status"), "Git: status")

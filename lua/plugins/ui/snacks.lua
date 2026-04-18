@@ -19,6 +19,7 @@ return {
         gitbrowse = { enabled = true },
         input = { enabled = true },
         picker = { enabled = true, ui_select = true },
+        explorer = { enabled = true },
         dashboard = {
             enabled = true,
             preset = {
