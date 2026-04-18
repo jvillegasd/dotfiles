@@ -8,28 +8,6 @@ return {
             "MunifTanjim/nui.nvim",
         },
         config = function()
-            -- Set keymap for toggling Neo-tree with <leader>e
-            vim.keymap.set('n', '<leader>e', ':Neotree toggle<CR>', { silent = true, noremap = true })
-            -- Set keymap for toggling Git status with <leader>ge
-            vim.keymap.set('n', '<leader>ge', ':Neotree toggle git_status<CR>', { silent = true, noremap = true })
-
-            -- Function to toggle hidden & git-ignored files
-            local function toggle_hidden()
-                local state = require("neo-tree.sources.manager").get_state("filesystem")
-                if state then
-                    local filters = state.filtered_items
-                    filters.visible = not filters.visible
-                    filters.hide_dotfiles = not filters.hide_dotfiles
-                    filters.hide_gitignored = not filters.hide_gitignored
-                    require("neo-tree.sources.filesystem")._navigate_internal(state, nil, nil)
-                end
-            end
-
-            -- Keymap to toggle hidden and git-ignored files
-            vim.keymap.set('n', '<leader>th', toggle_hidden,
-                { noremap = true, silent = true, desc = "Toggle Hidden Files" })
-
-            -- Optionally configure Neo-tree here
             require("neo-tree").setup({
                 -- Use custom icons for different components
                 default_component_configs = {

@@ -63,13 +63,6 @@ return {
                     end,
                 },
             }
-
-            -- Example keymaps
-            vim.keymap.set("n", "<F5>", dap.continue, { noremap = true, silent = true })
-            vim.keymap.set("n", "<F8>", dap.step_over, { noremap = true, silent = true })
-            vim.keymap.set("n", "<F7>", dap.step_into, { noremap = true, silent = true })
-            vim.keymap.set("n", "<F9>", dap.step_out, { noremap = true, silent = true })
-            vim.keymap.set("n", "<Leader>b", dap.toggle_breakpoint, { noremap = true, silent = true })
         end
     },
 
