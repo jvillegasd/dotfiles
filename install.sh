@@ -24,6 +24,7 @@ BREW_FORMULAE=(
     python@3.11
     node
     tree-sitter
+    tree-sitter-cli
 )
 
 BREW_CASKS=(
