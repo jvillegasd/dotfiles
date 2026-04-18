@@ -110,6 +110,8 @@ All plugin files contain **setup only** — no keymaps. Every mapping lives in
 | [toggleterm.nvim](https://github.com/akinsho/toggleterm.nvim) | Floating terminal |
 | [neo-tree.nvim](https://github.com/nvim-neo-tree/neo-tree.nvim) | File explorer |
 | [which-key.nvim](https://github.com/folke/which-key.nvim) | Leader-prefix popup |
+| [gitsigns.nvim](https://github.com/lewis6991/gitsigns.nvim) | Git gutter signs, hunk staging, blame |
+| [catppuccin/nvim](https://github.com/catppuccin/nvim) | Colorscheme (mocha flavour) |
 
 Languages pre-configured for LSP: Lua (`lua_ls`), Python (`pyright`),
 TypeScript (`ts_ls`). Debuggers: C++ (`cppdbg`, `codelldb`), Python (`debugpy`).
@@ -194,6 +196,21 @@ Use `<leader>fk` for a fuzzy-searchable Telescope view of every mapping.
 | `<leader>gb` | Git branches |
 | `<leader>gs` | Git status |
 | `<leader>gc` | Git commits |
+
+### Git hunks (gitsigns) — `<leader>gh*` + `[h` / `]h`
+
+| Key | Mode | Action |
+|---|---|---|
+| `]h` / `[h` | n | Next / previous hunk |
+| `<leader>ghs` | n, v | Stage hunk (or selection) |
+| `<leader>ghr` | n, v | Reset hunk (or selection) |
+| `<leader>ghS` | n | Stage buffer |
+| `<leader>ghR` | n | Reset buffer |
+| `<leader>ghu` | n | Undo stage |
+| `<leader>ghp` | n | Preview hunk |
+| `<leader>ghd` | n | Diff this buffer |
+| `<leader>ghb` | n | Blame line (full popup) |
+| `<leader>ght` | n | Toggle inline line-blame |
 
 ### LSP — `gN` / `K` / `<leader>l*`
 

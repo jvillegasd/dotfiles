@@ -95,6 +95,30 @@ map("n", "<leader>gs", telescope("git_status"), "Git: status")
 map("n", "<leader>gc", telescope("git_commits"), "Git: commits")
 
 
+-- Git hunks (gitsigns) — <leader>gh* + [h / ]h
+local gs = function(fn, ...)
+    local args = { ... }
+    return function() require("gitsigns")[fn](unpack(args)) end
+end
+map("n", "]h", gs("nav_hunk", "next"), "Hunk: next")
+map("n", "[h", gs("nav_hunk", "prev"), "Hunk: previous")
+map("n", "<leader>ghs", gs("stage_hunk"), "Hunk: stage")
+map("n", "<leader>ghr", gs("reset_hunk"), "Hunk: reset")
+map("v", "<leader>ghs", function()
+    require("gitsigns").stage_hunk({ vim.fn.line("."), vim.fn.line("v") })
+end, "Hunk: stage selection")
+map("v", "<leader>ghr", function()
+    require("gitsigns").reset_hunk({ vim.fn.line("."), vim.fn.line("v") })
+end, "Hunk: reset selection")
+map("n", "<leader>ghS", gs("stage_buffer"), "Hunk: stage buffer")
+map("n", "<leader>ghR", gs("reset_buffer"), "Hunk: reset buffer")
+map("n", "<leader>ghu", gs("undo_stage_hunk"), "Hunk: undo stage")
+map("n", "<leader>ghp", gs("preview_hunk"), "Hunk: preview")
+map("n", "<leader>ghd", gs("diffthis"), "Hunk: diff this")
+map("n", "<leader>ghb", function() require("gitsigns").blame_line({ full = true }) end, "Hunk: blame line")
+map("n", "<leader>ght", gs("toggle_current_line_blame"), "Hunk: toggle line blame")
+
+
 -- LSP — gN / K / <leader>l*
 map("n", "gd", vim.lsp.buf.definition, "LSP: go to definition")
 map("n", "gD", vim.lsp.buf.declaration, "LSP: go to declaration")

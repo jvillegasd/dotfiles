@@ -12,6 +12,7 @@ return {
             { "<leader>b", group = "buffer" },
             { "<leader>f", group = "find" },
             { "<leader>g", group = "git" },
+            { "<leader>gh", group = "hunks" },
             { "<leader>l", group = "lsp" },
             { "<leader>d", group = "dap" },
             { "<leader>t", group = "terminal" },
