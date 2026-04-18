@@ -22,7 +22,10 @@ map("n", "<leader>h", "<CMD>nohlsearch<CR>", "Clear search highlight")
 -- Buffers — <leader>b* + [b / ]b
 map("n", "]b", "<CMD>bnext<CR>", "Buffer: next")
 map("n", "[b", "<CMD>bprevious<CR>", "Buffer: previous")
-map("n", "<leader>bd", "<CMD>bdelete<CR>", "Buffer: delete")
+map("n", "<leader>bd", function() Snacks.bufdelete() end, "Buffer: delete (keep window)")
+map("n", "<leader>bo", function() Snacks.bufdelete.other() end, "Buffer: delete others")
+map("n", "<leader>ba", function() Snacks.bufdelete.all() end, "Buffer: delete all")
+map("n", "<leader>z", function() Snacks.zen() end, "Zen mode")
 
 
 -- Editing ergonomics
