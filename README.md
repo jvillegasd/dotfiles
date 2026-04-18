@@ -114,6 +114,12 @@ All plugin files contain **setup only** — no keymaps. Every mapping lives in
 | [catppuccin/nvim](https://github.com/catppuccin/nvim) | Colorscheme (mocha flavour) |
 | [lualine.nvim](https://github.com/nvim-lualine/lualine.nvim) | Bottom statusline (mode, branch, diagnostics, LSP, position) |
 | [dropbar.nvim](https://github.com/Bekaboo/dropbar.nvim) | Top winbar breadcrumbs (file > scope > symbol) |
+| [bufferline.nvim](https://github.com/akinsho/bufferline.nvim) | Top buffer tabs with catppuccin styling |
+| [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons) | Filetype icons (shared dependency) |
+| [nvim-colorizer.lua](https://github.com/catgoose/nvim-colorizer.lua) | Inline color swatches for hex / rgb / hsl literals |
+| [dressing.nvim](https://github.com/stevearc/dressing.nvim) | Prettier `vim.ui.input` / `vim.ui.select` (routes select to Telescope) |
+| [snacks.nvim](https://github.com/folke/snacks.nvim) | Utility suite: bigfile perf, notifier, indent guides, scope, word highlight, statuscolumn |
+| [fidget.nvim](https://github.com/j-hui/fidget.nvim) | LSP progress spinner in bottom-right |
 
 Languages pre-configured for LSP: Lua (`lua_ls`), Python (`pyright`),
 TypeScript (`ts_ls`). Debuggers: C++ (`cppdbg`, `codelldb`), Python (`debugpy`).
