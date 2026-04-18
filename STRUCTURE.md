@@ -26,17 +26,14 @@ lua/
     │   ├── lualine.lua           # Statusline
     │   ├── bufferline.lua        # Top buffer tabs
     │   ├── dropbar.lua           # Winbar breadcrumbs
-    │   ├── snacks.lua            # Notifier / indent / scope / words / statuscolumn
+    │   ├── snacks.lua            # Picker + explorer + terminal + dashboard + notifier + lazygit + gitbrowse + rename + bufdelete + scroll + toggle + words + scope + indent + statuscolumn + bigfile + input + git
     │   ├── fidget.lua            # LSP progress spinner
-    │   ├── dressing.lua          # Prettier vim.ui.input / select
     │   ├── nvim-colorizer.lua    # Inline #RRGGBB swatches
     │   ├── render-markdown.lua   # In-buffer markdown rendering
     │   └── web-devicons.lua      # Filetype icons
     │
     ├── editor/                 # Editing surface & navigation
     │   ├── treesitter.lua        # Parser management + highlight/fold/indent autocmds
-    │   ├── telescope.lua         # Fuzzy finder
-    │   ├── neotree.lua           # File explorer
     │   ├── which-key.lua         # Leader-prefix popup
     │   ├── luasnip.lua           # Snippet engine + custom C++ snippets
     │   └── autopairs.lua         # Auto-close brackets; cmp hook for ()
@@ -50,7 +47,6 @@ lua/
     │   └── gitsigns.lua          # Gutter signs + hunk staging + blame
     │
     └── tools/                  # Development tools
-        ├── toggleterm.lua        # Floating terminal (F7)
         └── dap.lua               # Debug adapter + dap-ui + mason-nvim-dap
 ```
 
@@ -61,7 +57,7 @@ lua/
 1. `require("core.icons")` — exposes a global `icons` table before any plugin references it.
 2. `require("core.options")` — `vim.opt.*` settings. Safe to require before lazy because it doesn't touch any plugin.
 3. `require("plugins")` — bootstraps lazy.nvim, sets `mapleader`, and imports each category in `lua/plugins/<category>/`.
-4. `require("core.keymaps")` — keymaps last, so plugin commands like `:Telescope`, `:Neotree`, `:ToggleTerm` are already registered.
+4. `require("core.keymaps")` — keymaps last, so plugin commands like `Snacks.picker.*`, `Snacks.explorer`, `Snacks.terminal` are already registered.
 
 ## Adding a plugin
 
@@ -80,7 +76,7 @@ Keymaps go in `lua/core/keymaps.lua`, not inside the plugin file.
 
 ## Catppuccin integration
 
-Catppuccin ships per-plugin integration modules in its own source tree. With `auto_integrations = true` in `plugins/ui/catppuccin.lua`, it detects installed plugins from lazy's spec and enables the matching highlight groups automatically. Currently auto-enabled: `cmp, dap, dap_ui, dropbar, fidget, gitsigns, mason, neotree, snacks, telescope, which_key`.
+Catppuccin ships per-plugin integration modules in its own source tree. With `auto_integrations = true` in `plugins/ui/catppuccin.lua`, it detects installed plugins from lazy's spec and enables the matching highlight groups automatically. Currently auto-enabled: `cmp, dap, dap_ui, dropbar, fidget, gitsigns, mason, snacks, which_key` (telescope/neo-tree removed now that snacks subsumes them).
 
 Lualine is themed differently — it uses catppuccin's `lua/lualine/themes/catppuccin-mocha.lua` preset directly via `theme = "catppuccin-mocha"` in `plugins/ui/lualine.lua`, not via `integrations`.
 

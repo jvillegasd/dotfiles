@@ -79,16 +79,7 @@ lua/
 │   ├── icons.lua         # diagnostic/kind icons (global `icons` table)
 │   ├── lazy.lua          # lazy.nvim bootstrap + plugin import
 │   └── maps.lua          # single source of truth for all keymaps
-└── plugins/
-    ├── dap.lua           # debug adapter + dap-ui + mason-nvim-dap
-    ├── lsp.lua           # nvim-lspconfig + nvim-cmp + cmp sources
-    ├── luasnip.lua       # snippet engine + custom C++ problem-solving snippets
-    ├── mason.lua         # mason.nvim + mason-lspconfig (lua_ls, pyright, ts_ls)
-    ├── neotree.lua       # file explorer
-    ├── telescope.lua     # fuzzy finder
-    ├── toggleterm.lua    # floating terminal (F7)
-    ├── treesitter.lua    # syntax parsing for lua/js/py/bash/java/c/markdown
-    └── which-key.lua     # leader-prefix popup + group labels
+See **STRUCTURE.md** for the full categorized layout. High level: `plugins/ui/` for appearance (catppuccin, lualine, bufferline, snacks, fidget, …), `plugins/editor/` for editing surface (treesitter, autopairs, which-key, luasnip), `plugins/lsp/` for LSP + completion, `plugins/git/` (gitsigns), `plugins/tools/` (dap).
 ```
 
 All plugin files contain **setup only** — no keymaps. Every mapping lives in
@@ -99,16 +90,12 @@ All plugin files contain **setup only** — no keymaps. Every mapping lives in
 | Plugin | Purpose |
 |---|---|
 | [lazy.nvim](https://github.com/folke/lazy.nvim) | Plugin manager |
-| [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) | Fuzzy finder |
-| [telescope-ui-select.nvim](https://github.com/nvim-telescope/telescope-ui-select.nvim) | Dropdown replacement for `vim.ui.select` |
 | [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig) | LSP client configs |
 | [nvim-cmp](https://github.com/hrsh7th/nvim-cmp) + sources | Autocompletion |
 | [mason.nvim](https://github.com/williamboman/mason.nvim) + [mason-lspconfig](https://github.com/williamboman/mason-lspconfig.nvim) | LSP/DAP/formatter installer |
 | [LuaSnip](https://github.com/L3MON4D3/LuaSnip) + [friendly-snippets](https://github.com/rafamadriz/friendly-snippets) | Snippet engine |
 | [nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter) | Syntax highlighting / parsing |
 | [nvim-dap](https://github.com/mfussenegger/nvim-dap) + [nvim-dap-ui](https://github.com/rcarriga/nvim-dap-ui) + [mason-nvim-dap](https://github.com/jay-babu/mason-nvim-dap.nvim) | Debugger |
-| [toggleterm.nvim](https://github.com/akinsho/toggleterm.nvim) | Floating terminal |
-| [neo-tree.nvim](https://github.com/nvim-neo-tree/neo-tree.nvim) | File explorer |
 | [which-key.nvim](https://github.com/folke/which-key.nvim) | Leader-prefix popup |
 | [gitsigns.nvim](https://github.com/lewis6991/gitsigns.nvim) | Git gutter signs, hunk staging, blame |
 | [catppuccin/nvim](https://github.com/catppuccin/nvim) | Colorscheme (mocha flavour) |
@@ -117,8 +104,7 @@ All plugin files contain **setup only** — no keymaps. Every mapping lives in
 | [bufferline.nvim](https://github.com/akinsho/bufferline.nvim) | Top buffer tabs with catppuccin styling |
 | [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons) | Filetype icons (shared dependency) |
 | [nvim-colorizer.lua](https://github.com/catgoose/nvim-colorizer.lua) | Inline color swatches for hex / rgb / hsl literals |
-| [dressing.nvim](https://github.com/stevearc/dressing.nvim) | Prettier `vim.ui.input` / `vim.ui.select` (routes select to Telescope) |
-| [snacks.nvim](https://github.com/folke/snacks.nvim) | Utility suite: bigfile perf, notifier, indent guides, scope, word highlight, statuscolumn |
+| [snacks.nvim](https://github.com/folke/snacks.nvim) | Core utility suite — replaces telescope, neo-tree, toggleterm, dressing, and provides: picker, explorer, terminal, dashboard, notifier, lazygit, gitbrowse, rename, bufdelete, scroll, toggle, words, scope, indent, statuscolumn, bigfile, input, git |
 | [fidget.nvim](https://github.com/j-hui/fidget.nvim) | LSP progress spinner in bottom-right |
 | [nvim-autopairs](https://github.com/windwp/nvim-autopairs) | Auto-close brackets / quotes; inserts `()` on function-name completion |
 | [render-markdown.nvim](https://github.com/MeanderingProgrammer/render-markdown.nvim) | In-buffer markdown rendering (headings, bullets, checkboxes, code fences, tables) |
@@ -129,7 +115,7 @@ TypeScript (`ts_ls`). Debuggers: C++ (`cppdbg`, `codelldb`), Python (`debugpy`).
 ## Keymap reference
 
 Leader is **Space**. Press `<leader>` and wait ~0.4s to see the which-key popup.
-Use `<leader>fk` for a fuzzy-searchable Telescope view of every mapping.
+Use `<leader>fk` for a fuzzy-searchable snacks.picker view of every mapping.
 
 ### Core
 
@@ -144,7 +130,9 @@ Use `<leader>fk` for a fuzzy-searchable Telescope view of every mapping.
 | Key | Action |
 |---|---|
 | `]b` / `[b` | Next / previous buffer |
-| `<leader>bd` | Delete buffer |
+| `<leader>bd` | Delete current buffer (keep window split) |
+| `<leader>bo` | Delete all other buffers |
+| `<leader>ba` | Delete all buffers |
 
 ### Splits — `<leader>s*`
 
@@ -174,24 +162,24 @@ Use `<leader>fk` for a fuzzy-searchable Telescope view of every mapping.
 | `<` / `>` | v | Indent and keep the selection |
 | `<A-j>` / `<A-k>` | n, v | Move line / block down / up |
 
-### File explorer (NeoTree) — `<leader>e*`
+### File explorer (snacks.explorer) — `<leader>e`
 
 | Key | Action |
 |---|---|
-| `<leader>e` | Toggle |
-| `<leader>E` | Focus |
-| `<leader>eh` | Toggle hidden / gitignored files |
+| `<leader>e` | Toggle the explorer pane |
 
-### Find (Telescope) — `<leader>f*`
+Inside the explorer the snacks defaults apply: `l`/`<CR>` open, `h` collapse, `a` add, `r` rename (LSP-aware via `snacks.rename`), `d` delete, `y`/`p` yank/paste, `H` toggle hidden, `I` toggle gitignored, `]g`/`[g` jump to git changes, `]d`/`[d` jump to diagnostics.
+
+### Find (snacks.picker) — `<leader>f*`
 
 | Key | Action |
 |---|---|
-| `<leader>ff` | Find files |
+| `<leader>ff` | Files |
 | `<leader>fg` | Live grep |
 | `<leader>fw` | Grep word under cursor |
 | `<leader>fb` | Buffers |
 | `<leader>fh` | Help tags |
-| `<leader>fr` | Recent files (oldfiles) |
+| `<leader>fr` | Recent files |
 | `<leader>fk` | Keymaps (this config!) |
 | `<leader>fd` | Workspace diagnostics |
 | `<leader>fp` | Resume last picker |
@@ -201,11 +189,13 @@ Use `<leader>fk` for a fuzzy-searchable Telescope view of every mapping.
 
 | Key | Action |
 |---|---|
-| `<leader>ge` | NeoTree git status view |
+| `<leader>ge` | Git status picker (alias for `<leader>gs`) |
 | `<leader>gf` | Git files |
 | `<leader>gb` | Git branches |
 | `<leader>gs` | Git status |
-| `<leader>gc` | Git commits |
+| `<leader>gc` | Git log |
+| `<leader>gl` | Lazygit (floating, themed) |
+| `<leader>gB` | Open current file on remote (GitHub/GitLab) in browser |
 
 ### Git hunks (gitsigns) — `<leader>gh*` + `[h` / `]h`
 
@@ -254,14 +244,14 @@ Use `<leader>fk` for a fuzzy-searchable Telescope view of every mapping.
 | `<leader>du` | Toggle DAP UI |
 | `<leader>dt` | Terminate |
 
-### Terminal — `<F7>` + `<leader>t*`
+### Terminal (snacks.terminal) — `<F7>` + `<leader>t*`
 
 | Key | Mode | Action |
 |---|---|---|
-| `<F7>` | n | Toggle floating terminal (toggleterm `open_mapping`) |
+| `<F7>` | n | Toggle floating terminal |
 | `<leader>tf` | n | Float terminal |
-| `<leader>th` | n | Horizontal terminal |
-| `<leader>tv` | n | Vertical terminal |
+| `<leader>th` | n | Bottom terminal (horizontal split) |
+| `<leader>tv` | n | Right terminal (vertical split) |
 | `<Esc><Esc>` | t | Exit terminal mode to normal mode |
 
 ### Snippets (LuaSnip) — insert / select mode
@@ -333,7 +323,7 @@ Both the `flavour` field and the `vim.cmd.colorscheme(...)` call must match.
 
 ### Pick from a fuzzy picker
 
-`<leader>fc` opens Telescope's colorscheme picker with live preview — good for
+`<leader>fc` opens snacks.picker's colorscheme picker with live preview — good for
 auditioning other schemes without editing files.
 
 ## Sanity checks
