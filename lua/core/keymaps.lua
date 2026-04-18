@@ -4,8 +4,8 @@ local function map(mode, lhs, rhs, desc)
     vim.keymap.set(mode, lhs, rhs, { silent = true, noremap = true, desc = desc })
 end
 
-local function telescope(name)
-    return function() require("telescope.builtin")[name]() end
+local function picker(name, opts)
+    return function() Snacks.picker[name](opts) end
 end
 
 local function dap_call(fn)
@@ -74,27 +74,25 @@ map("n", "<leader>eh", function()
 end, "NeoTree: toggle hidden files")
 
 
--- Telescope — <leader>f* (find)
-map("n", "<leader>ff", telescope("find_files"), "Telescope: find files")
-map("n", "<leader>fg", telescope("live_grep"), "Telescope: live grep")
-map("n", "<leader>fb", telescope("buffers"), "Telescope: buffers")
-map("n", "<leader>fh", telescope("help_tags"), "Telescope: help tags")
-map("n", "<leader>fr", telescope("oldfiles"), "Telescope: recent files")
-map("n", "<leader>fk", telescope("keymaps"), "Telescope: keymaps")
-map("n", "<leader>fd", telescope("diagnostics"), "Telescope: diagnostics")
-map("n", "<leader>fw", telescope("grep_string"), "Telescope: word under cursor")
-map("n", "<leader>fp", telescope("resume"), "Telescope: resume last picker")
-map("n", "<leader>fc", function()
-    require("telescope.builtin").colorscheme({ enable_preview = true })
-end, "Telescope: colorscheme")
+-- Picker (snacks) — <leader>f* (find)
+map("n", "<leader>ff", picker("files"), "Find: files")
+map("n", "<leader>fg", picker("grep"), "Find: live grep")
+map("n", "<leader>fb", picker("buffers"), "Find: buffers")
+map("n", "<leader>fh", picker("help"), "Find: help tags")
+map("n", "<leader>fr", picker("recent"), "Find: recent files")
+map("n", "<leader>fk", picker("keymaps"), "Find: keymaps")
+map("n", "<leader>fd", picker("diagnostics"), "Find: diagnostics")
+map("n", "<leader>fw", picker("grep_word"), "Find: word under cursor")
+map("n", "<leader>fp", picker("resume"), "Find: resume last picker")
+map("n", "<leader>fc", picker("colorschemes"), "Find: colorscheme")
 
 
 -- Git — <leader>g*
 map("n", "<leader>ge", "<CMD>Neotree toggle git_status<CR>", "Git: NeoTree status view")
-map("n", "<leader>gf", telescope("git_files"), "Git: files")
-map("n", "<leader>gb", telescope("git_branches"), "Git: branches")
-map("n", "<leader>gs", telescope("git_status"), "Git: status")
-map("n", "<leader>gc", telescope("git_commits"), "Git: commits")
+map("n", "<leader>gf", picker("git_files"), "Git: files")
+map("n", "<leader>gb", picker("git_branches"), "Git: branches")
+map("n", "<leader>gs", picker("git_status"), "Git: status")
+map("n", "<leader>gc", picker("git_log"), "Git: commits")
 map("n", "<leader>gl", function() Snacks.lazygit() end, "Git: lazygit")
 map("n", "<leader>gB", function() Snacks.gitbrowse() end, "Git: open in browser")
 

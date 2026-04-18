@@ -18,7 +18,7 @@ return {
         git = { enabled = true },
         gitbrowse = { enabled = true },
         input = { enabled = true },
-        picker = { enabled = false },
+        picker = { enabled = true, ui_select = true },
         dashboard = {
             enabled = true,
             preset = {
