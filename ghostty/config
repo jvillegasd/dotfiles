@@ -1,0 +1,17 @@
+# Ghostty config — kept beside the nvim config in this dotfiles repo.
+
+font-family = JetBrainsMono Nerd Font
+font-size = 14
+
+# Follows macOS appearance: Mocha when dark, Latte when light.
+theme = dark:Catppuccin Mocha,light:Catppuccin Latte
+
+window-padding-x = 10
+window-padding-y = 10
+window-padding-balance = true
+
+macos-option-as-alt = true
+
+cursor-style = block
+shell-integration = detect
+copy-on-select = clipboard

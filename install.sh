@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
-# Neovim auto-install for macOS.
-# Installs Homebrew dependencies, a Nerd Font, links this config to ~/.config/nvim,
-# and bootstraps plugins/LSPs headlessly so the first `nvim` launch is instant.
+# macOS dotfiles installer — Neovim + Ghostty.
+# Installs Homebrew dependencies, symlinks the configs under this repo into
+# ~/.config/{nvim,ghostty}, and bootstraps plugins/LSPs headlessly so the
+# first `nvim` launch is instant.
 #
-# Safe to re-run: brew installs are idempotent, existing configs get backed up.
+# Safe to re-run: brew installs are idempotent, existing real configs get
+# backed up, and matching symlinks are left alone.
 
 set -euo pipefail
 
-# If you later push this repo to a remote, set REPO_URL so the script can clone
-# itself onto a fresh Mac. Leave empty to require running in-place.
+# If set, install.sh will clone the repo into $DOTFILES_DIR when run outside
+# of it (e.g. on a fresh Mac). Leave empty to require running from inside
+# an existing checkout.
 REPO_URL=""
 
+DOTFILES_DIR="${HOME}/Desktop/projects/dotfiles"
 NVIM_CONFIG_DIR="${HOME}/.config/nvim"
+GHOSTTY_CONFIG_DIR="${HOME}/.config/ghostty"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 BREW_FORMULAE=(
@@ -31,6 +36,7 @@ BREW_FORMULAE=(
 
 BREW_CASKS=(
     font-jetbrains-mono-nerd-font
+    ghostty
 )
 
 MASON_PACKAGES=(
@@ -62,7 +68,6 @@ ensure_brew() {
     if ! command -v brew >/dev/null 2>&1; then
         log "Homebrew not found. Installing..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        # Add brew to PATH for the rest of this script on Apple Silicon.
         if [[ -x /opt/homebrew/bin/brew ]]; then
             eval "$(/opt/homebrew/bin/brew shellenv)"
         elif [[ -x /usr/local/bin/brew ]]; then
@@ -81,27 +86,50 @@ install_casks() {
     brew install --cask "${BREW_CASKS[@]}"
 }
 
-place_config() {
-    if [[ "$SCRIPT_DIR" == "$NVIM_CONFIG_DIR" ]]; then
-        log "Running in-place from $NVIM_CONFIG_DIR — no config copy needed."
+ensure_repo() {
+    if [[ -d "$SCRIPT_DIR/nvim" && -d "$SCRIPT_DIR/ghostty" ]]; then
         return
     fi
 
-    if [[ -e "$NVIM_CONFIG_DIR" && ! -L "$NVIM_CONFIG_DIR" ]]; then
-        local backup="${NVIM_CONFIG_DIR}.backup.$(date +%Y%m%d-%H%M%S)"
-        log "Backing up existing $NVIM_CONFIG_DIR to $backup"
-        mv "$NVIM_CONFIG_DIR" "$backup"
+    [[ -n "$REPO_URL" ]] || die "install.sh must be run from inside the dotfiles repo, or REPO_URL must be set."
+
+    if [[ -e "$DOTFILES_DIR" ]]; then
+        die "$DOTFILES_DIR already exists — move it aside before bootstrapping."
     fi
 
-    mkdir -p "$(dirname "$NVIM_CONFIG_DIR")"
+    log "Cloning $REPO_URL into $DOTFILES_DIR"
+    mkdir -p "$(dirname "$DOTFILES_DIR")"
+    git clone "$REPO_URL" "$DOTFILES_DIR"
+    SCRIPT_DIR="$DOTFILES_DIR"
+}
 
-    if [[ -n "$REPO_URL" ]]; then
-        log "Cloning $REPO_URL into $NVIM_CONFIG_DIR"
-        git clone "$REPO_URL" "$NVIM_CONFIG_DIR"
-    else
-        log "Linking $SCRIPT_DIR -> $NVIM_CONFIG_DIR"
-        ln -s "$SCRIPT_DIR" "$NVIM_CONFIG_DIR"
+link_config() {
+    local src="$1" dest="$2"
+    [[ -d "$src" ]] || die "Missing config source: $src"
+
+    if [[ -L "$dest" ]]; then
+        local current
+        current="$(readlink "$dest")"
+        if [[ "$current" == "$src" ]]; then
+            log "Symlink already in place: $dest -> $src"
+            return
+        fi
+        log "Replacing existing symlink: $dest (was -> $current)"
+        rm "$dest"
+    elif [[ -e "$dest" ]]; then
+        local backup="${dest}.backup.$(date +%Y%m%d-%H%M%S)"
+        log "Backing up existing $dest to $backup"
+        mv "$dest" "$backup"
     fi
+
+    mkdir -p "$(dirname "$dest")"
+    log "Linking $src -> $dest"
+    ln -s "$src" "$dest"
+}
+
+place_configs() {
+    link_config "$SCRIPT_DIR/nvim"    "$NVIM_CONFIG_DIR"
+    link_config "$SCRIPT_DIR/ghostty" "$GHOSTTY_CONFIG_DIR"
 }
 
 bootstrap_nvim() {
@@ -118,10 +146,14 @@ bootstrap_nvim() {
 summary() {
     cat <<EOF
 
-$(printf '\033[1;32m✓ Neovim setup complete.\033[0m')
+$(printf '\033[1;32m✓ Dotfiles setup complete.\033[0m')
+
+Configs linked:
+  $NVIM_CONFIG_DIR     -> $SCRIPT_DIR/nvim
+  $GHOSTTY_CONFIG_DIR  -> $SCRIPT_DIR/ghostty
 
 Next steps:
-  1. Set your terminal font to "JetBrains Mono Nerd Font" (Ghostty/iTerm2/Alacritty/etc).
+  1. Open Ghostty — JetBrainsMono Nerd Font + Catppuccin theme (Mocha/Latte, follows macOS appearance) are wired in via $GHOSTTY_CONFIG_DIR/config.
   2. Launch: nvim
   3. Sanity: :checkhealth   ·   :Lazy   ·   :Mason
 
@@ -138,7 +170,8 @@ main() {
     ensure_brew
     install_formulae
     install_casks
-    place_config
+    ensure_repo
+    place_configs
     bootstrap_nvim
     summary
 }
