@@ -1,7 +1,9 @@
-# nvim-config
+# dotfiles
 
-Personal Neovim configuration targeted at macOS. Built around `lazy.nvim` with a
-grouped, mnemonic `<leader>` keymap scheme (Space as leader).
+Personal macOS dotfiles — **Neovim** + **Ghostty**. The Neovim config is built
+around `lazy.nvim` with a grouped, mnemonic `<leader>` keymap scheme (Space as
+leader); the Ghostty config picks up the same JetBrains Mono Nerd Font and
+catppuccin-mocha theme so the editor and terminal match.
 
 ## Quick install (macOS)
 
@@ -9,11 +11,13 @@ grouped, mnemonic `<leader>` keymap scheme (Space as leader).
 ./install.sh
 ```
 
-The script installs Homebrew, the required formulae/casks, links this repo to
-`~/.config/nvim`, and bootstraps plugins + Mason packages headlessly so the
-first `nvim` launch is instant. Re-runnable.
+The script installs Homebrew and the required formulae/casks (including
+Ghostty and JetBrains Mono Nerd Font), symlinks `nvim/` → `~/.config/nvim` and
+`ghostty/` → `~/.config/ghostty`, and bootstraps plugins + Mason packages
+headlessly so the first `nvim` launch is instant. Re-runnable: existing real
+configs get backed up, matching symlinks are left alone.
 
-After it finishes, set your terminal font to **JetBrains Mono Nerd Font**.
+Ghostty picks up `ghostty/config` automatically; nothing to set in its UI.
 
 ## Requirements
 
@@ -55,7 +59,7 @@ press Option. To make `<A-...>` keys reach nvim:
 
 - **Terminal.app**: Settings → Profiles → Keyboard → **Use Option as Meta key**
 - **iTerm2**: Profiles → Keys → **Left/Right Option acts as → Esc+**
-- **Ghostty**: `macos-option-as-alt = true` in `~/.config/ghostty/config`
+- **Ghostty**: already set via `macos-option-as-alt = true` in this repo's `ghostty/config`
 - **WezTerm**: `send_composed_key_when_left_alt_is_pressed = false` in the lua config
 
 Without this, `<A-j>`/`<A-k>` silently do nothing and `<A-l>` prints `¬` into
@@ -71,19 +75,25 @@ the buffer. Everything else in the config works regardless of this setting.
 ## Directory layout
 
 ```
-init.lua                  # entry: loads icons, lazy, maps
-install.sh                # macOS bootstrap
-lazy-lock.json            # pinned plugin versions
-lua/
-├── config/
-│   ├── icons.lua         # diagnostic/kind icons (global `icons` table)
-│   ├── lazy.lua          # lazy.nvim bootstrap + plugin import
-│   └── maps.lua          # single source of truth for all keymaps
-See **STRUCTURE.md** for the full categorized layout. High level: `plugins/ui/` for appearance (catppuccin, lualine, bufferline, snacks, fidget, …), `plugins/editor/` for editing surface (treesitter, autopairs, which-key, luasnip), `plugins/lsp/` for LSP + completion, `plugins/git/` (gitsigns), `plugins/tools/` (dap).
+install.sh                # macOS bootstrap (brew + symlinks + mason + treesitter)
+README.md                 # this file
+STRUCTURE.md              # detailed Neovim layout
+nvim/                     # → ~/.config/nvim (symlinked by install.sh)
+│   ├── init.lua            # entry: loads core + plugins
+│   ├── lazy-lock.json      # pinned plugin versions
+│   └── lua/                # core/ + plugins/<category>/<plugin>.lua
+ghostty/                  # → ~/.config/ghostty (symlinked by install.sh)
+    └── config              # font, theme, macOS Option-as-Alt, padding, …
 ```
 
+See **STRUCTURE.md** for the full categorized Neovim layout. High level:
+`plugins/ui/` for appearance (catppuccin, lualine, bufferline, snacks, fidget,
+…), `plugins/editor/` for editing surface (treesitter, autopairs, which-key,
+luasnip), `plugins/lsp/` for LSP + completion, `plugins/git/` (gitsigns),
+`plugins/tools/` (dap).
+
 All plugin files contain **setup only** — no keymaps. Every mapping lives in
-`lua/config/maps.lua`.
+`nvim/lua/core/keymaps.lua`.
 
 ## Plugins
 

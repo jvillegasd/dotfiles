@@ -1,16 +1,24 @@
 # Structure
 
-Organization guide for this Neovim configuration.
+Organization guide for this dotfiles repo. It holds two configs as siblings:
 
-## Layout
+```
+install.sh                      # macOS bootstrap (brew + symlinks + mason + treesitter)
+README.md                       # User-facing docs
+STRUCTURE.md                    # This file
+reorganize.sh                   # Legacy migration helper (flat → categorized plugins/)
+nvim/                           # → ~/.config/nvim  (symlinked by install.sh)
+ghostty/                        # → ~/.config/ghostty (symlinked by install.sh)
+    └── config                  # font, theme, padding, macOS Option-as-Alt
+```
+
+The rest of this document describes the `nvim/` subtree — the Neovim config.
+
+## Neovim layout (inside `nvim/`)
 
 ```
 init.lua                        # Entry point: loads core + plugins
 lazy-lock.json                  # Plugin version lock (committed)
-install.sh                      # macOS bootstrap (brew + mason + treesitter)
-reorganize.sh                   # Idempotent migration helper (flat → categorized)
-README.md                       # User-facing docs
-STRUCTURE.md                    # This file
 
 lua/
 ├── core/                       # Editor-level config (no plugins)
