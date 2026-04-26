@@ -10,7 +10,7 @@ window-padding-x = 10
 window-padding-y = 10
 window-padding-balance = true
 
-macos-option-as-alt = true
+macos-option-as-alt = right
 
 cursor-style = block
 shell-integration = detect
