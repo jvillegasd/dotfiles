@@ -9,9 +9,6 @@ metadata:
 
 Require `docs/agents/harness.json`; if missing, tell the user to invoke
 `setup-harness`.
-Together with `docs/agents/issue-tracker.md`, that configuration satisfies
-`to-spec`'s tracker and label prerequisite. Never redirect to the legacy
-`setup-matt-pocock-skills` workflow.
 
 Load `to-spec` as the synthesis template, then repair its approval behavior:
 

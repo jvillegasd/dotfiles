@@ -10,9 +10,6 @@ metadata:
 Require `docs/agents/harness.json` and an approved source spec. Load
 `to-tickets` for tracer-bullet and expand-contract rules, but skip its quiz and
 approval step: the approved spec is the contract.
-Treat `harness.json` plus `docs/agents/issue-tracker.md` as satisfying the
-locked skill's tracker and label prerequisite; never request the legacy setup
-skill.
 
 Each ticket must fit one fresh context and contain:
 

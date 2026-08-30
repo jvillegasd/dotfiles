@@ -4,26 +4,47 @@ set -euo pipefail
 
 HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LINKS_ONLY=false
+WITH_SEO=false
+SEO_SET=false
 BACKUP_ROOT=""
+GROUPS_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/portable-harness/groups"
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[err]\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
     cat <<'EOF'
-Usage: harness/install.sh [--links-only]
+Usage: harness/install.sh [--links-only] [--with-seo|--without-seo]
 
-  --links-only  Reconcile policy and skill links without packages/plugins.
+  --links-only   Reconcile policy and skill links without packages/plugins.
+  --with-seo     Also link the optional SEO skill group and its launcher.
+  --without-seo  Unlink the optional SEO group (the default for a fresh install).
+
+The SEO choice is remembered, so a later run without either flag keeps it.
 EOF
 }
 
 for arg in "$@"; do
     case "$arg" in
         --links-only) LINKS_ONLY=true ;;
+        --with-seo) WITH_SEO=true; SEO_SET=true ;;
+        --without-seo) WITH_SEO=false; SEO_SET=true ;;
         -h|--help) usage; exit 0 ;;
         *) die "Unknown argument: $arg" ;;
     esac
 done
+
+resolve_groups() {
+    if ! $SEO_SET && [[ -f "$GROUPS_FILE" ]] && grep -qx seo "$GROUPS_FILE"; then
+        WITH_SEO=true
+    fi
+    mkdir -p "$(dirname "$GROUPS_FILE")"
+    if $WITH_SEO; then printf 'seo\n' > "$GROUPS_FILE"; else : > "$GROUPS_FILE"; fi
+}
+
+is_seo_skill() {
+    [[ "$1" == seo || "$1" == seo-* ]]
+}
 
 ensure_backup_root() {
     if [[ -z "$BACKUP_ROOT" ]]; then
@@ -220,6 +241,7 @@ retire_aliases() {
     local aliases=(
         design-an-interface
         diagnose
+        grill-me
         grill-with-docs
         implement
         request-refactor-plan
@@ -245,15 +267,24 @@ install_links() {
 
     while IFS= read -r skill; do
         source="$HARNESS_DIR/skills/$skill"
+        backup_existing "$HOME/.config/opencode/skills/$skill"
+        if is_seo_skill "$skill" && ! $WITH_SEO; then
+            backup_existing "$HOME/.agents/skills/$skill"
+            backup_existing "$HOME/.claude/skills/$skill"
+            continue
+        fi
         link_managed "$source" "$HOME/.agents/skills/$skill"
         link_managed "$source" "$HOME/.claude/skills/$skill"
-        backup_existing "$HOME/.config/opencode/skills/$skill"
     done < <(find "$HARNESS_DIR/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
 
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.codex/AGENTS.md"
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.claude/CLAUDE.md"
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.config/opencode/AGENTS.md"
-    link_managed "$HARNESS_DIR/skills/seo/bin/claude-seo" "$HOME/.local/bin/claude-seo"
+    if $WITH_SEO; then
+        link_managed "$HARNESS_DIR/skills/seo/bin/claude-seo" "$HOME/.local/bin/claude-seo"
+    else
+        backup_existing "$HOME/.local/bin/claude-seo"
+    fi
 }
 
 assert_plugin_count() {
@@ -271,14 +302,19 @@ assert_plugin_count() {
 
 smoke_check() {
     local command skill seo_status=0
-    for command in codex claude opencode gh python3 uv engram rtk wt claude-seo; do
+    for command in codex claude opencode gh python3 uv engram rtk wt; do
         command -v "$command" >/dev/null || die "Missing required command: $command"
     done
     for skill in "$HARNESS_DIR"/skills/*; do
+        local name; name="$(basename "$skill")"
         [[ -f "$skill/SKILL.md" ]] || die "Missing SKILL.md: $skill"
-        [[ -L "$HOME/.agents/skills/$(basename "$skill")" ]] || die "Missing shared skill link: $skill"
-        [[ -L "$HOME/.claude/skills/$(basename "$skill")" ]] || die "Missing Claude skill link: $skill"
-        [[ ! -e "$HOME/.config/opencode/skills/$(basename "$skill")" && ! -L "$HOME/.config/opencode/skills/$(basename "$skill")" ]] || die "Duplicate OpenCode skill path: $skill"
+        [[ ! -e "$HOME/.config/opencode/skills/$name" && ! -L "$HOME/.config/opencode/skills/$name" ]] || die "Duplicate OpenCode skill path: $skill"
+        if is_seo_skill "$name" && ! $WITH_SEO; then
+            [[ ! -e "$HOME/.agents/skills/$name" && ! -L "$HOME/.agents/skills/$name" ]] || die "Optional SEO skill is still linked: $skill"
+            continue
+        fi
+        [[ -L "$HOME/.agents/skills/$name" ]] || die "Missing shared skill link: $skill"
+        [[ -L "$HOME/.claude/skills/$name" ]] || die "Missing Claude skill link: $skill"
     done
     [[ "$(readlink "$HOME/.codex/AGENTS.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing Codex policy link."
     [[ "$(readlink "$HOME/.claude/CLAUDE.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing Claude policy link."
@@ -293,8 +329,11 @@ smoke_check() {
     claude plugin validate "$HARNESS_DIR/skills" >/dev/null
     wt switch --help | grep -q -- '--no-cd'
     rtk --version >/dev/null
-    claude-seo doctor --json >/dev/null || seo_status=$?
-    [[ "$seo_status" == 0 || "$seo_status" == 3 ]] || die "Portable SEO runtime is invalid."
+    if $WITH_SEO; then
+        command -v claude-seo >/dev/null || die "Missing required command: claude-seo"
+        claude-seo doctor --json >/dev/null || seo_status=$?
+        [[ "$seo_status" == 0 || "$seo_status" == 3 ]] || die "Portable SEO runtime is invalid."
+    fi
 }
 
 summary() {
@@ -311,6 +350,9 @@ Next steps (interactive; not run by this installer):
   6. In Codex, open /hooks and trust the Engram, Ponytail, and RTK hooks you reviewed.
   7. Invoke setup-harness in each project that should use the public lifecycle.
 
+Skill groups: core$($WITH_SEO && printf ', seo')
+Toggle the optional SEO group with --with-seo or --without-seo.
+
 Standalone third-party skills were not downloaded or updated. Their committed
 bodies and skills-lock.json are the reviewed source of truth.
 EOF
@@ -320,6 +362,7 @@ EOF
 }
 
 main() {
+    resolve_groups
     if ! $LINKS_ONLY; then
         install_packages
         install_integrations

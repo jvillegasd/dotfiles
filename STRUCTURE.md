@@ -26,9 +26,11 @@ harness/
 ├── skills/
 │   ├── <locked>/               # pristine skills.sh-managed upstream bodies
 │   ├── setup-harness/          # config + GitHub lifecycle templates
-│   ├── grill-me|spec|tickets/  # repaired planning entries
+│   ├── spec|tickets/           # repaired planning entries
 │   ├── ship|address-review/    # isolated worktree/PR delivery entries
-│   └── seo*/                   # portable SEO orchestration and roles
+│   ├── adversarial-review|evidence/  # protocols the delivery entries load
+│   └── seo*/                   # optional SEO group (--with-seo)
+├── bench/measure.py            # session-population comparison for harness changes
 └── tests/test_harness.py       # supply-chain, lifecycle, and installer checks
 ```
 
