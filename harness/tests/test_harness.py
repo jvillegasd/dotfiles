@@ -23,14 +23,19 @@ LOCAL_SKILLS = {
     "address-review",
     "adversarial-review",
     "evidence",
+    "feedback",
+    "review",
     "seo",
-    "seo-performance",
-    "seo-visual",
     "setup-harness",
     "ship",
     "spec",
     "tickets",
+    "triage",
 }
+
+# Locked bodies linked nowhere: reachable only through a local wrapper that
+# carries the invocation guards their hash-locked frontmatter cannot.
+INTERNAL_SKILLS = {"code-review"}
 
 
 SEO_SKILLS = sorted(
@@ -133,13 +138,21 @@ class HarnessTests(unittest.TestCase):
             self.assertTrue(link.is_symlink(), name)
             self.assertEqual(os.readlink(link), f"../../.agents/skills/{name}")
 
-        for name in LOCAL_SKILLS:
-            skill = SKILLS / name
-            self.assertIn("opencode/autoinvoke: \"false\"", (skill / "SKILL.md").read_text())
-            self.assertEqual(
-                (skill / "agents" / "openai.yaml").read_text(),
+        # POLICY.md: "Skills never auto-invoke on description matching." Each
+        # client gates that differently, so the rule needs all three guards.
+        for name in names:
+            manifest = SKILLS / name / "agents" / "openai.yaml"
+            self.assertTrue(manifest.is_file(), name)
+            self.assertIn(
                 "policy:\n  allow_implicit_invocation: false\n",
+                manifest.read_text(),
+                name,
             )
+
+        for name in LOCAL_SKILLS:
+            body = (SKILLS / name / "SKILL.md").read_text()
+            self.assertIn("opencode/autoinvoke: \"false\"", body, name)
+            self.assertIn("\ndisable-model-invocation: true\n", body, name)
 
         for name, entry in lock.items():
             body = SKILLS / name
@@ -402,7 +415,7 @@ class HarnessTests(unittest.TestCase):
             "ship": (
                 "wt switch --create",
                 "adversarial-review",
-                "code-review",
+                "review",
                 "oracle ladder",
                 "Assumptions",
                 "Never merge",
@@ -414,8 +427,11 @@ class HarnessTests(unittest.TestCase):
                 "Never merge",
             ),
             "adversarial-review": ("Reviewer A", "Reviewer B", "Never three"),
+            "review": ("code-review", "Standards and Spec", "explicit human invocation"),
+            "triage": ("kill query", "Plan brief", "Evidence ledger", "Never implement"),
+            "feedback": ("Deferred", "accumulated delta", "Never merge the pull request"),
             "evidence": ("Kill query first", "falsifiable", "No-fabrication"),
-            "seo": ("seo-technical", "seo-performance", "claude-seo setup"),
+            "seo": ("seo-technical", "roles/performance", "claude-seo setup"),
         }
         for name, terms in required.items():
             body = (SKILLS / name / "SKILL.md").read_text()

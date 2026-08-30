@@ -1,6 +1,7 @@
 ---
 name: evidence
 description: Challenge a load-bearing claim with data instead of asserting it, starting with the query that could cancel the work.
+disable-model-invocation: true
 metadata:
   opencode/autoinvoke: "false"
 ---

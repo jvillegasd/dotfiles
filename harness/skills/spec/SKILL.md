@@ -1,6 +1,7 @@
 ---
 name: spec
 description: Synthesize the agreed design into the final contract and publish it after one approval.
+disable-model-invocation: true
 metadata:
   opencode/autoinvoke: "false"
 ---

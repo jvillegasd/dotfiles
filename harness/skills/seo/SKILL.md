@@ -2,6 +2,7 @@
 name: seo
 description: Run the portable SEO package through isolated technical, content, schema, sitemap, performance, and visual roles.
 license: MIT
+disable-model-invocation: true
 metadata:
   upstream: "AgriciDaniel/claude-seo"
   opencode/autoinvoke: "false"
@@ -20,8 +21,12 @@ For a full audit, assign six isolated roles:
 - content -> `seo-content`
 - schema -> `seo-schema`
 - sitemap -> `seo-sitemap`
-- performance -> `seo-performance`
-- visual -> `seo-visual`
+- performance -> `roles/performance` in this skill directory
+- visual -> `roles/visual` in this skill directory
+
+The performance and visual roles are internal to this skill and are not
+installed as globally invocable names. Read their bodies from `roles/`
+relative to this skill directory.
 
 Run roles in parallel when supported and sequentially otherwise. Give each
 role only the URL, requested scope, relevant raw evidence, and output contract.
@@ -55,6 +60,6 @@ directory, not the user's current project.
 ## Nested skills
 
 - `seo-technical`, `seo-content`, `seo-schema`, `seo-sitemap`
-- `seo-performance`, `seo-visual`
+- `roles/performance` and `roles/visual`, read from this skill directory
 - `seo-page`, `seo-competitor-pages`, `seo-geo`, `seo-hreflang`, `seo-images`,
   `seo-plan`, `seo-programmatic` when the request selects that branch

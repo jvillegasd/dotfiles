@@ -1,0 +1,5 @@
+interface:
+  display_name: "SEO Audit"
+  short_description: "Full-site SEO audit across delegated roles"
+policy:
+  allow_implicit_invocation: false

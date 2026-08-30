@@ -1,6 +1,7 @@
 ---
 name: adversarial-review
 description: Review a diff with blind reviewers before pushing, then triage their findings.
+disable-model-invocation: true
 metadata:
   opencode/autoinvoke: "false"
 ---

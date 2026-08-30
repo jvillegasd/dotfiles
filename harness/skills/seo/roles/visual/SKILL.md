@@ -1,7 +1,8 @@
 ---
-name: seo-visual
+name: visual
 description: Internal portable SEO role for desktop/mobile rendering and above-the-fold evidence.
 license: MIT
+disable-model-invocation: true
 metadata:
   upstream: "AgriciDaniel/claude-seo"
   opencode/autoinvoke: "false"

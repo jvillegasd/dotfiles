@@ -1,0 +1,5 @@
+interface:
+  display_name: "SEO Hreflang"
+  short_description: "Hreflang and international SEO validation"
+policy:
+  allow_implicit_invocation: false

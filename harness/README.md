@@ -72,16 +72,33 @@ belong in `skills-lock.json`.
 ## Roster
 
 Locked Matt Pocock skills provide grilling, domain/module vocabulary, TDD,
-research/prototyping, diagnosis/review, handoff, conflict resolution, setup,
-and spec/ticket primitives. Locked `AgriciDaniel/claude-seo` skills provide SEO
+research/prototyping, diagnosis/review, handoff, conflict resolution, and
+spec/ticket primitives. Locked `AgriciDaniel/claude-seo` skills provide SEO
 domain primitives.
 
-Local explicit workflow entries are `setup-harness`, `spec`, `tickets`, `ship`,
-and `address-review`, with `adversarial-review` and `evidence` as the protocols
-they load. Grilling uses the locked `grilling` body directly; the old `grill-me`
-wrapper is retired and its three constraints live in `POLICY.md`. `seo` is the
-portable SEO orchestrator; `seo-performance` and `seo-visual` are its local
-internal roles.
+Local explicit workflow entries are `setup-harness`, `triage`, `spec`,
+`tickets`, `ship`, `feedback`, and `address-review`, with `adversarial-review`,
+`evidence`, and `review` as the protocols they load. Grilling uses the locked
+`grilling` body directly; the old `grill-me` wrapper is retired and its three
+constraints live in `POLICY.md`. The legacy `setup-matt-pocock-skills` body is
+deleted: `setup-harness` writes the tracker files its consumers need. `seo` is
+the portable SEO orchestrator, and its performance and visual roles live under
+`skills/seo/roles/` rather than as globally invocable names.
+
+## Invocation guards
+
+`POLICY.md` opens with "skills never auto-invoke on description matching", and
+each client enforces that differently, so every skill carries all three guards:
+`policy.allow_implicit_invocation: false` in its `agents/openai.yaml` for
+Codex, plus `disable-model-invocation: true` and
+`metadata."opencode/autoinvoke": "false"` in its frontmatter for Claude Code
+and OpenCode. The acceptance suite asserts all three.
+
+A hash-locked body can take the Codex sidecar, which sits outside its
+`skills-lock.json` hash, but not the two frontmatter keys. A locked body whose
+description would otherwise auto-fire is therefore not linked under its own
+name and is reached only through a local wrapper carrying the guards. That is
+what `review` is to `code-review`.
 
 ## GitHub lifecycle
 
@@ -106,6 +123,10 @@ directory against the sessions it actually produced:
 ```sh
 python3 harness/bench/measure.py --split <commit-date> --since <window-start>
 ```
+
+Do not enable the Worktrunk Claude Code plugin. Its `UserPromptSubmit` hook
+rewrites the same per-branch slot `POLICY.md` uses for attempt and escalation
+counts, which would erase an escalation on the next prompt.
 
 It reads Claude Code JSONL transcripts, Codex rollout JSONL, and the OpenCode
 SQLite database, and reports each client separately; `--client` narrows it. A

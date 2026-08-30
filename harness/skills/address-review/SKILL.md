@@ -1,6 +1,7 @@
 ---
 name: address-review
 description: Resolve review or CI feedback on an existing harness pull request in its retained worktree.
+disable-model-invocation: true
 metadata:
   opencode/autoinvoke: "false"
 ---
@@ -21,7 +22,7 @@ Require an existing pull request created by `ship`.
    Make the smallest fix, drive the oracle ladder in the policy to green, and
    resolve each thread with evidence.
 4. Review the new diff the same way `ship` does: `adversarial-review` first,
-   then the isolated Standards and Spec `code-review`. Repair all findings,
+   then the isolated Standards and Spec `review`. Repair all findings,
    make coherent Conventional Commits, and push.
 5. Keep the pull request body's `Assumptions`, `Refuted evidence`, and
    `Rejected review findings` sections current with anything this pass decided
@@ -37,5 +38,5 @@ Never merge the pull request or remove its worktree.
 - `tdd`
 - `diagnosing-bugs`
 - `adversarial-review`
-- `code-review`
+- `review`
 - `resolving-merge-conflicts` only when already conflicted

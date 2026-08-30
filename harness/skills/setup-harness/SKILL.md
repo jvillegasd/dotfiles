@@ -1,6 +1,7 @@
 ---
 name: setup-harness
 description: Configure a repository for the portable spec-to-PR workflow.
+disable-model-invocation: true
 metadata:
   opencode/autoinvoke: "false"
 ---

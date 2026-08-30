@@ -1,0 +1,5 @@
+interface:
+  display_name: "SEO GEO"
+  short_description: "Generative engine and AI citation optimization"
+policy:
+  allow_implicit_invocation: false

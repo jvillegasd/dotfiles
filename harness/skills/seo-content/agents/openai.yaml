@@ -1,0 +1,5 @@
+interface:
+  display_name: "SEO Content"
+  short_description: "Content quality and E-E-A-T assessment"
+policy:
+  allow_implicit_invocation: false

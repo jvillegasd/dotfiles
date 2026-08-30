@@ -46,6 +46,12 @@ is_seo_skill() {
     [[ "$1" == seo || "$1" == seo-* ]]
 }
 
+# Locked bodies reachable only through a local wrapper that carries the
+# invocation guards their hash-locked frontmatter cannot.
+is_internal_skill() {
+    [[ "$1" == code-review ]]
+}
+
 ensure_backup_root() {
     if [[ -z "$BACKUP_ROOT" ]]; then
         BACKUP_ROOT="$HOME/.dotfiles-backups/harness/$(date +%Y%m%d-%H%M%S)-$$"
@@ -239,13 +245,16 @@ install_integrations() {
 retire_aliases() {
     local root name
     local aliases=(
+        code-review
         design-an-interface
         diagnose
         grill-me
         grill-with-docs
         implement
         request-refactor-plan
-        review
+        seo-performance
+        seo-visual
+        setup-matt-pocock-skills
         to-issues
         to-prd
         ubiquitous-language
@@ -268,6 +277,9 @@ install_links() {
     while IFS= read -r skill; do
         source="$HARNESS_DIR/skills/$skill"
         backup_existing "$HOME/.config/opencode/skills/$skill"
+        if is_internal_skill "$skill"; then
+            continue
+        fi
         if is_seo_skill "$skill" && ! $WITH_SEO; then
             backup_existing "$HOME/.agents/skills/$skill"
             backup_existing "$HOME/.claude/skills/$skill"
@@ -308,6 +320,10 @@ smoke_check() {
     for skill in "$HARNESS_DIR"/skills/*; do
         local name; name="$(basename "$skill")"
         [[ -f "$skill/SKILL.md" ]] || die "Missing SKILL.md: $skill"
+        if is_internal_skill "$name"; then
+            [[ ! -e "$HOME/.agents/skills/$name" && ! -L "$HOME/.agents/skills/$name" ]] || die "Internal skill is still linked: $skill"
+            continue
+        fi
         [[ ! -e "$HOME/.config/opencode/skills/$name" && ! -L "$HOME/.config/opencode/skills/$name" ]] || die "Duplicate OpenCode skill path: $skill"
         if is_seo_skill "$name" && ! $WITH_SEO; then
             [[ ! -e "$HOME/.agents/skills/$name" && ! -L "$HOME/.agents/skills/$name" ]] || die "Optional SEO skill is still linked: $skill"

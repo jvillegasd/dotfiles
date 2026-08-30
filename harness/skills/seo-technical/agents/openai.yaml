@@ -1,0 +1,5 @@
+interface:
+  display_name: "SEO Technical"
+  short_description: "Technical SEO audit across eight categories"
+policy:
+  allow_implicit_invocation: false

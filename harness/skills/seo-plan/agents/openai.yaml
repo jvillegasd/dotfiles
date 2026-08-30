@@ -1,0 +1,5 @@
+interface:
+  display_name: "SEO Plan"
+  short_description: "Strategic SEO planning and roadmap"
+policy:
+  allow_implicit_invocation: false

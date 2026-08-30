@@ -1,0 +1,5 @@
+interface:
+  display_name: "Feedback"
+  short_description: "Apply bullet-list feedback to an open pull request"
+policy:
+  allow_implicit_invocation: false

@@ -1,6 +1,7 @@
 ---
 name: tickets
 description: Publish implementation-ready vertical slices from an approved spec.
+disable-model-invocation: true
 metadata:
   opencode/autoinvoke: "false"
 ---

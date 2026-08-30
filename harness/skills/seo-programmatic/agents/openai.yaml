@@ -1,0 +1,5 @@
+interface:
+  display_name: "SEO Programmatic"
+  short_description: "Programmatic SEO at scale with thin-content guards"
+policy:
+  allow_implicit_invocation: false

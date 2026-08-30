@@ -1,0 +1,5 @@
+interface:
+  display_name: "SEO Images"
+  short_description: "Image optimization for SEO and performance"
+policy:
+  allow_implicit_invocation: false

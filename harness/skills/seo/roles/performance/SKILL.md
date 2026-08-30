@@ -1,7 +1,8 @@
 ---
-name: seo-performance
+name: performance
 description: Internal portable SEO role for measured performance and Core Web Vitals evidence.
 license: MIT
+disable-model-invocation: true
 metadata:
   upstream: "AgriciDaniel/claude-seo"
   opencode/autoinvoke: "false"

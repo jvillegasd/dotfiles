@@ -16,17 +16,22 @@ and OpenCode. Project instructions override it when they are more specific.
   them sequentially without merging their scopes.
 - Treat locked SEO bodies as primitives behind the local `seo` portability
   layer: resolve `claude-seo` with its bundled launcher and any
-  `skills/seo/...` path relative to the local `seo` skill directory.
+  `skills/seo/...` path relative to the local `seo` skill directory. A locked
+  body naming `seo-performance` or `seo-visual` means `roles/performance` or
+  `roles/visual` inside that same directory; neither is an installed skill.
 
 ### Routing
 
 | Plain language | Follow |
 | --- | --- |
 | "set this repo up for the workflow" | `setup-harness` |
+| "triage this", a pasted ticket, a production error signal | `triage` |
 | "poke holes in this", "challenge this design" | `grilling` |
 | "spec this out", "write it up" | `spec` |
 | "break this into tickets", "slice this" | `tickets` |
+| "how should we do this", a design with no contract yet | native plan mode |
 | "implement this", "go build it", an approved plan, a ticket id | `ship` |
+| a bullet list of changes to work already in a pull request | `feedback` |
 | "address the review comments", "CI is red on my PR" | `address-review` |
 | "look into X", "is it true that" | `research` |
 | "why does X happen", something broken or slow | `diagnosing-bugs` |
@@ -39,9 +44,10 @@ Do not route when the request is conversational or a one-line lookup where the
 workflow costs more than the answer, or when two entries match and the choice
 changes the outcome. Name both and ask.
 
-Never route into producing a code review. `code-review` and
-`adversarial-review` are entered only by explicit human invocation or from
-`ship` and `address-review`.
+Never route into producing a code review. `review` and `adversarial-review`
+are entered only by explicit human invocation or from `ship` and
+`address-review`. The locked `code-review` body is reachable only through the
+`review` wrapper, which is what carries its invocation guards.
 
 When a request matches a workflow but omits something the workflow needs,
 follow the workflow and let its own steps handle the gap. Do not fall back to
@@ -66,6 +72,54 @@ The lifecycle is `setup-harness` -> `grilling` -> `spec` -> `tickets` ->
 - Delivery ends at a green, reviewed, ready-for-human pull request. A human
   merges it and later removes its worktree.
 
+## Planning
+
+Every change needs an agreed contract before implementation. There are two
+routes to one, and exactly one of them is required.
+
+- **`spec` plus `tickets`**, for work worth documenting: a large feature,
+  anything touching several surfaces, or anything whose reasoning should
+  outlive the pull request. The published spec is the contract.
+- **Native plan mode**, for everything else. Cheaper, in-conversation, nothing
+  to publish. Trace the relevant system end to end, name the source of truth
+  and the lifecycle implications, clarify only load-bearing ambiguity, and
+  recommend the smallest coherent change with its files and verification. The
+  approved plan is the contract `ship` consumes in its lightweight mode.
+
+Never do both. An approved spec is already the implementation contract, so
+re-entering plan mode to restate it adds a second gate over the same
+decisions. Go straight from the approved contract to `ship`.
+
+Whichever route, pressure-test with `grilling` before committing to it.
+
+A `triage` plan brief, a `research` finding ledger, or a `prototype`
+requirements ledger is the contract's input, not a suggestion to re-derive. Do
+not re-investigate what it already grounded with a `path:line` or a linked
+number. Carry its verification concerns forward verbatim and its open
+questions in as decisions with defaults. Re-run only evidence it marked
+refuted or unchecked.
+
+## Approval means autonomous execution
+
+Approving a contract is the go-ahead to run to completion. This applies to
+every surface that produces one: native plan mode, `ExitPlanMode`, a published
+spec, or a ticket.
+
+On approval, follow `ship` without being asked. Treat the contract as the
+implementation contract, work autonomously, and do not stop until `ship`
+reaches its terminal state: a pull request open with every resolved rung
+green. Do not ask for confirmation to begin, between steps, before committing,
+or before pushing. Do not re-present the contract or ask which part to start.
+
+Stop early only when implementation reveals the contract is invalid against
+repository evidence, a load-bearing decision is genuinely unresolvable, or
+pre-existing unrelated changes cannot be safely separated. Otherwise pick the
+minimal option, record it in the pull request body, and continue.
+
+Never commit implementation to the default branch, in any mode. `ship`
+branches before editing; interactive work does the same. Work found sitting on
+the default branch moves to a branch before pushing, not after.
+
 ## Oracle ladder
 
 Done is machine-checkable, not a judgement call. The shape is global; each
@@ -89,6 +143,11 @@ Re-derive the failure list on every pass; never work from a stale one. A
 missing rung is skipped, never faked: no remote CI means the ladder ends at the
 local rungs plus an open pull request, and no test suite means a shorter
 ladder.
+
+Record the resolved ladder in Worktrunk's per-branch vars
+(`git config worktrunk.state.<branch>.vars.ladder`) so later passes and any
+supervisor do not re-derive it, and so a wrong inference is visible rather
+than silent.
 
 Resolving review threads is not a rung. Threads appear only after a human
 reviews, so `address-review` owns them.
@@ -140,6 +199,13 @@ On a trip, do not try a fourth thing. Report what was attempted, what each
 attempt disproved, the smallest next hypothesis, and what you need. A trip is
 information, not failure.
 
+These counters must survive a restart or a context compaction, or the detector
+silently resets to zero on exactly the long runs it exists for. Keep the
+attempt and escalation counts in Worktrunk's per-branch vars
+(`git config worktrunk.state.<branch>.vars.attempts` and `.escalations`),
+which live in `.git`. Use vars, never the activity marker: the marker is
+rewritten on every prompt and would erase an escalation.
+
 ### Surfaces that escalate on first touch
 
 Touching one of these is an escalation however small the change looks, unless
@@ -171,7 +237,34 @@ design may not be optimal" (pick the minimal option, record it, continue).
 - Prefer primary sources for research, and follow `evidence` before asserting
   a load-bearing claim about runtime behavior, impact, or frequency. Re-verify
   time-sensitive technical and SEO guidance before presenting it as current.
+- A claim is load-bearing only if being wrong about it changes the decision.
+  Check those against telemetry, or mark them explicitly unchecked. Never state
+  a number without its source deep link and timeframe. Where a project has not
+  configured a telemetry capability, say so and move on: absence of data never
+  blocks the work and never justifies inventing a number.
 - When `rtk` is available, prefix shell commands with `rtk`.
+
+## Conventions
+
+These instructions load in three clients, so anything client-specific written
+here is wrong somewhere.
+
+- Name an MCP tool as its server plus its bare tool name, for example "the
+  Linear MCP's `save_issue`". Never write a client-specific prefix.
+- File edits go through the client's own edit tool, never `sed`, a heredoc, or
+  a script, even where a permissions mode says to prefer the shell. An edit
+  tool fails loudly on a missing or ambiguous target; a replacement that
+  matches nothing exits 0 and reports success, so the mistake surfaces later as
+  a change that was never made. The shell is still right for a mechanical sweep
+  across many files; read the result back afterwards, because nothing else
+  confirms it landed.
+- Render a link as its complete absolute URL, including scheme and host. Never
+  hide one behind alias text, and never render a bare path as a link.
+- Never use em-dashes in prose, commit messages, pull request text, or code
+  comments. Use a comma, a colon, parentheses, or a period.
+- Commit subjects are Conventional, imperative, and at most 50 characters, with
+  a body only when the "why" is non-obvious. No AI attribution, no emoji, no
+  filler.
 
 ## Git discipline
 

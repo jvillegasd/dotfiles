@@ -1,0 +1,5 @@
+interface:
+  display_name: "Review"
+  short_description: "Review a diff on standards and spec, by explicit invocation only"
+policy:
+  allow_implicit_invocation: false
