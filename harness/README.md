@@ -87,18 +87,26 @@ the portable SEO orchestrator, and its performance and visual roles live under
 
 ## Invocation guards
 
-`POLICY.md` opens with "skills never auto-invoke on description matching", and
-each client enforces that differently, so every skill carries all three guards:
-`policy.allow_implicit_invocation: false` in its `agents/openai.yaml` for
-Codex, plus `disable-model-invocation: true` and
+`POLICY.md` opens with "skills never auto-invoke on description matching". Each
+client enforces that differently, so every locally authored skill carries all
+three guards: `policy.allow_implicit_invocation: false` in its
+`agents/openai.yaml` for Codex, plus `disable-model-invocation: true` and
 `metadata."opencode/autoinvoke": "false"` in its frontmatter for Claude Code
 and OpenCode. The acceptance suite asserts all three.
 
-A hash-locked body can take the Codex sidecar, which sits outside its
-`skills-lock.json` hash, but not the two frontmatter keys. A locked body whose
-description would otherwise auto-fire is therefore not linked under its own
-name and is reached only through a local wrapper carrying the guards. That is
-what `review` is to `code-review`.
+A locked body gets none of them. `agents/openai.yaml` is upstream content, not
+a harness sidecar, and `computedHash` covers the whole directory, so anything
+written inside a locked skill is clobbered by the next `skills update` without
+a drift warning and with the lockfile rewritten to record the loss as correct.
+The suite catches it afterwards; nothing prevents it. So a locked body is left
+pristine and constrained by `POLICY.md` alone.
+
+When prose is not enough, the control is to not install the skill. A locked
+body whose upstream description advertises trigger phrases it must not act on
+is excluded from every client's skill directory by `is_internal_skill` in the
+installer, and the workflows that need it read it from its path. `code-review`
+is the only one: `ship` and `address-review` load
+`harness/skills/code-review/SKILL.md` directly.
 
 ## GitHub lifecycle
 

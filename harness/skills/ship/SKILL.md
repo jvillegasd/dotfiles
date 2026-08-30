@@ -38,10 +38,10 @@ merged pull request.
    preferring the narrowest variant of each rung.
 2. Make the fewest coherent Conventional Commits; every commit stays green.
 3. Review the diff before pushing. Run `adversarial-review` first, and triage
-   every finding. Then run `review` against the remote-default merge base
+   every finding. Then run `code-review` against the remote-default merge base
    and the contract, keeping Standards and Spec isolated, parallel where
    supported and sequential otherwise. Repair all findings and repeat until
-   every axis passes. `review` is the second axis here, not a re-run:
+   every axis passes. `code-review` is the second axis here, not a re-run:
    the blind round already saw the diff without the plan.
 4. Push, then create or update a draft pull request with a Conventional Commit
    title and a closing reference to the ticket. The body states what changed,
@@ -69,5 +69,5 @@ Never merge the pull request or remove the worktree.
 - `codebase-design` when an agreed seam needs implementation vocabulary
 - `diagnosing-bugs` for failures that do not have an obvious local cause
 - `adversarial-review`
-- `review`
+- `code-review`, read from `harness/skills/code-review/SKILL.md`
 - `resolving-merge-conflicts` only when the ticket worktree is conflicted

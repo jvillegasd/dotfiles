@@ -8,6 +8,10 @@ and OpenCode. Project instructions override it when they are more specific.
 - Skills never auto-invoke on description matching. Load a skill only when the
   user names it, or when the routing table below sends a plain-language request
   to it. Announce that routing in one line so a wrong guess is cheap to correct.
+  Locally authored skills enforce this structurally, with a guard for each
+  client. A locked body cannot be guarded without drift, so this rule is its
+  only control, and a locked body that must never fire on its own is not
+  installed as a skill at all.
 - After an orchestrator is explicitly invoked, it may load only the skills
   named in its `Nested skills` section.
 - Use ephemeral specialist roles. Do not create persistent client-specific
@@ -44,10 +48,12 @@ Do not route when the request is conversational or a one-line lookup where the
 workflow costs more than the answer, or when two entries match and the choice
 changes the outcome. Name both and ask.
 
-Never route into producing a code review. `review` and `adversarial-review`
-are entered only by explicit human invocation or from `ship` and
-`address-review`. The locked `code-review` body is reachable only through the
-`review` wrapper, which is what carries its invocation guards.
+Never route into producing a code review. `adversarial-review` and the locked
+`code-review` body are entered only by explicit human invocation or from `ship`
+and `address-review`. `code-review` is deliberately not installed as a skill:
+its upstream description advertises review trigger phrases it cannot be stopped
+from matching, so `ship` and `address-review` read it from
+`harness/skills/code-review/SKILL.md` by path instead.
 
 When a request matches a workflow but omits something the workflow needs,
 follow the workflow and let its own steps handle the gap. Do not fall back to

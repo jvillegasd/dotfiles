@@ -24,7 +24,6 @@ LOCAL_SKILLS = {
     "adversarial-review",
     "evidence",
     "feedback",
-    "review",
     "seo",
     "setup-harness",
     "ship",
@@ -33,8 +32,9 @@ LOCAL_SKILLS = {
     "triage",
 }
 
-# Locked bodies linked nowhere: reachable only through a local wrapper that
-# carries the invocation guards their hash-locked frontmatter cannot.
+# A locked body cannot carry an invocation guard without drifting from
+# upstream, so one that must never fire on its own is not installed as a skill
+# at all. Workflows read it from its path instead.
 INTERNAL_SKILLS = {"code-review"}
 
 
@@ -139,8 +139,13 @@ class HarnessTests(unittest.TestCase):
             self.assertEqual(os.readlink(link), f"../../.agents/skills/{name}")
 
         # POLICY.md: "Skills never auto-invoke on description matching." Each
-        # client gates that differently, so the rule needs all three guards.
-        for name in names:
+        # client gates that differently, so a local skill needs all three
+        # guards. Locked bodies are never edited to add one: an edit inside a
+        # locked directory is silently clobbered by the next skills update.
+        for name in LOCAL_SKILLS:
+            body = (SKILLS / name / "SKILL.md").read_text()
+            self.assertIn("opencode/autoinvoke: \"false\"", body, name)
+            self.assertIn("\ndisable-model-invocation: true\n", body, name)
             manifest = SKILLS / name / "agents" / "openai.yaml"
             self.assertTrue(manifest.is_file(), name)
             self.assertIn(
@@ -149,10 +154,12 @@ class HarnessTests(unittest.TestCase):
                 name,
             )
 
-        for name in LOCAL_SKILLS:
-            body = (SKILLS / name / "SKILL.md").read_text()
-            self.assertIn("opencode/autoinvoke: \"false\"", body, name)
-            self.assertIn("\ndisable-model-invocation: true\n", body, name)
+        # The unguardable ones are controlled by never linking them instead.
+        installer = (ROOT / "harness" / "install.sh").read_text()
+        for name in INTERNAL_SKILLS:
+            self.assertTrue((SKILLS / name / "SKILL.md").is_file(), name)
+            self.assertIn(f'"$1" == {name}', installer, name)
+            self.assertNotIn(name, LOCAL_SKILLS)
 
         for name, entry in lock.items():
             body = SKILLS / name
@@ -427,7 +434,6 @@ class HarnessTests(unittest.TestCase):
                 "Never merge",
             ),
             "adversarial-review": ("Reviewer A", "Reviewer B", "Never three"),
-            "review": ("code-review", "Standards and Spec", "explicit human invocation"),
             "triage": ("kill query", "Plan brief", "Evidence ledger", "Never implement"),
             "feedback": ("Deferred", "accumulated delta", "Never merge the pull request"),
             "evidence": ("Kill query first", "falsifiable", "No-fabrication"),

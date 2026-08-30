@@ -1,5 +1,0 @@
-interface:
-  display_name: "SEO Page"
-  short_description: "Deep single-page SEO analysis"
-policy:
-  allow_implicit_invocation: false

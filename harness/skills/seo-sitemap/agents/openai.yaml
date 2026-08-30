@@ -1,5 +1,0 @@
-interface:
-  display_name: "SEO Sitemap"
-  short_description: "XML sitemap validation and generation"
-policy:
-  allow_implicit_invocation: false
