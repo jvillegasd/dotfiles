@@ -1,6 +1,7 @@
 # dotfiles
 
-Personal macOS dotfiles — **Neovim** + **Ghostty**. The Neovim config is built
+Personal macOS dotfiles — **Neovim**, **Ghostty**, and a portable AI harness
+for Codex, Claude Code, and OpenCode. The Neovim config is built
 around `lazy.nvim` with a grouped, mnemonic `<leader>` keymap scheme (Space as
 leader); the Ghostty config picks up the same JetBrains Mono Nerd Font and
 catppuccin-mocha theme so the editor and terminal match.
@@ -11,11 +12,11 @@ catppuccin-mocha theme so the editor and terminal match.
 ./install.sh
 ```
 
-The script installs Homebrew and the required formulae/casks (including
-Ghostty and JetBrains Mono Nerd Font), symlinks `nvim/` → `~/.config/nvim` and
-`ghostty/` → `~/.config/ghostty`, and bootstraps plugins + Mason packages
-headlessly so the first `nvim` launch is instant. Re-runnable: existing real
-configs get backed up, matching symlinks are left alone.
+The script installs Homebrew and the required formulae/casks, symlinks the
+editor and terminal configs, installs the current AI clients/integrations,
+links the shared harness policy and skills, and bootstraps Neovim headlessly.
+Re-runnable: existing managed collisions get backed up, matching symlinks are
+left alone, and unrelated private skills are preserved.
 
 Ghostty picks up `ghostty/config` automatically; nothing to set in its UI.
 
@@ -25,6 +26,10 @@ Ghostty picks up `ghostty/config` automatically; nothing to set in its UI.
 - Homebrew
 - Neovim ≥ 0.10 (installed by the script)
 - A Nerd Font (JetBrains Mono Nerd Font is installed by the script)
+
+The AI harness is macOS/GitHub-first and uses Homebrew plus each integration's
+official setup command. Authentication and hook trust remain interactive
+post-install steps printed by the installer.
 
 Sanity check inside nvim: `:checkhealth`, `:Lazy`, `:Mason`.
 
@@ -78,6 +83,10 @@ the buffer. Everything else in the config works regardless of this setting.
 install.sh                # macOS bootstrap (brew + symlinks + mason + treesitter)
 README.md                 # this file
 STRUCTURE.md              # detailed Neovim layout
+harness/                  # portable three-client policy, skills, installer, tests
+skills-lock.json          # reviewed standalone third-party skill lock
+.agents/skills            # symlink to the canonical harness/skills directory
+.claude/skills            # skills.sh/Claude bookkeeping symlinks
 nvim/                     # → ~/.config/nvim (symlinked by install.sh)
 │   ├── init.lua            # entry: loads core + plugins
 │   ├── lazy-lock.json      # pinned plugin versions
@@ -85,6 +94,9 @@ nvim/                     # → ~/.config/nvim (symlinked by install.sh)
 ghostty/                  # → ~/.config/ghostty (symlinked by install.sh)
     └── config              # font, theme, macOS Option-as-Alt, padding, …
 ```
+
+See [`harness/README.md`](harness/README.md) for the public workflow, skill
+supply-chain procedure, and validation commands.
 
 See **STRUCTURE.md** for the full categorized Neovim layout. High level:
 `plugins/ui/` for appearance (catppuccin, lualine, bufferline, snacks, fidget,
