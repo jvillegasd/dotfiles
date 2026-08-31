@@ -1,28 +1,57 @@
 ---
 name: grilling
-description: Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.
+description: A relentless interview that attacks the load-bearing assumptions in a plan or design before they become expensive, interactively or by self-grilling.
+disable-model-invocation: true
+metadata:
+  opencode/autoinvoke: "false"
 ---
 
-Interview the user relentlessly until you reach a shared understanding. Map this as a **design tree**: every decision branches into the decisions that hang off it.
+# Grilling
 
-Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: number each question and give your recommended answer. Then wait for the user's answers before the next round.
+Cheap to change a plan. Expensive to change a merged diff. This closes that gap by attacking the plan while it is still words.
 
-Format a round like so:
+Grilling is not a checklist and not a summary. It is an attempt to break the thing.
 
-```
-❓ **Q1** - **<question title>**: <question body, might be multiple paragraphs, including multiple choices>
+## Find the load-bearing assumption first
 
-➡️ <your recommended answer>
+Before asking anything, identify what the plan **depends on** being true. Attack that. Do not attack the surface.
 
----
+A load-bearing assumption is one where being wrong changes the approach, the scope, or whether the work happens at all. Everything else is detail, and interrogating detail while the foundation is unexamined is theatre.
 
-❓ **Q2** - **<question title>**: <question body, might be multiple paragraphs, including multiple choices>
+Rank by consequence, then start with the worst one.
 
-➡️ <your recommended answer>
-```
+## Mode: interactive
 
-Each round the user answers reshapes the tree: settled decisions push the frontier outward and unblock questions that depended on them. Recompute the frontier and ask the next round. A question whose answer depends on another question still open in this round belongs to a _later_ round, not this one.
+Human-driven. The default when invoked directly.
 
-Finding _facts_ is your job, never the user's. When a frontier question needs a fact from the environment (filesystem, tools, etc.), dispatch a sub-agent to find it; don't ask the user for anything you could look up yourself. Don't block on it: a running exploration is an unsettled prerequisite, so only the questions downstream of it wait for the sub-agent to report; ask the rest of the frontier now. The _decisions_ are the user's: put each to them and wait.
+- **One question at a time.** Wait for the answer. A batch invites skimming, and skimming is what you are trying to prevent.
+- **Hardest first.** If the plan dies on question one, every later question was wasted.
+- **Follow the crack.** When an answer is vague, hedged, or shifts the subject, push there instead of moving on. "It depends" means you found something.
+- **Use the repository, not just logic.** "Does anything here already do this?" beats an abstract objection. Search before asserting.
+- **Never accept a plan restatement as an answer.** Saying it again louder is not evidence.
 
-The session is done when the frontier is empty: every branch of the design tree visited, nothing left silently assumed. Do not act on it until the user confirms you have reached a shared understanding.
+Finding facts is your job, never the user's. When a question needs a fact from the environment, look it up or dispatch a read-only subagent; never ask the user for something you could find yourself. The decisions are the user's: put each to them and wait.
+
+Stop when the design either survives, in which case say so and name what would still break it, or breaks, in which case say what broke and what the smaller version looks like.
+
+## Mode: self-grill
+
+No human in the loop. Use this when a workflow needs its own approach pressure-tested and serial human grilling would be the bottleneck: `/yolo` on a load-bearing ambiguity that survives a repository search, and `/triage` before it escalates.
+
+1. **List the assumptions** the approach depends on, ranked by consequence.
+2. **Resolve what you can**, in this order: search the repository for precedent; check history for whether this was tried before; load and follow the `evidence` skill for any claim about runtime behavior, impact, or frequency. Most open questions die here, because they were answerable and nobody looked.
+3. **Kill the plan if it deserves it.** If evidence refutes the premise, say so and stop. That is a success, not a failure.
+4. **Present only survivors**, in one batch, each carrying the decision, what you already checked and what it ruled out, the options with consequences, your default, and the cost if the default is wrong. Per the policy's escalation contract, if three or fewer read-only actions would settle a question, take them instead of asking it.
+
+A self-grill that produces a long question list did not do step 2.
+
+## What makes a good question
+
+- Falsifiable: answerable with evidence, not opinion.
+- Consequential: a different answer changes what gets built.
+- Specific: names the file, endpoint, state, or number in question.
+- Not already answered: check the conversation before asking again.
+
+## What is not grilling
+
+Restating the plan back as a question. Asking for confirmation. Listing risks without ranking them. Interrogating edge cases while the core mechanism is unverified. Producing one question per section because there are sections.

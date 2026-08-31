@@ -111,17 +111,19 @@ The trade is deliberate. `/ponytail lite|ultra` switching, the statusline, subag
 
 ## Roster
 
-Commands are `/ask`, `/triage`, `/spec`, `/create-ticket`, `/yolo`, `/feedback`, `/address-review`, and `/land`.
+Commands are `/ask`, `/research`, `/triage`, `/spec`, `/create-ticket`, `/proto`, `/yolo`, `/feedback`, `/address-review`, and `/land`.
 
-Local skills are `adversarial-review`, `evidence`, `seo`, and `setup-harness`. `setup-harness` stays a skill because it installs bundled lifecycle assets that only a skill directory can carry; its guards keep it from firing on its own.
+Local skills are `adversarial-review`, `evidence`, `grilling`, `seo`, and `setup-harness`. `setup-harness` stays a skill because it installs bundled lifecycle assets that only a skill directory can carry; its guards keep it from firing on its own. `grilling` is the `grill-me` body from https://github.com/sjdonado/dotfiles/tree/master/agents, kept under the local name the routing table already used, with the three guards added and `AGENTS.md` resolved to this policy. It replaced the locked Matt Pocock body, whose design-tree rounds ask a whole frontier at once: that is the batching this protocol exists to prevent, and it carried no self-grill mode for `/yolo` and `/triage` to call. The trade is that this body tracks a source with no lock entry, so an upstream change to it arrives only when someone looks.
 
-Locked Matt Pocock skills provide grilling, domain/module vocabulary, TDD, research/prototyping, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode. Locked `AgriciDaniel/claude-seo` bodies provide the SEO roles, none of them installed.
+`/research` and `/proto` replace two locked bodies that were workflows wearing a skill's clothes: they could fire on description matching, and neither produced the finding ledger or the requirements ledger `POLICY.md` names as contract input. As commands they are typed or they do not run, and each now emits the artifact the policy promised.
 
-Deliberately removed: `to-spec` and `to-tickets`, whose templates now live inline in `/spec` and `/create-ticket` rather than behind a wrapper that overrode most of what it loaded; `code-review`, whose second axis is now a spec-conformance pass `/yolo` runs itself while holding the contract; the `grill-me` and `review` wrappers, retired earlier; and twelve globally invocable SEO names.
+Locked Matt Pocock skills provide domain/module vocabulary, TDD, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode. Locked `AgriciDaniel/claude-seo` bodies provide the SEO roles, none of them installed.
+
+Deliberately removed: `to-spec` and `to-tickets`, whose templates now live inline in `/spec` and `/create-ticket` rather than behind a wrapper that overrode most of what it loaded; `code-review`, whose second axis is now a spec-conformance pass `/yolo` runs itself while holding the contract; the `grill-me` and `review` command wrappers, retired earlier, which is a separate thing from the `grill-me` skill body `grilling` now carries; and twelve globally invocable SEO names.
 
 ## Invocation guards
 
-`POLICY.md` opens with the commands-and-skills split. Structure carries it for the workflows. For the four local skills, the three per-client guards carry it, and the acceptance suite asserts the full matrix. For a locked body, prose is the only control, which is why a body that must never fire on its own is not installed at all.
+`POLICY.md` opens with the commands-and-skills split. Structure carries it for the workflows. For the five local skills, the three per-client guards carry it, and the acceptance suite asserts the full matrix. For a locked body, prose is the only control, which is why a body that must never fire on its own is not installed at all.
 
 ## GitHub lifecycle
 

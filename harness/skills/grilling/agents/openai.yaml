@@ -1,3 +1,5 @@
 interface:
   display_name: "Grilling"
-  short_description: "Stress-test thinking a round of questions at a time"
+  short_description: "Attack a plan's load-bearing assumptions before implementing"
+policy:
+  allow_implicit_invocation: false
