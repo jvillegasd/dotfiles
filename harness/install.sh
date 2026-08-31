@@ -384,11 +384,14 @@ PY
 # The committed statusline is linked to the path Claude Code already reads, so
 # settings.json only ever needs the one command line pointing at it. Rewritten
 # only when it differs, which keeps a hand-edited settings.json otherwise alone.
+# The reconciled file is emitted on stdout and written here, rather than
+# written in place, so the backup is taken only when something actually
+# changes. Backing up unconditionally minted a fresh backup root on every run.
 point_statusline_at_link() {
-    local settings="$HOME/.claude/settings.json"
+    local settings="$HOME/.claude/settings.json" reconciled
+    mkdir -p "$(dirname "$settings")"
     [[ -f "$settings" ]] || printf '{}\n' > "$settings"
-    backup_copy "$settings"
-    python3 - "$settings" <<'PY'
+    if reconciled="$(python3 - "$settings" <<'PY'
 import json, sys
 
 path = sys.argv[1]
@@ -396,12 +399,16 @@ with open(path) as handle:
     settings = json.load(handle)
 wanted = {"type": "command", "command": 'bash "$HOME/.claude/statusline.sh"'}
 if settings.get("statusLine") == wanted:
-    sys.exit(0)
+    raise SystemExit(1)
 settings["statusLine"] = wanted
-with open(path, "w") as handle:
-    json.dump(settings, handle, indent=2)
-    handle.write("\n")
+json.dump(settings, sys.stdout, indent=2)
+sys.stdout.write("\n")
 PY
+    )"; then
+        backup_copy "$settings"
+        printf '%s\n' "$reconciled" > "$settings"
+        log "Pointed the Claude statusline at $HOME/.claude/statusline.sh"
+    fi
 }
 
 install_links() {
