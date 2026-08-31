@@ -222,13 +222,12 @@ class HarnessTests(unittest.TestCase):
             text,
             r"skills(?:@\d+)?\s+(?:add|update|experimental_install)",
         )
-        # Claude Code's plugin registers its own MCP server, hooks, and skill,
-        # so `engram setup claude-code` would only duplicate them. Codex and
-        # OpenCode are set up the way upstream documents, because their setup
-        # commands write files no plugin carries.
-        self.assertNotIn("engram setup claude-code", text)
-        for command in ("engram setup codex", "engram setup opencode"):
-            self.assertIn(command, text, command)
+        # Every client is set up with its own documented command, and none of
+        # them may block on a prompt.
+        for command in ("claude-code", "codex", "opencode"):
+            self.assertRegex(
+                text, rf"(?m)^\s*engram setup {command} < /dev/null", command
+            )
         # Setting up Codex re-adds an entry that outranks the plugin's own.
         self.assertIn("remove_codex_direct_engram_mcp", text)
 

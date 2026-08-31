@@ -225,36 +225,34 @@ PY
     fi
 }
 
-# Per-agent setup, as https://github.com/Gentleman-Programming/engram documents
-# it in docs/AGENT-SETUP.md:
+# Per-agent setup, exactly as https://github.com/Gentleman-Programming/engram
+# documents it in docs/AGENT-SETUP.md: one `engram setup <agent>` per client.
+# Measured on a clean HOME, the claude-code command installs the full plugin,
+# marketplace entry and all, not just an MCP config, so there is no reason to
+# drive Claude Code's plugin CLI by hand. It also writes
+# ~/.claude/mcp/engram.json pinned to the absolute path of the current engram
+# binary, which is why install_packages upgrades engram before this runs: the
+# pin is rewritten after the upgrade rather than left stale by it.
 #
-# - Claude Code: the plugin, and nothing else. It registers the MCP server, the
-#   hooks, and the Memory Protocol skill by itself.
-# - OpenCode: `engram setup opencode`. There is no marketplace entry; the
-#   command writes the plugin, the MCP entry, and the statusline.
-# - Codex: `engram setup codex`. The plugin alone is not the documented setup:
-#   it carries the MCP server and hooks, but the instructions file and the
-#   compaction prompt file are written only by the setup command, and the
-#   compaction prompt is what puts a memory-save instruction into a compaction
-#   summary. Its own plugin install is best-effort, so the explicit pin below
-#   still runs.
+# It asks whether to add engram's tools to the settings allowlist, so it reads
+# from /dev/null: this installer never blocks on a prompt, and declining leaves
+# the tools working with Claude Code's own permission handling.
 #
-# Claude Code needs no matching removal: its plugin is the only setup run here,
-# and nothing in this flow writes a direct MCP entry for it.
-#
-# Setting up Codex writes `[mcp_servers.engram]` with `args = ["mcp"]`, and
-# config.toml takes precedence over the server the plugin declares in its
-# .mcp.json. Measured with `codex mcp list`: with both present Codex lists one
-# `engram` server and it is the config.toml one, so the entry silently swaps
-# the plugin's agent tool profile for the full one, admin tools included. It is
-# removed after every setup, not as one-time cleanup. All of it is idempotent.
+# The one non-upstream step is the last. Setting up Codex writes
+# `[mcp_servers.engram]` with `args = ["mcp"]`, and config.toml outranks the
+# server the plugin declares in its .mcp.json. Measured with `codex mcp list`:
+# with both present Codex lists one `engram` server and it is the config.toml
+# one, so the entry silently swaps the plugin's agent tool profile for the full
+# one. The difference is exactly four tools, and two of them, mem_delete and
+# mem_merge_projects, are destructive against every project in the database.
+# The yolo aliases run these clients with approvals bypassed, so the profile
+# the plugin chose is the one that gets kept. All of it is idempotent.
 install_engram() {
     log "Reconciling Engram"
     command -v engram >/dev/null || die "Engram is missing; run without --links-only to install it."
-    ensure_claude_plugin engram Gentleman-Programming/engram engram
-    engram setup opencode
-    engram setup codex
-    ensure_codex_plugin engram Gentleman-Programming/engram engram
+    engram setup claude-code < /dev/null
+    engram setup codex < /dev/null
+    engram setup opencode < /dev/null
     remove_codex_direct_engram_mcp
 }
 
