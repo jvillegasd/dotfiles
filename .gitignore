@@ -1,0 +1,17 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+
+**/.venv/
+**/__pycache__/
+**/.cache/
+**/browsers/
+**/screenshots/
+
+.claude/settings*.json
+.claude/history.jsonl
+.codex/
+.opencode/
+.engram/
+*.backup.*

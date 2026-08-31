@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# macOS dotfiles installer — Neovim + Ghostty.
+# macOS dotfiles installer — Neovim + Ghostty + portable AI harness.
 # Installs Homebrew dependencies, symlinks the configs under this repo into
 # ~/.config/{nvim,ghostty}, and bootstraps plugins/LSPs headlessly so the
 # first `nvim` launch is instant.
@@ -133,6 +133,11 @@ place_configs() {
     link_config "$SCRIPT_DIR/ghostty" "$GHOSTTY_CONFIG_DIR"
 }
 
+install_harness() {
+    [[ -x "$SCRIPT_DIR/harness/install.sh" ]] || die "Missing harness installer: $SCRIPT_DIR/harness/install.sh"
+    "$SCRIPT_DIR/harness/install.sh"
+}
+
 bootstrap_nvim() {
     log "Syncing lazy.nvim plugins"
     nvim --headless "+Lazy! sync" +qa
@@ -152,12 +157,15 @@ $(printf '\033[1;32m✓ Dotfiles setup complete.\033[0m')
 Configs linked:
   $NVIM_CONFIG_DIR     -> $SCRIPT_DIR/nvim
   $GHOSTTY_CONFIG_DIR  -> $SCRIPT_DIR/ghostty
+  AI harness policy and skills -> Codex, Claude Code, and OpenCode
 
 Next steps:
   1. Open Ghostty — JetBrainsMono Nerd Font (default) + Catppuccin theme (Mocha/Latte, follows macOS appearance) are wired in via $GHOSTTY_CONFIG_DIR/config.
      Monocraft is also installed; swap by editing \`font-family\` in that config to \`Monocraft\`.
   2. Launch: nvim
   3. Sanity: :checkhealth   ·   :Lazy   ·   :Mason
+  4. Authenticate when needed: codex login · claude auth login · opencode auth login · gh auth login
+  5. Restart the three AI clients, then review and trust the Engram and RTK hooks in Codex /hooks.
 
 Tools installed via brew:
   ${BREW_FORMULAE[*]}
@@ -174,6 +182,7 @@ main() {
     install_casks
     ensure_repo
     place_configs
+    install_harness
     bootstrap_nvim
     summary
 }
