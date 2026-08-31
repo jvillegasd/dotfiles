@@ -165,7 +165,7 @@ Next steps:
   2. Launch: nvim
   3. Sanity: :checkhealth   ·   :Lazy   ·   :Mason
   4. Authenticate when needed: codex login · claude auth login · opencode auth login · gh auth login
-  5. Restart the three AI clients, then review and trust the Engram, Ponytail, and RTK hooks in Codex /hooks.
+  5. Restart the three AI clients, then review and trust the Engram and RTK hooks in Codex /hooks.
 
 Tools installed via brew:
   ${BREW_FORMULAE[*]}

@@ -44,10 +44,10 @@ Give it only the diff. No requirements, no context, no ticket.
 > Assume this diff is wrong. Find the bug.
 
 Lenses: callers of every touched symbol left unupdated; sibling code paths left
-broken because a fix landed at one call site only; dead code and leftovers; a
-new abstraction with one user, a dependency for a few lines, or config for a
-constant; anything whose correctness depends on information not visible in the
-diff.
+broken because a fix landed at one call site only; dead code and leftovers;
+`ponytail` violations, meaning a new abstraction with one user, a dependency
+for a few lines, or config for a constant; anything whose correctness depends
+on information not visible in the diff.
 
 ## Reviewer output
 
@@ -79,7 +79,7 @@ Reviewers never edit files, and findings never reach the forge.
 
 For each finding, exactly one of:
 
-- Fix it, with the smallest change that resolves it.
+- Fix it, with the smallest change that resolves it, per `ponytail`.
 - Reject it, with a specific reason recorded in the pull request body under
   `Rejected review findings`. A rejection you cannot justify in one line is a
   fix you are avoiding.

@@ -51,6 +51,11 @@ INGESTING_COMMANDS = {
     "yolo",
 }
 
+# Ponytail replaced a SessionStart hook that applied to every session with an
+# explicit load in each command that writes code. Nothing else enforces it, so
+# dropping the line would silently turn lazy mode off everywhere.
+PONYTAIL_COMMANDS = {"address-review", "feedback", "yolo"}
+
 
 def folder_hash(path: Path) -> str:
     digest = hashlib.sha256()
@@ -569,6 +574,19 @@ class HarnessTests(unittest.TestCase):
                 (COMMANDS / f"{name}.md").read_text(),
                 name,
             )
+
+        for name in PONYTAIL_COMMANDS:
+            self.assertIn(
+                "Load and follow the `ponytail` skill",
+                (COMMANDS / f"{name}.md").read_text(),
+                name,
+            )
+        # The plugin and the skill together would load ponytail twice, so
+        # provisioning removes the plugin and the smoke check asserts zero.
+        installer = (ROOT / "harness" / "install.sh").read_text()
+        self.assertIn("retire_ponytail_plugin", installer)
+        self.assertIn("assert_plugin_count codex ponytail 0", installer)
+        self.assertIn("assert_plugin_count claude ponytail 0", installer)
 
         skills = {
             "setup-harness": (

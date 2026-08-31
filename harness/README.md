@@ -49,7 +49,7 @@ Measured on a clean HOME, each command installs the full plugin, marketplace ent
 
 Setting up Codex also writes `[mcp_servers.engram]` in `config.toml`, which outranks the server the plugin declares in its `.mcp.json`. Nothing is lost by that: engram 1.20.0 writes `args = ["mcp", "--tools=agent"]` and the stable `/opt/homebrew/bin/engram` path, so the entry that wins carries the same agent tool profile the plugin asks for. Verified with `codex mcp list`. Upstream's configuration is kept as shipped.
 
-The full installer uses Homebrew for Codex, OpenCode, GitHub CLI, Engram, UV, RTK, and Worktrunk; Anthropic's native latest channel for Claude Code; and official client setup/plugin commands for Engram, Ponytail, and RTK. It never starts an interactive client or authenticates for you.
+The full installer uses Homebrew for Codex, OpenCode, GitHub CLI, Engram, UV, RTK, and Worktrunk; Anthropic's native latest channel for Claude Code; and official client setup commands for Engram and RTK. It never starts an interactive client or authenticates for you.
 
 With the SEO group enabled it also links the portable `claude-seo` launcher. SEO Python dependencies and Chromium remain lazy and live only in the ignored per-user harness cache.
 
@@ -87,7 +87,15 @@ Review every upstream diff, run the acceptance suite, and commit only the approv
 
 Delete a locked skill in one reviewed change: remove `harness/skills/<name>`, its `skills-lock.json` entry, and `.claude/skills/<name>`. A copied skill with unknown provenance remains an attributed local fork until its exact upstream is identified.
 
-Engram, Ponytail, and Orca-provided skills are runtime/plugin managed and never belong in `skills-lock.json`.
+Engram and Orca-provided skills are runtime/plugin managed and never belong in `skills-lock.json`.
+
+## Ponytail
+
+Ponytail is a locked skill body, not a plugin. The plugin's mechanism was a `SessionStart` hook that turned lazy mode on for every session in every repository, plus `SubagentStart` and `UserPromptSubmit` trackers, six skills, and a config file. Provisioning removes all of it: `retire_ponytail_plugin` uninstalls the plugin and its marketplace from Codex and Claude Code and drops the module from OpenCode's global config, and the smoke check asserts zero of it survives, so the plugin and the skill can never load ponytail twice.
+
+What replaces it is one line in each command that writes code, `/yolo`, `/feedback`, and `/address-review`, saying to load and follow the skill, plus `adversarial-review` using ponytail violations as a review lens and its fix standard. That is a smaller and more precise surface than a session hook: lazy mode applies where code is written rather than to every conversation, and it costs one sentence per command rather than three hooks and five JS files. It also delivers more of the skill, because the hook injects a level-filtered condensation while the locked `SKILL.md` carries the full body, including the reuse-before-writing rung, the root-cause-not-symptom rule, and the read-fully-then-be-lazy boundary.
+
+The trade is deliberate. `/ponytail lite|ultra` switching, the statusline, subagent inheritance, and the five auxiliary skills are gone; the intensity table survives in the body as reference prose with nothing to write the config it describes. In exchange the body is pinned in `skills-lock.json` and changes only through a reviewed `npx skills@1 update`, where the plugin previously moved 4.7.0 to 4.9.0 during an install with six agent-steering bodies changing unread.
 
 ## Roster
 
@@ -95,7 +103,7 @@ Commands are `/ask`, `/triage`, `/spec`, `/create-ticket`, `/yolo`, `/feedback`,
 
 Local skills are `adversarial-review`, `evidence`, `seo`, and `setup-harness`. `setup-harness` stays a skill because it installs bundled lifecycle assets that only a skill directory can carry; its guards keep it from firing on its own.
 
-Locked Matt Pocock skills provide grilling, domain/module vocabulary, TDD, research/prototyping, diagnosis, handoff, and conflict resolution. Locked `AgriciDaniel/claude-seo` bodies provide the SEO roles, none of them installed.
+Locked Matt Pocock skills provide grilling, domain/module vocabulary, TDD, research/prototyping, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode. Locked `AgriciDaniel/claude-seo` bodies provide the SEO roles, none of them installed.
 
 Deliberately removed: `to-spec` and `to-tickets`, whose templates now live inline in `/spec` and `/create-ticket` rather than behind a wrapper that overrode most of what it loaded; `code-review`, whose second axis is now a spec-conformance pass `/yolo` runs itself while holding the contract; the `grill-me` and `review` wrappers, retired earlier; and twelve globally invocable SEO names.
 

@@ -15,6 +15,8 @@ Use ephemeral specialist roles. Do not create persistent client-specific persona
 
 Run independent roles in parallel when the client supports it; otherwise run them sequentially without merging their scopes.
 
+`ponytail` is the coding standard, loaded by name from every command that writes code rather than by a session hook. The laziest solution that works: YAGNI, reuse what the codebase already has, stdlib and native before a dependency, root cause over symptom, no unrequested abstractions. It shortens the solution, never the reading, and it never simplifies away validation at a trust boundary, error handling that prevents data loss, security, accessibility, or anything explicitly requested.
+
 `seo` is the only installed SEO name. Every other SEO body, locked or local, is a role read from a path relative to the `seo` skill directory, and none of them is an invocable skill. Resolve `claude-seo` with its bundled launcher and any upstream path beginning `skills/seo/` against that same directory.
 
 ### Routing

@@ -180,31 +180,6 @@ json_contains() {
         grep -q '^True$'
 }
 
-ensure_codex_plugin() {
-    local marketplace="$1" source="$2" plugin="$3"
-    if ! json_contains "\"name\": \"$marketplace\"" codex plugin marketplace list --json; then
-        codex plugin marketplace add "$source"
-    fi
-    codex plugin marketplace upgrade "$marketplace"
-    if ! json_contains "$plugin@$marketplace" codex plugin list --json; then
-        codex plugin add "$plugin@$marketplace"
-    fi
-}
-
-ensure_claude_plugin() {
-    local marketplace="$1" source="$2" plugin="$3"
-    if ! json_contains "\"name\": \"$marketplace\"" claude plugin marketplace list --json; then
-        claude plugin marketplace add "$source" --scope user
-    else
-        claude plugin marketplace update "$marketplace"
-    fi
-    if json_contains "$plugin@$marketplace" claude plugin list --json; then
-        claude plugin update "$plugin@$marketplace" --scope user --yes
-    else
-        claude plugin install "$plugin@$marketplace" --scope user --yes
-    fi
-}
-
 # Per-agent setup, exactly as https://github.com/Gentleman-Programming/engram
 # documents it in docs/AGENT-SETUP.md: one `engram setup <agent>` per client,
 # and nothing else. Measured on a clean HOME, each command installs the full
@@ -233,13 +208,59 @@ install_engram() {
     engram setup opencode < /dev/null
 }
 
+# Ponytail is a locked skill body now, not a plugin. The plugin's value was its
+# SessionStart hook, which turned lazy mode on for every session; the commands
+# that write code name the skill instead, which is a smaller surface and gets
+# the full SKILL.md rather than the level-filtered condensation the hook
+# injects. Leaving the plugin installed alongside it would load ponytail twice
+# and let six agent-steering bodies keep updating unreviewed, so provisioning
+# removes it. Idempotent: every branch is skipped once the plugin is gone.
+retire_ponytail_plugin() {
+    log "Retiring the Ponytail plugin"
+    if json_contains "ponytail@ponytail" codex plugin list --json; then
+        codex plugin remove ponytail@ponytail
+    fi
+    if json_contains "\"name\": \"ponytail\"" codex plugin marketplace list --json; then
+        codex plugin marketplace remove ponytail
+    fi
+    if json_contains "ponytail@ponytail" claude plugin list --json; then
+        claude plugin uninstall ponytail@ponytail --scope user --yes
+    fi
+    if json_contains "\"name\": \"ponytail\"" claude plugin marketplace list --json; then
+        claude plugin marketplace remove ponytail --scope user
+    fi
+    drop_opencode_plugin '@dietrichgebert/ponytail'
+}
+
+# OpenCode has no uninstall verb: its plugin list is just an array in the global
+# config, so the entry is dropped there. Rewritten only when it is present.
+drop_opencode_plugin() {
+    local module="$1" config="$HOME/.config/opencode/opencode.json"
+    [[ -f "$config" ]] || return 0
+    python3 - "$config" "$module" <<'PY'
+import json, sys
+
+path, module = sys.argv[1], sys.argv[2]
+with open(path) as handle:
+    config = json.load(handle)
+plugins = config.get("plugin", [])
+# An entry is the bare module or the module with a version suffix.
+kept = [p for p in plugins if p != module and not p.startswith(module + "@")]
+if len(kept) == len(plugins):
+    sys.exit(0)
+if kept:
+    config["plugin"] = kept
+else:
+    config.pop("plugin")
+with open(path, "w") as handle:
+    json.dump(config, handle, indent=2)
+    handle.write("\n")
+PY
+}
+
 install_integrations() {
     install_engram
-
-    log "Reconciling Ponytail"
-    ensure_codex_plugin ponytail DietrichGebert/ponytail ponytail
-    ensure_claude_plugin ponytail DietrichGebert/ponytail ponytail
-    opencode plugin --global --force @dietrichgebert/ponytail
+    retire_ponytail_plugin
 
     log "Reconciling RTK and Worktrunk"
     rtk init --global --hook-only --auto-patch --no-trust-filters
@@ -466,12 +487,15 @@ smoke_check() {
     [[ "$(readlink "$HOME/.claude/CLAUDE.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing Claude policy link."
     [[ "$(readlink "$HOME/.config/opencode/AGENTS.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing OpenCode policy link."
     assert_plugin_count codex engram 1
-    assert_plugin_count codex ponytail 1
     assert_plugin_count claude engram 1
-    assert_plugin_count claude ponytail 1
+    # Ponytail is a locked skill now. Zero is the assertion, so a reappearing
+    # plugin is caught instead of silently double-loading with the skill.
+    assert_plugin_count codex ponytail 0
+    assert_plugin_count claude ponytail 0
+    [[ -f "$HARNESS_DIR/skills/ponytail/SKILL.md" ]] || die "Missing the ponytail skill body."
 
     opencode debug config |
-        python3 -c 'import json,sys; d=json.load(sys.stdin); p=d.get("plugin",[]); assert sum("engram" in x for x in p)==1; assert sum("ponytail" in x for x in p)==1; assert "engram" in d.get("mcp",{})'
+        python3 -c 'import json,sys; d=json.load(sys.stdin); p=d.get("plugin",[]); assert sum("engram" in x for x in p)==1; assert not any("ponytail" in x for x in p); assert "engram" in d.get("mcp",{})'
     claude plugin validate "$HARNESS_DIR/skills" >/dev/null
     wt switch --help | grep -q -- '--no-cd'
     rtk --version >/dev/null
@@ -493,7 +517,7 @@ Next steps (interactive; not run by this installer):
   3. Authenticate: opencode auth login
   4. Authenticate: gh auth login
   5. Restart Codex, Claude Code, and OpenCode.
-  6. In Codex, open /hooks and trust the Engram, Ponytail, and RTK hooks you reviewed.
+  6. In Codex, open /hooks and trust the Engram and RTK hooks you reviewed.
   7. Invoke setup-harness in each project that should use the public lifecycle.
 
 Skill groups: core$($WITH_SEO && printf ', seo')
