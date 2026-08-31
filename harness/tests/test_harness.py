@@ -425,6 +425,43 @@ class HarnessTests(unittest.TestCase):
             for name in ["seo"] + UNLINKED_SKILLS:
                 self.assertFalse((home / ".claude" / "skills" / name).exists(), name)
 
+    def test_no_backup_deletes_instead_of_archiving(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            # Something in the way at a managed path, and a private skill that
+            # must survive either way.
+            collision = home / ".agents" / "skills" / "evidence"
+            collision.mkdir(parents=True)
+            (collision / "keep").write_text("collision")
+            private = home / ".agents" / "skills" / "private"
+            private.mkdir(parents=True)
+            (private / "SKILL.md").write_text(
+                "---\nname: private\ndescription: private\n---\n"
+            )
+
+            environment = os.environ | {
+                "HOME": str(home),
+                "XDG_CACHE_HOME": str(home / ".cache"),
+            }
+            subprocess.run(
+                ["bash", ROOT / "harness" / "install.sh", "--links-only", "--no-backup"],
+                env=environment,
+                check=True,
+                capture_output=True,
+            )
+
+            self.assertFalse((home / ".dotfiles-backups").exists())
+            self.assertTrue((home / ".agents" / "skills" / "evidence").is_symlink())
+            self.assertTrue(private.is_dir())
+            self.assertTrue((private / "SKILL.md").is_file())
+
+    def test_no_backup_is_documented_in_both_installers(self) -> None:
+        for script in (ROOT / "install.sh", ROOT / "harness" / "install.sh"):
+            text = script.read_text()
+            self.assertIn("--no-backup", text, script)
+            # The flag is destructive, so the usage text has to say so.
+            self.assertIn("Destructive and unrecoverable", text, script)
+
     def test_bench_reads_every_client_session_store(self) -> None:
         measure = load_module("measure", ROOT / "harness" / "bench" / "measure.py")
 

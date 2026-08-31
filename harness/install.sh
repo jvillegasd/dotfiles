@@ -6,6 +6,7 @@ HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LINKS_ONLY=false
 WITH_SEO=false
 SEO_SET=false
+NO_BACKUP=false
 BACKUP_ROOT=""
 GROUPS_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/portable-harness/groups"
 
@@ -14,11 +15,15 @@ die()  { printf '\033[1;31m[err]\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
     cat <<'EOF'
-Usage: harness/install.sh [--links-only] [--with-seo|--without-seo]
+Usage: harness/install.sh [--links-only] [--with-seo|--without-seo] [--no-backup]
 
   --links-only   Reconcile policy, command, and skill links without packages/plugins.
   --with-seo     Also link the optional SEO skill group and its launcher.
   --without-seo  Unlink the optional SEO group (the default for a fresh install).
+  --no-backup    Delete whatever is in the way instead of moving it to
+                 ~/.dotfiles-backups. Destructive and unrecoverable: a private
+                 skill or a hand-edited config sitting at a managed path is
+                 gone, not archived.
 
 The SEO choice is remembered, so a later run without either flag keeps it.
 EOF
@@ -29,6 +34,7 @@ for arg in "$@"; do
         --links-only) LINKS_ONLY=true ;;
         --with-seo) WITH_SEO=true; SEO_SET=true ;;
         --without-seo) WITH_SEO=false; SEO_SET=true ;;
+        --no-backup) NO_BACKUP=true ;;
         -h|--help) usage; exit 0 ;;
         *) die "Unknown argument: $arg" ;;
     esac
@@ -82,6 +88,11 @@ ensure_backup_root() {
 backup_existing() {
     local path="$1" suffix="${2-}" relative backup
     [[ -e "$path" || -L "$path" ]] || return 0
+    if $NO_BACKUP; then
+        rm -rf "$path"
+        log "Removed $path"
+        return
+    fi
     ensure_backup_root
     relative="${path#"$HOME"/}"
     backup="$BACKUP_ROOT/$relative$suffix"
@@ -93,6 +104,9 @@ backup_existing() {
 backup_copy() {
     local path="$1" relative backup
     [[ -f "$path" ]] || return 0
+    if $NO_BACKUP; then
+        return
+    fi
     ensure_backup_root
     relative="${path#"$HOME"/}"
     backup="$BACKUP_ROOT/$relative.pre-reconcile"
