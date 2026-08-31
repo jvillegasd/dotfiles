@@ -205,55 +205,32 @@ ensure_claude_plugin() {
     fi
 }
 
-remove_codex_direct_engram_mcp() {
-    local config="$HOME/.codex/config.toml"
-    [[ -f "$config" ]] || return
-    if grep -Eq '^\[mcp_servers\.engram(\.|\])' "$config"; then
-        backup_copy "$config"
-        python3 - "$config" <<'PY'
-import pathlib, re, sys
-path = pathlib.Path(sys.argv[1])
-text = path.read_text()
-text = re.sub(
-    r"(?ms)^\[mcp_servers\.engram(?:\.[^]]+)?\]\n.*?(?=^\[|\Z)",
-    "",
-    text,
-).rstrip() + "\n"
-path.write_text(text)
-PY
-        log "Removed the direct Codex Engram MCP; the plugin's agent profile owns it"
-    fi
-}
-
 # Per-agent setup, exactly as https://github.com/Gentleman-Programming/engram
-# documents it in docs/AGENT-SETUP.md: one `engram setup <agent>` per client.
-# Measured on a clean HOME, the claude-code command installs the full plugin,
-# marketplace entry and all, not just an MCP config, so there is no reason to
-# drive Claude Code's plugin CLI by hand. It also writes
-# ~/.claude/mcp/engram.json pinned to the absolute path of the current engram
-# binary, which is why install_packages upgrades engram before this runs: the
-# pin is rewritten after the upgrade rather than left stale by it.
+# documents it in docs/AGENT-SETUP.md: one `engram setup <agent>` per client,
+# and nothing else. Measured on a clean HOME, each command installs the full
+# plugin, marketplace entry and all, so nothing here drives a client's plugin
+# CLI by hand.
 #
-# It asks whether to add engram's tools to the settings allowlist, so it reads
-# from /dev/null: this installer never blocks on a prompt, and declining leaves
-# the tools working with Claude Code's own permission handling.
+# The claude-code command asks whether to add engram's tools to the settings
+# allowlist, so all three read from /dev/null: this installer never blocks on a
+# prompt, and declining leaves the tools working with Claude Code's own
+# permission handling. That command also writes ~/.claude/mcp/engram.json
+# pinned to the absolute path of the current engram binary, which is why
+# install_packages upgrades engram before this runs: the pin is rewritten after
+# the upgrade rather than left stale by it.
 #
-# The one non-upstream step is the last. Setting up Codex writes
-# `[mcp_servers.engram]` with `args = ["mcp"]`, and config.toml outranks the
-# server the plugin declares in its .mcp.json. Measured with `codex mcp list`:
-# with both present Codex lists one `engram` server and it is the config.toml
-# one, so the entry silently swaps the plugin's agent tool profile for the full
-# one. The difference is exactly four tools, and two of them, mem_delete and
-# mem_merge_projects, are destructive against every project in the database.
-# The yolo aliases run these clients with approvals bypassed, so the profile
-# the plugin chose is the one that gets kept. All of it is idempotent.
+# Setting up Codex also writes `[mcp_servers.engram]` in config.toml, which
+# outranks the server the plugin declares in its .mcp.json. Nothing is lost:
+# engram 1.20.0 writes `args = ["mcp", "--tools=agent"]` and the stable
+# /opt/homebrew/bin/engram path, so the entry that wins carries the same agent
+# tool profile the plugin asks for. Upstream's configuration is kept as
+# shipped.
 install_engram() {
     log "Reconciling Engram"
     command -v engram >/dev/null || die "Engram is missing; run without --links-only to install it."
     engram setup claude-code < /dev/null
     engram setup codex < /dev/null
     engram setup opencode < /dev/null
-    remove_codex_direct_engram_mcp
 }
 
 install_integrations() {

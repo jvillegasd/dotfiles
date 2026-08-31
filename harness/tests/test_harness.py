@@ -228,8 +228,6 @@ class HarnessTests(unittest.TestCase):
             self.assertRegex(
                 text, rf"(?m)^\s*engram setup {command} < /dev/null", command
             )
-        # Setting up Codex re-adds an entry that outranks the plugin's own.
-        self.assertIn("remove_codex_direct_engram_mcp", text)
 
     def test_shell_and_python_syntax(self) -> None:
         for script in (
