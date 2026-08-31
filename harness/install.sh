@@ -6,6 +6,7 @@ HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LINKS_ONLY=false
 WITH_SEO=false
 SEO_SET=false
+NO_BACKUP=false
 BACKUP_ROOT=""
 GROUPS_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/portable-harness/groups"
 
@@ -14,11 +15,15 @@ die()  { printf '\033[1;31m[err]\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
     cat <<'EOF'
-Usage: harness/install.sh [--links-only] [--with-seo|--without-seo]
+Usage: harness/install.sh [--links-only] [--with-seo|--without-seo] [--no-backup]
 
   --links-only   Reconcile policy, command, and skill links without packages/plugins.
   --with-seo     Also link the optional SEO skill group and its launcher.
   --without-seo  Unlink the optional SEO group (the default for a fresh install).
+  --no-backup    Delete whatever is in the way instead of moving it to
+                 ~/.dotfiles-backups. Destructive and unrecoverable: a private
+                 skill or a hand-edited config sitting at a managed path is
+                 gone, not archived.
 
 The SEO choice is remembered, so a later run without either flag keeps it.
 EOF
@@ -29,6 +34,7 @@ for arg in "$@"; do
         --links-only) LINKS_ONLY=true ;;
         --with-seo) WITH_SEO=true; SEO_SET=true ;;
         --without-seo) WITH_SEO=false; SEO_SET=true ;;
+        --no-backup) NO_BACKUP=true ;;
         -h|--help) usage; exit 0 ;;
         *) die "Unknown argument: $arg" ;;
     esac
@@ -76,12 +82,20 @@ ensure_backup_root() {
     fi
 }
 
+# A directory symlink is backed up under a suffixed name: parking it at the
+# plain path would leave a symlink where a later backup expects a directory,
+# and that backup would then write through it into the link's target.
 backup_existing() {
-    local path="$1" relative backup
+    local path="$1" suffix="${2-}" relative backup
     [[ -e "$path" || -L "$path" ]] || return 0
+    if $NO_BACKUP; then
+        rm -rf "$path"
+        log "Removed $path"
+        return
+    fi
     ensure_backup_root
     relative="${path#"$HOME"/}"
-    backup="$BACKUP_ROOT/$relative"
+    backup="$BACKUP_ROOT/$relative$suffix"
     mkdir -p "$(dirname "$backup")"
     mv "$path" "$backup"
     log "Backed up $path -> $backup"
@@ -90,21 +104,14 @@ backup_existing() {
 backup_copy() {
     local path="$1" relative backup
     [[ -f "$path" ]] || return 0
+    if $NO_BACKUP; then
+        return
+    fi
     ensure_backup_root
     relative="${path#"$HOME"/}"
     backup="$BACKUP_ROOT/$relative.pre-reconcile"
     mkdir -p "$(dirname "$backup")"
     cp -p "$path" "$backup"
-}
-
-backup_skill_dir_link() {
-    local path="$1" relative backup
-    ensure_backup_root
-    relative="${path#"$HOME"/}"
-    backup="$BACKUP_ROOT/$relative.previous-link"
-    mkdir -p "$(dirname "$backup")"
-    mv "$path" "$backup"
-    log "Backed up $path -> $backup"
 }
 
 link_managed() {
@@ -118,24 +125,18 @@ link_managed() {
     log "Linked $destination -> $source"
 }
 
+# The harness owns a real directory here, so its links and a user's private
+# skills can sit side by side. Anything else at the path is moved aside; a
+# symlink included, because linking into someone else's directory would write
+# managed entries somewhere this installer never sweeps.
 ensure_skill_dir() {
-    local destination="$1" old_target entry
+    local destination="$1"
     if [[ -L "$destination" ]]; then
-        old_target="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$destination")"
-        backup_skill_dir_link "$destination"
-        mkdir -p "$destination"
-        if [[ -d "$old_target" ]]; then
-            for entry in "$old_target"/*; do
-                [[ -e "$entry" ]] || continue
-                ln -s "$entry" "$destination/$(basename "$entry")"
-            done
-        fi
+        backup_existing "$destination" .previous-link
     elif [[ -e "$destination" && ! -d "$destination" ]]; then
         backup_existing "$destination"
-        mkdir -p "$destination"
-    else
-        mkdir -p "$destination"
     fi
+    mkdir -p "$destination"
 }
 
 brew_latest_formula() {
@@ -173,13 +174,6 @@ install_packages() {
     export PATH="$HOME/.local/bin:$PATH"
 }
 
-json_contains() {
-    local needle="$1"
-    shift
-    "$@" | python3 -c 'import json,sys; needle=sys.argv[1]; print(needle in json.dumps(json.load(sys.stdin)))' "$needle" |
-        grep -q '^True$'
-}
-
 # Per-agent setup, exactly as https://github.com/Gentleman-Programming/engram
 # documents it in docs/AGENT-SETUP.md: one `engram setup <agent>` per client,
 # and nothing else. Measured on a clean HOME, each command installs the full
@@ -208,59 +202,8 @@ install_engram() {
     engram setup opencode < /dev/null
 }
 
-# Ponytail is a locked skill body now, not a plugin. The plugin's value was its
-# SessionStart hook, which turned lazy mode on for every session; the commands
-# that write code name the skill instead, which is a smaller surface and gets
-# the full SKILL.md rather than the level-filtered condensation the hook
-# injects. Leaving the plugin installed alongside it would load ponytail twice
-# and let six agent-steering bodies keep updating unreviewed, so provisioning
-# removes it. Idempotent: every branch is skipped once the plugin is gone.
-retire_ponytail_plugin() {
-    log "Retiring the Ponytail plugin"
-    if json_contains "ponytail@ponytail" codex plugin list --json; then
-        codex plugin remove ponytail@ponytail
-    fi
-    if json_contains "\"name\": \"ponytail\"" codex plugin marketplace list --json; then
-        codex plugin marketplace remove ponytail
-    fi
-    if json_contains "ponytail@ponytail" claude plugin list --json; then
-        claude plugin uninstall ponytail@ponytail --scope user --yes
-    fi
-    if json_contains "\"name\": \"ponytail\"" claude plugin marketplace list --json; then
-        claude plugin marketplace remove ponytail --scope user
-    fi
-    drop_opencode_plugin '@dietrichgebert/ponytail'
-}
-
-# OpenCode has no uninstall verb: its plugin list is just an array in the global
-# config, so the entry is dropped there. Rewritten only when it is present.
-drop_opencode_plugin() {
-    local module="$1" config="$HOME/.config/opencode/opencode.json"
-    [[ -f "$config" ]] || return 0
-    python3 - "$config" "$module" <<'PY'
-import json, sys
-
-path, module = sys.argv[1], sys.argv[2]
-with open(path) as handle:
-    config = json.load(handle)
-plugins = config.get("plugin", [])
-# An entry is the bare module or the module with a version suffix.
-kept = [p for p in plugins if p != module and not p.startswith(module + "@")]
-if len(kept) == len(plugins):
-    sys.exit(0)
-if kept:
-    config["plugin"] = kept
-else:
-    config.pop("plugin")
-with open(path, "w") as handle:
-    json.dump(config, handle, indent=2)
-    handle.write("\n")
-PY
-}
-
 install_integrations() {
     install_engram
-    retire_ponytail_plugin
 
     log "Reconciling RTK and Worktrunk"
     rtk init --global --hook-only --auto-patch --no-trust-filters
@@ -268,61 +211,18 @@ install_integrations() {
     wt config shell install --yes zsh
 }
 
-# Bodies this harness once installed under a different name, or that a client
-# picked up before the harness existed. These are real directories rather than
-# harness symlinks, so the orphan sweep cannot see them.
-retire_aliases() {
-    local root name persona
-    local aliases=(
-        address-review
-        ask-matt
-        claude-handoff
-        code-review
-        design-an-interface
-        diagnose
-        edit-article
-        grill-me
-        grill-with-docs
-        implement
-        improve-codebase-architecture
-        loop-me
-        request-refactor-plan
-        review
-        seo-performance
-        seo-visual
-        setup-matt-pocock-skills
-        ship
-        spec
-        teach
-        tickets
-        to-issues
-        to-prd
-        to-questionnaire
-        to-spec
-        to-tickets
-        triage
-        ubiquitous-language
-    )
+# A real directory shadowing a name this harness manages. It survives the
+# orphan sweep because it is not a symlink, and it stays live in the client
+# whether or not the harness links that name.
+retire_shadowed_skills() {
+    local root name
     for root in "${SKILL_ROOTS[@]}"; do
         [[ -d "$root" ]] || continue
-        for name in "${aliases[@]}"; do
-            backup_existing "$root/$name"
-        done
-        # A real directory shadowing a name this harness manages, left behind
-        # by an earlier standalone install. It survives the orphan sweep
-        # because it is not a symlink, and it stays live in the client
-        # whether or not the harness links that name.
         while IFS= read -r name; do
             if [[ -e "$root/$name" && ! -L "$root/$name" ]]; then
                 backup_existing "$root/$name"
             fi
         done < <(skill_names)
-    done
-    # The policy forbids persistent client-specific personas; the SEO roles are
-    # read from the seo skill directory instead.
-    for persona in "$HOME"/.claude/agents/seo-*.md; do
-        [[ -e "$persona" ]] || continue
-        backup_existing "$persona"
     done
 }
 
@@ -338,8 +238,14 @@ reconcile_orphans() {
             target="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$entry")"
             if [[ ! -e "$target" ]]; then
                 backup_existing "$entry"
-            elif [[ "$target" == "$HARNESS_DIR"/* && "$desired" != *"|$target|"* ]]; then
-                backup_existing "$entry"
+            elif [[ "$target" == "$HARNESS_DIR"/* ]]; then
+                # A managed link is always named after its target, so a name
+                # this harness no longer installs is an orphan even when it
+                # still points at a body that is installed under its own name.
+                if [[ "$desired" != *"|$target|"* ]] ||
+                    [[ "$(basename "$entry")" != "$(basename "$target")" ]]; then
+                    backup_existing "$entry"
+                fi
             fi
         done
     done
@@ -384,11 +290,14 @@ PY
 # The committed statusline is linked to the path Claude Code already reads, so
 # settings.json only ever needs the one command line pointing at it. Rewritten
 # only when it differs, which keeps a hand-edited settings.json otherwise alone.
+# The reconciled file is emitted on stdout and written here, rather than
+# written in place, so the backup is taken only when something actually
+# changes. Backing up unconditionally minted a fresh backup root on every run.
 point_statusline_at_link() {
-    local settings="$HOME/.claude/settings.json"
+    local settings="$HOME/.claude/settings.json" reconciled
+    mkdir -p "$(dirname "$settings")"
     [[ -f "$settings" ]] || printf '{}\n' > "$settings"
-    backup_copy "$settings"
-    python3 - "$settings" <<'PY'
+    if reconciled="$(python3 - "$settings" <<'PY'
 import json, sys
 
 path = sys.argv[1]
@@ -396,21 +305,24 @@ with open(path) as handle:
     settings = json.load(handle)
 wanted = {"type": "command", "command": 'bash "$HOME/.claude/statusline.sh"'}
 if settings.get("statusLine") == wanted:
-    sys.exit(0)
+    raise SystemExit(1)
 settings["statusLine"] = wanted
-with open(path, "w") as handle:
-    json.dump(settings, handle, indent=2)
-    handle.write("\n")
+json.dump(settings, sys.stdout, indent=2)
+sys.stdout.write("\n")
 PY
+    )"; then
+        backup_copy "$settings"
+        printf '%s\n' "$reconciled" > "$settings"
+        log "Pointed the Claude statusline at $HOME/.claude/statusline.sh"
+    fi
 }
 
 install_links() {
     local skill source command root desired="|"
     ensure_skill_dir "$HOME/.agents/skills"
     ensure_skill_dir "$HOME/.claude/skills"
-    ensure_skill_dir "$HOME/.config/opencode/skills"
     mkdir -p "${COMMAND_ROOTS[@]}"
-    retire_aliases
+    retire_shadowed_skills
 
     while IFS= read -r skill; do
         if is_unlinked_skill "$skill"; then
@@ -514,14 +426,10 @@ smoke_check() {
     [[ "$(readlink "$HOME/.config/opencode/AGENTS.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing OpenCode policy link."
     assert_plugin_count codex engram 1
     assert_plugin_count claude engram 1
-    # Ponytail is a locked skill now. Zero is the assertion, so a reappearing
-    # plugin is caught instead of silently double-loading with the skill.
-    assert_plugin_count codex ponytail 0
-    assert_plugin_count claude ponytail 0
     [[ -f "$HARNESS_DIR/skills/ponytail/SKILL.md" ]] || die "Missing the ponytail skill body."
 
     opencode debug config |
-        python3 -c 'import json,sys; d=json.load(sys.stdin); p=d.get("plugin",[]); assert sum("engram" in x for x in p)==1; assert not any("ponytail" in x for x in p); assert "engram" in d.get("mcp",{})'
+        python3 -c 'import json,sys; d=json.load(sys.stdin); p=d.get("plugin",[]); assert sum("engram" in x for x in p)==1; assert "engram" in d.get("mcp",{})'
     claude plugin validate "$HARNESS_DIR/skills" >/dev/null
     wt switch --help | grep -q -- '--no-cd'
     rtk --version >/dev/null
@@ -560,25 +468,6 @@ EOF
     fi
 }
 
-# Engram is core: the policy assumes memory survives a session. A links-only
-# run skips package work, so it checks all four surfaces and repairs them
-# rather than reporting a gap it could have closed.
-verify_engram() {
-    local missing=()
-    command -v engram >/dev/null || missing+=("engram binary")
-    json_contains "engram@engram" claude plugin list --json || missing+=("Claude plugin")
-    json_contains "engram@engram" codex plugin list --json || missing+=("Codex plugin")
-    opencode debug config |
-        python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if "engram" in d.get("mcp",{}) else 1)' ||
-        missing+=("OpenCode MCP")
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        printf '\033[1;33m[warn]\033[0m Engram is incomplete (%s); reconciling.\n' "${missing[*]}" >&2
-        install_engram
-        return
-    fi
-    log "Engram is installed in all three clients"
-}
-
 main() {
     resolve_groups
     if ! $LINKS_ONLY; then
@@ -587,8 +476,13 @@ main() {
     fi
     install_links
     install_aliases
+    # Engram is core: the policy assumes memory survives a session. A links-only
+    # run skips package work, so it reconciles Engram unconditionally rather
+    # than probing first. Probing only ever saw presence, never the absolute
+    # binary path pinned in each client's config, so a stale pin passed the
+    # check; setup rewrites the pin every time.
     if $LINKS_ONLY; then
-        verify_engram || true
+        install_engram
     else
         smoke_check
     fi

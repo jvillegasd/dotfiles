@@ -29,7 +29,15 @@ The root `../install.sh` installs the harness by default. To reconcile only poli
 ./harness/install.sh --links-only
 ```
 
-Reconciliation removes as well as adds. Any symlink in a managed skill or command root whose target is gone, or that points into `harness/` at something no longer installed, is backed up and removed, so a renamed or retired entry cannot outlive the change that retired it. Legacy bodies that are real directories rather than harness symlinks are removed by an explicit alias list, and the client-specific SEO personas under `~/.claude/agents/` are removed with them.
+Reconciliation removes as well as adds. Any symlink in a managed skill or command root whose target is gone, that points into `harness/` at something no longer installed, or whose own name differs from its target's, is backed up and removed, so a renamed or retired entry cannot outlive the change that retired it. That last rule replaces a hardcoded list of retired names: a managed link is always named after its target, so a stale name is detectable structurally even when it still points at a body that is installed under its own name. A real directory shadowing a name the harness manages is backed up too, since the symlink sweep cannot see it.
+
+Anything in the way of a managed path is moved to a timestamped directory under `~/.dotfiles-backups/harness/` rather than overwritten. `--no-backup` deletes it instead, in both this installer and the root one, which forwards the flag:
+
+```sh
+./harness/install.sh --links-only --no-backup
+```
+
+It is destructive and unrecoverable: a private skill or a hand-edited config sitting at a managed path is gone, not archived. Each removal is still logged, so the run says what it took. Reach for it when the archives are noise, for example a repeated development install, not on a machine whose `~/.claude` or `~/.agents` you have not already reconciled.
 
 The SEO group is optional and is not linked by default. Add or remove it with `--with-seo` / `--without-seo`; the choice is remembered, so a later flagless run keeps it.
 
@@ -37,7 +45,9 @@ The SEO group is optional and is not linked by default. Add or remove it with `-
 ./harness/install.sh --with-seo
 ```
 
-Engram is core, not optional: the policy assumes memory survives a session. `install_engram` runs one `engram setup <agent>` per client, exactly as https://github.com/Gentleman-Programming/engram documents in `docs/AGENT-SETUP.md`, and it is idempotent, so both run modes reach it. A links-only run checks the binary, both plugins, and the OpenCode MCP, and repairs whatever is missing instead of reporting a gap it could close.
+Engram is core, not optional: the policy assumes memory survives a session. `install_engram` runs one `engram setup <agent>` per client, exactly as https://github.com/Gentleman-Programming/engram documents in `docs/AGENT-SETUP.md`, so both run modes reach it. Setup is idempotent, verified against engram 1.20.0 by running each agent's setup repeatedly in a throwaway `HOME` and checksumming the tree: every run exits 0, `[mcp_servers.engram]` stays single, and the tree is byte-identical from the second run on, the only delta being key and section reordering as the config is re-serialized.
+
+A links-only run therefore reconciles Engram unconditionally rather than probing first. Probing was both longer and weaker: it could only see whether the plugin and MCP were present, never whether the absolute binary path each client pins still resolves, so a stale pin after a Homebrew prefix change passed the check. Running setup rewrites the pin every time.
 
 ```sh
 engram setup claude-code < /dev/null
@@ -91,7 +101,9 @@ Engram and Orca-provided skills are runtime/plugin managed and never belong in `
 
 ## Ponytail
 
-Ponytail is a locked skill body, not a plugin. The plugin's mechanism was a `SessionStart` hook that turned lazy mode on for every session in every repository, plus `SubagentStart` and `UserPromptSubmit` trackers, six skills, and a config file. Provisioning removes all of it: `retire_ponytail_plugin` uninstalls the plugin and its marketplace from Codex and Claude Code and drops the module from OpenCode's global config, and the smoke check asserts zero of it survives, so the plugin and the skill can never load ponytail twice.
+Ponytail is a locked skill body, not a plugin. The plugin's mechanism was a `SessionStart` hook that turned lazy mode on for every session in every repository, plus `SubagentStart` and `UserPromptSubmit` trackers, six skills, and a config file. The harness installs none of it, and the smoke check asserts the skill body is present.
+
+Provisioning once also uninstalled that plugin from all three clients. That code is gone: it removed a state no version of this repository ever created, since the plugin predates the harness and lived only in a hand-rolled setup. An installer that migrates away from states it never produced accumulates them forever.
 
 What replaces it is one line in each command that writes code, `/yolo`, `/feedback`, and `/address-review`, saying to load and follow the skill, plus `adversarial-review` using ponytail violations as a review lens and its fix standard. That is a smaller and more precise surface than a session hook: lazy mode applies where code is written rather than to every conversation, and it costs one sentence per command rather than three hooks and five JS files. It also delivers more of the skill, because the hook injects a level-filtered condensation while the locked `SKILL.md` carries the full body, including the reuse-before-writing rung, the root-cause-not-symptom rule, and the read-fully-then-be-lazy boundary.
 
@@ -135,4 +147,4 @@ It reads Claude Code JSONL transcripts, Codex rollout JSONL, and the OpenCode SQ
 
 Populations, not pairs. Cost and friction are the measured part; quality stays a human read of the sessions.
 
-The suite validates shell/Python syntax, unique skill names, lock hashes, Claude bookkeeping links, local-vs-locked separation, command shape and task-data framing, command-versus-skill name disjointness, routing-table coverage, secret/generated-state exclusions, installer safety, collision backups, orphan and alias retirement, idempotency, and GitHub close/reopen behavior.
+The suite validates shell/Python syntax, unique skill names, lock hashes, Claude bookkeeping links, local-vs-locked separation, command shape and task-data framing, command-versus-skill name disjointness, routing-table coverage, secret/generated-state exclusions, installer safety, collision backups, orphan retirement, idempotency, and GitHub close/reopen behavior.

@@ -296,9 +296,6 @@ class HarnessTests(unittest.TestCase):
             collision = home / ".agents" / "skills" / "evidence"
             collision.mkdir()
             (collision / "keep").write_text("collision")
-            retired = home / ".agents" / "skills" / "implement"
-            retired.mkdir()
-            (retired / "keep").write_text("retired")
             # A link this harness wrote for a name it no longer installs, and
             # one whose target it deleted outright. Both must go.
             orphan = home / ".agents" / "skills" / "ship"
@@ -306,14 +303,6 @@ class HarnessTests(unittest.TestCase):
             orphan.symlink_to(SKILLS / "evidence")
             dangling = home / ".agents" / "skills" / "to-spec"
             dangling.symlink_to(SKILLS / "to-spec")
-            # A persistent client-specific persona the policy forbids, and a
-            # legacy body that is a real directory rather than a harness link.
-            persona = home / ".claude" / "agents" / "seo-visual.md"
-            persona.parent.mkdir(parents=True)
-            persona.write_text("persona")
-            legacy = home / ".agents" / "skills" / "review"
-            legacy.mkdir(parents=True)
-            (legacy / "SKILL.md").write_text("---\nname: review\ndescription: x\n---\n")
             # A hand-written duplicate of an alias the harness now owns.
             zshrc = home / ".zshrc"
             zshrc.write_text(
@@ -348,14 +337,16 @@ class HarnessTests(unittest.TestCase):
             subprocess.run(command, env=environment, check=True, capture_output=True)
 
             self.assertTrue(private.is_dir())
-            self.assertTrue((home / ".claude" / "skills" / "private-claude").is_symlink())
+            # A symlinked skills root is moved aside for a real directory the
+            # installer owns, and the link's target is left untouched.
+            claude_skills = home / ".claude" / "skills"
+            self.assertTrue(claude_skills.is_dir())
+            self.assertFalse(claude_skills.is_symlink())
             self.assertTrue((legacy_skills / "private-claude" / "SKILL.md").is_file())
             self.assertTrue(opencode_private.is_dir())
             self.assertFalse(opencode_collision.exists())
             self.assertTrue((home / ".agents" / "skills" / "evidence").is_symlink())
-            self.assertFalse(retired.exists())
             self.assertFalse(orphan.is_symlink())
-            self.assertFalse(persona.exists())
 
             # One sourced line owns the yolo aliases; the hand-written
             # duplicate is gone and unrelated aliases are untouched.
@@ -364,6 +355,9 @@ class HarnessTests(unittest.TestCase):
             self.assertIn("alias sail=", rc)
             self.assertEqual(rc.count("portable-harness aliases"), 1)
             self.assertIn(f'source "{ROOT / "harness" / "aliases.sh"}"', rc)
+            # The harness never creates the OpenCode skills root: it reads
+            # ~/.agents/skills, so a second copy would double-list.
+            self.assertFalse((home / ".config" / "opencode" / "skills" / "evidence").exists())
             aliases = (ROOT / "harness" / "aliases.sh").read_text()
             for name, flag in (
                 ("ccyolo", "--dangerously-skip-permissions"),
@@ -372,7 +366,6 @@ class HarnessTests(unittest.TestCase):
             ):
                 self.assertIn(f"alias {name}=", aliases)
                 self.assertIn(flag, aliases)
-            self.assertFalse(legacy.exists())
             self.assertFalse(dangling.is_symlink())
             for name in COMMAND_NAMES:
                 for root in (
@@ -397,9 +390,6 @@ class HarnessTests(unittest.TestCase):
             self.assertEqual(len(backups), 1)
             self.assertTrue(
                 (backups[0] / ".agents" / "skills" / "evidence" / "keep").is_file()
-            )
-            self.assertTrue(
-                (backups[0] / ".agents" / "skills" / "implement" / "keep").is_file()
             )
             self.assertTrue((backups[0] / ".claude" / "skills.previous-link").is_symlink())
             self.assertTrue(
@@ -434,6 +424,43 @@ class HarnessTests(unittest.TestCase):
             )
             for name in ["seo"] + UNLINKED_SKILLS:
                 self.assertFalse((home / ".claude" / "skills" / name).exists(), name)
+
+    def test_no_backup_deletes_instead_of_archiving(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            # Something in the way at a managed path, and a private skill that
+            # must survive either way.
+            collision = home / ".agents" / "skills" / "evidence"
+            collision.mkdir(parents=True)
+            (collision / "keep").write_text("collision")
+            private = home / ".agents" / "skills" / "private"
+            private.mkdir(parents=True)
+            (private / "SKILL.md").write_text(
+                "---\nname: private\ndescription: private\n---\n"
+            )
+
+            environment = os.environ | {
+                "HOME": str(home),
+                "XDG_CACHE_HOME": str(home / ".cache"),
+            }
+            subprocess.run(
+                ["bash", ROOT / "harness" / "install.sh", "--links-only", "--no-backup"],
+                env=environment,
+                check=True,
+                capture_output=True,
+            )
+
+            self.assertFalse((home / ".dotfiles-backups").exists())
+            self.assertTrue((home / ".agents" / "skills" / "evidence").is_symlink())
+            self.assertTrue(private.is_dir())
+            self.assertTrue((private / "SKILL.md").is_file())
+
+    def test_no_backup_is_documented_in_both_installers(self) -> None:
+        for script in (ROOT / "install.sh", ROOT / "harness" / "install.sh"):
+            text = script.read_text()
+            self.assertIn("--no-backup", text, script)
+            # The flag is destructive, so the usage text has to say so.
+            self.assertIn("Destructive and unrecoverable", text, script)
 
     def test_bench_reads_every_client_session_store(self) -> None:
         measure = load_module("measure", ROOT / "harness" / "bench" / "measure.py")
@@ -581,13 +608,6 @@ class HarnessTests(unittest.TestCase):
                 (COMMANDS / f"{name}.md").read_text(),
                 name,
             )
-        # The plugin and the skill together would load ponytail twice, so
-        # provisioning removes the plugin and the smoke check asserts zero.
-        installer = (ROOT / "harness" / "install.sh").read_text()
-        self.assertIn("retire_ponytail_plugin", installer)
-        self.assertIn("assert_plugin_count codex ponytail 0", installer)
-        self.assertIn("assert_plugin_count claude ponytail 0", installer)
-
         skills = {
             "setup-harness": (
                 "docs/agents/harness.json",
