@@ -240,13 +240,21 @@ PY
     fi
 }
 
-install_integrations() {
+# Codex and Claude Code get Engram through its official plugin; OpenCode has
+# no plugin marketplace for it, so `engram setup` writes its plugin and MCP
+# entry. All three steps are idempotent.
+install_engram() {
     log "Reconciling Engram"
+    command -v engram >/dev/null || die "Engram is missing; run without --links-only to install it."
     ensure_codex_plugin engram Gentleman-Programming/engram engram
     ensure_claude_plugin engram Gentleman-Programming/engram engram
     engram setup opencode
     remove_codex_legacy_engram_mcp
     remove_claude_legacy_engram_mcp
+}
+
+install_integrations() {
+    install_engram
 
     log "Reconciling Ponytail"
     ensure_codex_plugin ponytail DietrichGebert/ponytail ponytail
@@ -518,7 +526,8 @@ EOF
 }
 
 # Engram is core: the policy assumes memory survives a session. A links-only
-# run skips package work, so it reports the gap rather than proving it away.
+# run skips package work, so it checks all four surfaces and repairs them
+# rather than reporting a gap it could have closed.
 verify_engram() {
     local missing=()
     command -v engram >/dev/null || missing+=("engram binary")
@@ -528,9 +537,9 @@ verify_engram() {
         python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if "engram" in d.get("mcp",{}) else 1)' ||
         missing+=("OpenCode MCP")
     if [[ ${#missing[@]} -gt 0 ]]; then
-        printf '\033[1;33m[warn]\033[0m Engram is not fully installed: %s\n' "${missing[*]}" >&2
-        printf '        Run ./harness/install.sh without --links-only to reconcile it.\n' >&2
-        return 1
+        printf '\033[1;33m[warn]\033[0m Engram is incomplete (%s); reconciling.\n' "${missing[*]}" >&2
+        install_engram
+        return
     fi
     log "Engram is installed in all three clients"
 }

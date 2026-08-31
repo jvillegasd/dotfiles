@@ -37,7 +37,7 @@ The SEO group is optional and is not linked by default. Add or remove it with `-
 ./harness/install.sh --with-seo
 ```
 
-Engram is core, not optional: the policy assumes memory survives a session. The full run installs and reconciles it for all three clients and the smoke check fails without it; a `--links-only` run cannot install it, so it verifies the binary, both plugins, and the OpenCode MCP and warns if any is missing.
+Engram is core, not optional: the policy assumes memory survives a session. `install_engram` reconciles all three clients, and it is idempotent, so both run modes reach it. Codex and Claude Code get the official plugin; OpenCode has no marketplace entry for it, so `engram setup opencode` writes the plugin and the MCP entry. A links-only run checks the binary, both plugins, and the OpenCode MCP, and repairs whatever is missing instead of reporting a gap it could close. A legacy direct MCP entry in either client's config is removed, because the plugin owns that server now.
 
 The full installer uses Homebrew for Codex, OpenCode, GitHub CLI, Engram, UV, RTK, and Worktrunk; Anthropic's native latest channel for Claude Code; and official client setup/plugin commands for Engram, Ponytail, and RTK. It never starts an interactive client or authenticates for you.
 
