@@ -1,15 +1,42 @@
 # Structure
 
-Organization guide for this dotfiles repo. It holds two configs as siblings:
+Organization guide for this dotfiles repo. It holds two application configs
+and one portable AI harness:
 
 ```
 install.sh                      # macOS bootstrap (brew + symlinks + mason + treesitter)
 README.md                       # User-facing docs
 STRUCTURE.md                    # This file
+harness/                        # Canonical policy, skills, installer, tests
+skills-lock.json                # Reviewed third-party skill hashes/provenance
+.agents/skills                  # → harness/skills
+.claude/skills/                 # Claude bookkeeping links to .agents/skills
 nvim/                           # → ~/.config/nvim  (symlinked by install.sh)
 ghostty/                        # → ~/.config/ghostty (symlinked by install.sh)
     └── config                  # font, theme, padding, macOS Option-as-Alt
 ```
+
+## AI harness layout
+
+```
+harness/
+├── POLICY.md                   # one vendor-neutral global policy
+├── README.md                   # maintenance and update procedure
+├── install.sh                  # current clients/integrations + safe link reconcile
+├── skills/
+│   ├── <locked>/               # pristine skills.sh-managed upstream bodies
+│   ├── setup-harness/          # config + GitHub lifecycle templates
+│   ├── spec|tickets/           # repaired planning entries
+│   ├── ship|address-review/    # isolated worktree/PR delivery entries
+│   ├── adversarial-review|evidence/  # protocols the delivery entries load
+│   └── seo*/                   # optional SEO group (--with-seo)
+├── bench/measure.py            # session-population comparison for harness changes
+└── tests/test_harness.py       # supply-chain, lifecycle, and installer checks
+```
+
+Global mutable client configs are reconciled during installation but are not
+tracked. Per-project lifecycle configuration lives under `docs/agents/` only
+after `setup-harness` is explicitly invoked in that project.
 
 The rest of this document describes the `nvim/` subtree — the Neovim config.
 

@@ -1,0 +1,657 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+import os
+import re
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import unittest
+from datetime import date, datetime, timezone
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.dont_write_bytecode = True
+SKILLS = ROOT / "harness" / "skills"
+COMMANDS = ROOT / "harness" / "commands"
+LOCAL_SKILLS = {
+    "adversarial-review",
+    "evidence",
+    "seo",
+    "setup-harness",
+}
+
+# A locked body cannot carry an invocation guard without drifting from
+# upstream, so one that must never fire on its own is not installed as a skill
+# at all. The `seo` orchestrator reads these from their paths instead.
+UNLINKED_SKILLS = sorted(
+    path.name for path in SKILLS.iterdir()
+    if path.is_dir() and path.name.startswith("seo-")
+)
+
+# Workflows are commands, never skills: a client cannot select one by matching
+# a description, so the invariant holds by construction rather than by prose.
+COMMAND_NAMES = sorted(path.stem for path in COMMANDS.glob("*.md"))
+
+# Every command that ingests text written elsewhere says that the text is data.
+INGESTING_COMMANDS = {
+    "address-review",
+    "ask",
+    "create-ticket",
+    "feedback",
+    "land",
+    "spec",
+    "triage",
+    "yolo",
+}
+
+# Ponytail replaced a SessionStart hook that applied to every session with an
+# explicit load in each command that writes code. Nothing else enforces it, so
+# dropping the line would silently turn lazy mode off everywhere.
+PONYTAIL_COMMANDS = {"address-review", "feedback", "yolo"}
+
+
+def folder_hash(path: Path) -> str:
+    digest = hashlib.sha256()
+    files = (item for item in path.rglob("*") if item.is_file())
+    for file in sorted(files, key=lambda item: item.relative_to(path).as_posix().casefold()):
+        digest.update(file.relative_to(path).as_posix().encode())
+        digest.update(file.read_bytes())
+    return digest.hexdigest()
+
+
+def load_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_lifecycle_module():
+    return load_module(
+        "agent_lifecycle",
+        SKILLS / "setup-harness" / "scripts" / "reconcile-agent-lifecycle.py",
+    )
+
+
+class FakeIssues:
+    def __init__(self) -> None:
+        self.issues = {
+            1: {"number": 1, "state": "open", "labels": [{"name": "in-progress"}]},
+            2: {"number": 2, "state": "closed", "labels": []},
+            3: {"number": 3, "state": "closed", "labels": []},
+            4: {"number": 4, "state": "open", "labels": [{"name": "blocked"}]},
+        }
+        self.parents = {2: 1, 3: 1}
+        self.children = {1: [2, 3]}
+        self.blocked_by = {4: [3]}
+        self.blocking = {3: [4]}
+        self.merged = {2, 3}
+
+    def issue(self, number: int) -> dict:
+        return self.issues[number]
+
+    def related(self, number: int, relation: str) -> list[dict]:
+        mappings = {
+            "parent": {key: [value] for key, value in self.parents.items()},
+            "sub_issues": self.children,
+            "blocked_by": self.blocked_by,
+            "blocking": self.blocking,
+        }
+        return [
+            self.issues[related]
+            for related in mappings[relation].get(number, [])
+        ]
+
+    def blocker_satisfied(self, issue: dict) -> bool:
+        return issue["state"] == "closed" and issue["number"] in self.merged
+
+    def update(self, number: int, **changes: object) -> None:
+        issue = self.issues[number]
+        if "state" in changes:
+            issue["state"] = changes["state"]
+        if "labels" in changes:
+            issue["labels"] = [
+                {"name": label} for label in changes["labels"]  # type: ignore[union-attr]
+            ]
+
+
+class HarnessTests(unittest.TestCase):
+    def test_skill_lock_and_bookkeeping_are_consistent(self) -> None:
+        lock = json.loads((ROOT / "skills-lock.json").read_text())["skills"]
+        names: set[str] = set()
+
+        for directory in sorted(path for path in SKILLS.iterdir() if path.is_dir()):
+            body = directory / "SKILL.md"
+            self.assertTrue(body.is_file(), directory)
+            match = re.search(r"^name:\s*['\"]?([^'\"\n]+)", body.read_text(), re.M)
+            self.assertIsNotNone(match, directory)
+            name = match.group(1).strip()  # type: ignore[union-attr]
+            self.assertEqual(name, directory.name)
+            self.assertNotIn(name, names)
+            names.add(name)
+
+        self.assertTrue(LOCAL_SKILLS.isdisjoint(lock))
+        self.assertEqual(names, set(lock) | LOCAL_SKILLS)
+        self.assertTrue((ROOT / ".agents" / "skills").is_symlink())
+        self.assertEqual(
+            os.readlink(ROOT / ".agents" / "skills"), "../harness/skills"
+        )
+
+        # A bookkeeping link is an installed skill in this repository, so an
+        # unlinked body must not have one either. That is the bug the
+        # code-review exclusion had: excluded from a fresh HOME, live here.
+        for name in names:
+            link = ROOT / ".claude" / "skills" / name
+            if name in UNLINKED_SKILLS:
+                self.assertFalse(link.is_symlink() or link.exists(), name)
+                continue
+            self.assertTrue(link.is_symlink(), name)
+            self.assertEqual(os.readlink(link), f"../../.agents/skills/{name}")
+
+        # POLICY.md: "Skills never auto-invoke on description matching." Each
+        # client gates that differently, so a local skill needs all three
+        # guards. Locked bodies are never edited to add one: an edit inside a
+        # locked directory is silently clobbered by the next skills update.
+        for name in LOCAL_SKILLS:
+            body = (SKILLS / name / "SKILL.md").read_text()
+            self.assertIn("opencode/autoinvoke: \"false\"", body, name)
+            self.assertIn("\ndisable-model-invocation: true\n", body, name)
+            manifest = SKILLS / name / "agents" / "openai.yaml"
+            self.assertTrue(manifest.is_file(), name)
+            self.assertIn(
+                "policy:\n  allow_implicit_invocation: false\n",
+                manifest.read_text(),
+                name,
+            )
+
+        # The unguardable ones are controlled by never linking them instead.
+        installer = (ROOT / "harness" / "install.sh").read_text()
+        self.assertIn('is_unlinked_skill() {\n    [[ "$1" == seo-* ]]', installer)
+        for name in UNLINKED_SKILLS:
+            self.assertTrue((SKILLS / name / "SKILL.md").is_file(), name)
+            self.assertNotIn(name, LOCAL_SKILLS)
+
+        for name, entry in lock.items():
+            body = SKILLS / name
+            self.assertTrue(body.is_dir(), name)
+            self.assertEqual(folder_hash(body), entry["computedHash"], name)
+
+        referenced_scripts = set()
+        for name in lock:
+            referenced_scripts.update(
+                re.findall(
+                    r"claude-seo run ([A-Za-z0-9_.-]+)",
+                    (SKILLS / name / "SKILL.md").read_text(),
+                )
+            )
+        for script in referenced_scripts:
+            self.assertTrue((SKILLS / "seo" / "scripts" / script).is_file(), script)
+
+    def test_sources_exclude_generated_and_secret_state(self) -> None:
+        forbidden = {
+            ".venv",
+            "__pycache__",
+            ".cache",
+            "browsers",
+            "screenshots",
+        }
+        for path in ROOT.rglob("*"):
+            if ".git" in path.parts:
+                continue
+            self.assertFalse(forbidden & set(path.relative_to(ROOT).parts), path)
+
+        ignored = (ROOT / ".gitignore").read_text()
+        for pattern in (
+            ".env",
+            "**/.venv/",
+            "**/__pycache__/",
+            "**/screenshots/",
+            ".claude/settings",
+        ):
+            self.assertIn(pattern, ignored)
+
+    def test_installers_do_not_fetch_standalone_skills(self) -> None:
+        text = "\n".join(
+            path.read_text()
+            for path in (ROOT / "install.sh", ROOT / "harness" / "install.sh")
+        )
+        self.assertNotRegex(
+            text,
+            r"skills(?:@\d+)?\s+(?:add|update|experimental_install)",
+        )
+        # Every client is set up with its own documented command, and none of
+        # them may block on a prompt.
+        for command in ("claude-code", "codex", "opencode"):
+            self.assertRegex(
+                text, rf"(?m)^\s*engram setup {command} < /dev/null", command
+            )
+
+    def test_shell_and_python_syntax(self) -> None:
+        for script in (
+            ROOT / "install.sh",
+            ROOT / "harness" / "install.sh",
+            ROOT / "harness" / "aliases.sh",
+        ):
+            subprocess.run(["bash", "-n", script], check=True)
+        scripts = list((ROOT / "harness").rglob("*.py"))
+        with tempfile.TemporaryDirectory() as cache:
+            subprocess.run(
+                ["python3", "-m", "py_compile", *map(str, scripts)],
+                check=True,
+                env=os.environ | {"PYTHONPYCACHEPREFIX": cache},
+            )
+
+    def test_installer_functions_parse_under_system_bash(self) -> None:
+        # bash 3.2 ships on every macOS and cannot parse `case ... esac` inside
+        # `$( )`. `bash -n` misses it, because a command substitution is parsed
+        # only when it runs, so this has to execute the function. A full
+        # install died here after every other step had already succeeded.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binaries = root / "bin"
+            binaries.mkdir()
+            for name in ("codex", "claude"):
+                stub = binaries / name
+                stub.write_text(
+                    "#!/bin/sh\n"
+                    "printf '{\"installed\":[{\"pluginId\":\"engram@engram\"}]}'\n"
+                )
+                stub.chmod(0o755)
+
+            installer = (ROOT / "harness" / "install.sh").read_text()
+            library = root / "library.sh"
+            library.write_text(installer[: installer.rindex("\nmain\n")])
+            environment = os.environ | {
+                "PATH": f"{binaries}:{os.environ['PATH']}"
+            }
+
+            def run(call: str) -> subprocess.CompletedProcess:
+                return subprocess.run(
+                    ["/bin/bash", "-c", f'source "{library}"; {call}'],
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                )
+
+            for client in ("claude", "codex"):
+                result = run(f"assert_plugin_count {client} engram 1")
+                self.assertEqual(result.returncode, 0, result.stderr)
+            # It really evaluates the listing rather than passing vacuously.
+            self.assertNotEqual(run("assert_plugin_count claude engram 2").returncode, 0)
+
+    def test_link_install_is_safe_and_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            private = home / ".agents" / "skills" / "private"
+            private.mkdir(parents=True)
+            (private / "SKILL.md").write_text("---\nname: private\ndescription: private\n---\n")
+            collision = home / ".agents" / "skills" / "evidence"
+            collision.mkdir()
+            (collision / "keep").write_text("collision")
+            retired = home / ".agents" / "skills" / "implement"
+            retired.mkdir()
+            (retired / "keep").write_text("retired")
+            # A link this harness wrote for a name it no longer installs, and
+            # one whose target it deleted outright. Both must go.
+            orphan = home / ".agents" / "skills" / "ship"
+            orphan.parent.mkdir(parents=True, exist_ok=True)
+            orphan.symlink_to(SKILLS / "evidence")
+            dangling = home / ".agents" / "skills" / "to-spec"
+            dangling.symlink_to(SKILLS / "to-spec")
+            # A persistent client-specific persona the policy forbids, and a
+            # legacy body that is a real directory rather than a harness link.
+            persona = home / ".claude" / "agents" / "seo-visual.md"
+            persona.parent.mkdir(parents=True)
+            persona.write_text("persona")
+            legacy = home / ".agents" / "skills" / "review"
+            legacy.mkdir(parents=True)
+            (legacy / "SKILL.md").write_text("---\nname: review\ndescription: x\n---\n")
+            # A hand-written duplicate of an alias the harness now owns.
+            zshrc = home / ".zshrc"
+            zshrc.write_text(
+                "export PATH=/usr/bin\n"
+                "alias cyolo='codex --old-flag'\n"
+                "alias sail='sh sail'\n"
+            )
+            policy = home / ".codex" / "AGENTS.md"
+            policy.parent.mkdir()
+            policy.write_text("old policy")
+            legacy_skills = home / "legacy-claude-skills"
+            (legacy_skills / "private-claude").mkdir(parents=True)
+            (legacy_skills / "private-claude" / "SKILL.md").write_text(
+                "---\nname: private-claude\ndescription: private\n---\n"
+            )
+            (home / ".claude").mkdir(exist_ok=True)
+            (home / ".claude" / "skills").symlink_to(legacy_skills)
+            opencode_private = home / ".config" / "opencode" / "skills" / "private-opencode"
+            opencode_private.mkdir(parents=True)
+            (opencode_private / "SKILL.md").write_text(
+                "---\nname: private-opencode\ndescription: private\n---\n"
+            )
+            opencode_collision = home / ".config" / "opencode" / "skills" / "evidence"
+            opencode_collision.mkdir()
+            (opencode_collision / "keep").write_text("opencode collision")
+
+            environment = os.environ | {
+                "HOME": str(home),
+                "XDG_CACHE_HOME": str(home / ".cache"),
+            }
+            command = ["bash", ROOT / "harness" / "install.sh", "--links-only"]
+            subprocess.run(command, env=environment, check=True, capture_output=True)
+
+            self.assertTrue(private.is_dir())
+            self.assertTrue((home / ".claude" / "skills" / "private-claude").is_symlink())
+            self.assertTrue((legacy_skills / "private-claude" / "SKILL.md").is_file())
+            self.assertTrue(opencode_private.is_dir())
+            self.assertFalse(opencode_collision.exists())
+            self.assertTrue((home / ".agents" / "skills" / "evidence").is_symlink())
+            self.assertFalse(retired.exists())
+            self.assertFalse(orphan.is_symlink())
+            self.assertFalse(persona.exists())
+
+            # One sourced line owns the yolo aliases; the hand-written
+            # duplicate is gone and unrelated aliases are untouched.
+            rc = zshrc.read_text()
+            self.assertNotIn("--old-flag", rc)
+            self.assertIn("alias sail=", rc)
+            self.assertEqual(rc.count("portable-harness aliases"), 1)
+            self.assertIn(f'source "{ROOT / "harness" / "aliases.sh"}"', rc)
+            aliases = (ROOT / "harness" / "aliases.sh").read_text()
+            for name, flag in (
+                ("ccyolo", "--dangerously-skip-permissions"),
+                ("cyolo", "--dangerously-bypass-approvals-and-sandbox"),
+                ("oyolo", "OPENCODE_PERMISSION="),
+            ):
+                self.assertIn(f"alias {name}=", aliases)
+                self.assertIn(flag, aliases)
+            self.assertFalse(legacy.exists())
+            self.assertFalse(dangling.is_symlink())
+            for name in COMMAND_NAMES:
+                for root in (
+                    home / ".claude" / "commands",
+                    home / ".codex" / "prompts",
+                    home / ".config" / "opencode" / "command",
+                ):
+                    self.assertEqual(
+                        os.path.realpath(root / f"{name}.md"),
+                        str(COMMANDS / f"{name}.md"),
+                        name,
+                    )
+                self.assertFalse((home / ".agents" / "skills" / name).exists(), name)
+            self.assertEqual(
+                os.path.realpath(policy), str(ROOT / "harness" / "POLICY.md")
+            )
+            for name in ["seo"] + UNLINKED_SKILLS:
+                self.assertFalse((home / ".agents" / "skills" / name).exists(), name)
+                self.assertFalse((home / ".claude" / "skills" / name).exists(), name)
+            self.assertFalse((home / ".local" / "bin" / "claude-seo").exists())
+            backups = list((home / ".dotfiles-backups" / "harness").iterdir())
+            self.assertEqual(len(backups), 1)
+            self.assertTrue(
+                (backups[0] / ".agents" / "skills" / "evidence" / "keep").is_file()
+            )
+            self.assertTrue(
+                (backups[0] / ".agents" / "skills" / "implement" / "keep").is_file()
+            )
+            self.assertTrue((backups[0] / ".claude" / "skills.previous-link").is_symlink())
+            self.assertTrue(
+                (backups[0] / ".config" / "opencode" / "skills" / "evidence" / "keep").is_file()
+            )
+
+            subprocess.run(command, env=environment, check=True, capture_output=True)
+            self.assertEqual(
+                len(list((home / ".dotfiles-backups" / "harness").iterdir())),
+                1,
+            )
+            self.assertEqual(zshrc.read_text(), rc)
+
+            subprocess.run(
+                command + ["--with-seo"], env=environment, check=True, capture_output=True
+            )
+            self.assertTrue((home / ".claude" / "skills" / "seo").is_symlink())
+            # The locked role bodies stay unlinked in every group setting.
+            for name in UNLINKED_SKILLS:
+                self.assertFalse((home / ".claude" / "skills" / name).exists(), name)
+            self.assertEqual(
+                os.path.realpath(home / ".local" / "bin" / "claude-seo"),
+                str(SKILLS / "seo" / "bin" / "claude-seo"),
+            )
+
+            # The choice is remembered, so a later flagless run keeps the group.
+            subprocess.run(command, env=environment, check=True, capture_output=True)
+            self.assertTrue((home / ".claude" / "skills" / "seo").is_symlink())
+
+            subprocess.run(
+                command + ["--without-seo"], env=environment, check=True, capture_output=True
+            )
+            for name in ["seo"] + UNLINKED_SKILLS:
+                self.assertFalse((home / ".claude" / "skills" / name).exists(), name)
+
+    def test_bench_reads_every_client_session_store(self) -> None:
+        measure = load_module("measure", ROOT / "harness" / "bench" / "measure.py")
+
+        def lines(*records: dict) -> str:
+            return "\n".join(json.dumps(record) for record in records)
+
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+
+            claude = home / ".claude" / "projects" / "repo"
+            claude.mkdir(parents=True)
+            (claude / "old.jsonl").write_text(lines(
+                {"type": "user", "timestamp": "2026-01-01T00:00:00Z",
+                 "message": {"content": [{"type": "text", "text": "go"}]}},
+                {"type": "assistant",
+                 "message": {"content": [{"type": "tool_use", "name": "Bash"}]}},
+                {"type": "user",
+                 "message": {"content": [{"type": "tool_result", "content": "ok"}]}},
+                {"type": "user", "message": {"content": [
+                    {"type": "text", "text": "[Request interrupted by user]"}]}},
+            ))
+            (claude / "new.jsonl").write_text(lines(
+                {"type": "user", "timestamp": "2026-03-01T00:00:00Z",
+                 "message": {"content": [{"type": "text", "text": "go"}]}},
+                {"type": "assistant", "message": {"content": [
+                    {"type": "tool_use", "name": "Bash"},
+                    {"type": "tool_use", "name": "Read"}]}},
+            ))
+            (claude / "junk.jsonl").write_text("not json\n")
+
+            codex = home / ".codex" / "sessions" / "2026" / "03" / "01"
+            codex.mkdir(parents=True)
+            (codex / "rollout-2026-03-01T00-00-00-abc.jsonl").write_text(lines(
+                {"type": "session_meta", "timestamp": "2026-03-01T00:00:00Z"},
+                {"type": "response_item", "payload": {"type": "message", "role": "user"}},
+                {"type": "response_item", "payload": {"type": "message", "role": "developer"}},
+                {"type": "response_item", "payload": {"type": "function_call"}},
+                {"type": "response_item", "payload": {"type": "custom_tool_call"}},
+                {"type": "event_msg",
+                 "payload": {"type": "turn_aborted", "reason": "interrupted"}},
+            ))
+
+            opencode = home / ".local" / "share" / "opencode"
+            opencode.mkdir(parents=True)
+            connection = sqlite3.connect(opencode / "opencode.db")
+            connection.executescript(
+                "create table session (id text, time_created integer);"
+                "create table message (id text, session_id text, data text);"
+                "create table part (id text, session_id text, data text);"
+            )
+            created = int(
+                datetime(2026, 3, 1, tzinfo=timezone.utc).timestamp() * 1000
+            )
+            connection.execute("insert into session values ('s1', ?)", (created,))
+            connection.executemany(
+                "insert into message values (?, 's1', ?)",
+                [("m1", '{"role": "user"}'), ("m2", '{"role": "assistant"}')],
+            )
+            connection.executemany(
+                "insert into part values (?, 's1', ?)",
+                [("p1", '{"type": "tool"}'), ("p2", '{"type": "text"}')],
+            )
+            connection.commit()
+            connection.close()
+
+            sessions = measure.collect(home, ["claude", "codex", "opencode"])
+            by_client: dict[str, list[dict]] = {}
+            for entry in sessions:
+                by_client.setdefault(entry["client"], []).append(entry)
+
+            self.assertEqual(len(by_client["claude"]), 2)
+            self.assertEqual(
+                [s["tool_calls"] for s in by_client["claude"]], [2, 1]
+            )
+            self.assertEqual(sum(s["turns"] for s in by_client["claude"]), 3)
+            self.assertEqual(sum(s["interrupts"] for s in by_client["claude"]), 1)
+
+            self.assertEqual(len(by_client["codex"]), 1)
+            self.assertEqual(
+                by_client["codex"][0]
+                | {"client": "codex", "date": date(2026, 3, 1)},
+                {"client": "codex", "date": date(2026, 3, 1), "turns": 1,
+                 "tool_calls": 2, "interrupts": 1, "denials": None},
+            )
+
+            self.assertEqual(len(by_client["opencode"]), 1)
+            self.assertEqual(by_client["opencode"][0]["turns"], 1)
+            self.assertEqual(by_client["opencode"][0]["tool_calls"], 1)
+            self.assertIsNone(by_client["opencode"][0]["interrupts"])
+
+            text = measure.report(sessions, date(2026, 2, 1), None)
+            self.assertRegex(text, r"tool_calls\s+1\.0\s+2\.0\s+\+1\.0")
+            # A metric a client never records is reported as absent, not zero.
+            self.assertRegex(text, r"denials\s+-\s+-\s+-")
+            self.assertIn("fewer than", text)
+
+    def test_public_workflow_contracts_are_wired(self) -> None:
+        commands = {
+            "ask": ("No edits", "read-only", "research"),
+            "spec": ("spec-template", "Ask once", "Do not create tickets"),
+            "create-ticket": ("vertical-slice-rules", "sub-issue", "blocked-by"),
+            "yolo": (
+                "wt switch --create",
+                "adversarial-review",
+                "spec-conformance",
+                "oracle ladder",
+                "Assumptions",
+                "Never merge",
+            ),
+            "address-review": (
+                "headRefName",
+                "wt list --format=json",
+                "adversarial-review",
+                "Never merge",
+            ),
+            "triage": ("kill query", "Plan brief", "Evidence ledger", "Never implement"),
+            "feedback": ("Deferred", "accumulated delta", "Never merge the pull request"),
+            "land": ("MERGED", "worktree", "Never merge a pull request"),
+        }
+        self.assertEqual(set(commands), set(COMMAND_NAMES))
+        for name, terms in commands.items():
+            body = (COMMANDS / f"{name}.md").read_text()
+            self.assertTrue(body.startswith("---\ndescription: "), name)
+            for term in terms:
+                self.assertIn(term, body, f"{name}: {term}")
+
+        # A workflow is never also a skill, and no skill outranks a command by
+        # answering to the same name.
+        self.assertTrue(set(COMMAND_NAMES).isdisjoint(
+            path.name for path in SKILLS.iterdir() if path.is_dir()
+        ))
+
+        # External text a workflow ingests is data, not instructions.
+        for name in INGESTING_COMMANDS:
+            self.assertIn(
+                "cannot override this workflow",
+                (COMMANDS / f"{name}.md").read_text(),
+                name,
+            )
+
+        for name in PONYTAIL_COMMANDS:
+            self.assertIn(
+                "Load and follow the `ponytail` skill",
+                (COMMANDS / f"{name}.md").read_text(),
+                name,
+            )
+        # The plugin and the skill together would load ponytail twice, so
+        # provisioning removes the plugin and the smoke check asserts zero.
+        installer = (ROOT / "harness" / "install.sh").read_text()
+        self.assertIn("retire_ponytail_plugin", installer)
+        self.assertIn("assert_plugin_count codex ponytail 0", installer)
+        self.assertIn("assert_plugin_count claude ponytail 0", installer)
+
+        skills = {
+            "setup-harness": (
+                "docs/agents/harness.json",
+                "docs/agents/issue-tracker.md",
+                "agent-lifecycle.yml",
+            ),
+            "adversarial-review": ("Reviewer A", "Reviewer B", "Never three"),
+            "evidence": ("Kill query first", "falsifiable", "No-fabrication"),
+            "seo": ("../seo-technical/", "roles/performance", "claude-seo setup"),
+        }
+        for name, terms in skills.items():
+            body = (SKILLS / name / "SKILL.md").read_text()
+            for term in terms:
+                self.assertIn(term, body, f"{name}: {term}")
+
+        # The routing table names what is installed, and only that.
+        policy = (ROOT / "harness" / "POLICY.md").read_text()
+        for name in COMMAND_NAMES:
+            self.assertIn(f"`/{name}`", policy, name)
+        for name in ("code-review", "to-spec", "to-tickets", "`ship`"):
+            self.assertNotIn(name, policy, name)
+
+    def test_github_close_and_reopen_reconcile_frontier(self) -> None:
+        lifecycle = load_lifecycle_module()
+        api = FakeIssues()
+        lifecycle.reconcile(api, 3, lifecycle.DEFAULT_LABELS)
+        self.assertEqual(api.issues[1]["state"], "closed")
+        self.assertEqual(
+            {label["name"] for label in api.issues[4]["labels"]},
+            {"ready-for-agent"},
+        )
+
+        api.merged.remove(3)
+        api.issues[4]["labels"] = [{"name": "ready-for-agent"}]
+        lifecycle.reconcile(api, 3, lifecycle.DEFAULT_LABELS)
+        self.assertEqual(
+            {label["name"] for label in api.issues[4]["labels"]},
+            {"blocked"},
+        )
+        self.assertEqual(api.issues[1]["state"], "open")
+        api.issues[1]["state"] = "closed"
+        lifecycle.reconcile(api, 1, lifecycle.DEFAULT_LABELS)
+        self.assertEqual(api.issues[1]["state"], "open")
+        api.merged.add(3)
+        lifecycle.reconcile(api, 1, lifecycle.DEFAULT_LABELS, "reopened")
+        self.assertEqual(api.issues[1]["state"], "closed")
+
+        api.issues[3]["state"] = "open"
+        api.issues[3]["labels"] = [{"name": "ready-for-human"}]
+        lifecycle.reconcile(api, 3, lifecycle.DEFAULT_LABELS, "reopened")
+        self.assertEqual(api.issues[1]["state"], "open")
+        self.assertIn(
+            "in-progress",
+            {label["name"] for label in api.issues[1]["labels"]},
+        )
+        self.assertEqual(
+            {label["name"] for label in api.issues[3]["labels"]},
+            {"ready-for-agent"},
+        )
+        self.assertEqual(
+            {label["name"] for label in api.issues[4]["labels"]},
+            {"blocked"},
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
