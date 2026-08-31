@@ -14,6 +14,11 @@ set -euo pipefail
 # an existing checkout.
 REPO_URL=""
 
+# Delete a config that is in the way instead of renaming it to
+# <path>.backup.<timestamp>, and pass the same choice to the harness
+# installer. Destructive and unrecoverable.
+NO_BACKUP=false
+
 DOTFILES_DIR="${HOME}/Desktop/projects/dotfiles"
 NVIM_CONFIG_DIR="${HOME}/.config/nvim"
 GHOSTTY_CONFIG_DIR="${HOME}/.config/ghostty"
@@ -118,9 +123,14 @@ link_config() {
         log "Replacing existing symlink: $dest (was -> $current)"
         rm "$dest"
     elif [[ -e "$dest" ]]; then
-        local backup="${dest}.backup.$(date +%Y%m%d-%H%M%S)"
-        log "Backing up existing $dest to $backup"
-        mv "$dest" "$backup"
+        if $NO_BACKUP; then
+            log "Removing existing $dest"
+            rm -rf "$dest"
+        else
+            local backup="${dest}.backup.$(date +%Y%m%d-%H%M%S)"
+            log "Backing up existing $dest to $backup"
+            mv "$dest" "$backup"
+        fi
     fi
 
     mkdir -p "$(dirname "$dest")"
@@ -135,7 +145,11 @@ place_configs() {
 
 install_harness() {
     [[ -x "$SCRIPT_DIR/harness/install.sh" ]] || die "Missing harness installer: $SCRIPT_DIR/harness/install.sh"
-    "$SCRIPT_DIR/harness/install.sh"
+    if $NO_BACKUP; then
+        "$SCRIPT_DIR/harness/install.sh" --no-backup
+    else
+        "$SCRIPT_DIR/harness/install.sh"
+    fi
 }
 
 bootstrap_nvim() {
@@ -174,7 +188,25 @@ Tools installed via brew:
 EOF
 }
 
+usage() {
+    cat <<'EOF'
+Usage: install.sh [--no-backup]
+
+  --no-backup  Delete configs that are in the way instead of renaming them to
+               <path>.backup.<timestamp>, and pass the same choice to the
+               harness installer. Destructive and unrecoverable.
+EOF
+}
+
 main() {
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            --no-backup) NO_BACKUP=true ;;
+            -h|--help) usage; exit 0 ;;
+            *) die "Unknown argument: $arg" ;;
+        esac
+    done
     require_macos
     ensure_xcode_clt
     ensure_brew
