@@ -410,14 +410,19 @@ install_links() {
     fi
 }
 
+# The listing is fetched before the substitution rather than inside a `case`
+# within one: bash 3.2, which is the system bash every macOS ships, cannot
+# parse `case ... esac` inside `$( )`. `bash -n` does not catch it, because a
+# command substitution is parsed when it runs.
 assert_plugin_count() {
-    local client="$1" plugin="$2" expected="$3"
-    local count
+    local client="$1" plugin="$2" expected="$3" listing count
+    if [[ "$client" == codex ]]; then
+        listing="$(codex plugin list --json)"
+    else
+        listing="$(claude plugin list --json)"
+    fi
     count="$(
-        case "$client" in
-            codex) codex plugin list --json ;;
-            claude) claude plugin list --json ;;
-        esac |
+        printf '%s' "$listing" |
             python3 -c 'import json,sys; d=json.load(sys.stdin); p=sys.argv[1]; items=d.get("installed",d) if isinstance(d,dict) else d; print(sum(p in (x.get("pluginId") or x.get("id") or "") for x in items))' "$plugin"
     )"
     [[ "$count" == "$expected" ]] || die "Expected $expected $plugin integration in $client; found $count."

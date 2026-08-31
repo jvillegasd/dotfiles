@@ -244,6 +244,44 @@ class HarnessTests(unittest.TestCase):
                 env=os.environ | {"PYTHONPYCACHEPREFIX": cache},
             )
 
+    def test_installer_functions_parse_under_system_bash(self) -> None:
+        # bash 3.2 ships on every macOS and cannot parse `case ... esac` inside
+        # `$( )`. `bash -n` misses it, because a command substitution is parsed
+        # only when it runs, so this has to execute the function. A full
+        # install died here after every other step had already succeeded.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binaries = root / "bin"
+            binaries.mkdir()
+            for name in ("codex", "claude"):
+                stub = binaries / name
+                stub.write_text(
+                    "#!/bin/sh\n"
+                    "printf '{\"installed\":[{\"pluginId\":\"engram@engram\"}]}'\n"
+                )
+                stub.chmod(0o755)
+
+            installer = (ROOT / "harness" / "install.sh").read_text()
+            library = root / "library.sh"
+            library.write_text(installer[: installer.rindex("\nmain\n")])
+            environment = os.environ | {
+                "PATH": f"{binaries}:{os.environ['PATH']}"
+            }
+
+            def run(call: str) -> subprocess.CompletedProcess:
+                return subprocess.run(
+                    ["/bin/bash", "-c", f'source "{library}"; {call}'],
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                )
+
+            for client in ("claude", "codex"):
+                result = run(f"assert_plugin_count {client} engram 1")
+                self.assertEqual(result.returncode, 0, result.stderr)
+            # It really evaluates the listing rather than passing vacuously.
+            self.assertNotEqual(run("assert_plugin_count claude engram 2").returncode, 0)
+
     def test_link_install_is_safe_and_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_home:
             home = Path(temporary_home)
