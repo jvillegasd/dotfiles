@@ -225,21 +225,6 @@ PY
     fi
 }
 
-remove_claude_legacy_engram_mcp() {
-    local config="$HOME/.claude.json"
-    [[ -f "$config" ]] || return 0
-    if python3 - "$config" <<'PY'
-import json, pathlib, sys
-data = json.loads(pathlib.Path(sys.argv[1]).read_text())
-raise SystemExit(0 if "engram" in data.get("mcpServers", {}) else 1)
-PY
-    then
-        backup_copy "$config"
-        claude mcp remove engram --scope user
-        log "Removed legacy direct Claude Engram MCP; the official plugin owns it"
-    fi
-}
-
 # Per-agent setup, as https://github.com/Gentleman-Programming/engram documents
 # it in docs/AGENT-SETUP.md:
 #
@@ -253,6 +238,9 @@ PY
 #   compaction prompt is what puts a memory-save instruction into a compaction
 #   summary. Its own plugin install is best-effort, so the explicit pin below
 #   still runs.
+#
+# Claude Code needs no matching removal: its plugin is the only setup run here,
+# and nothing in this flow writes a direct MCP entry for it.
 #
 # Setting up Codex writes `[mcp_servers.engram]` with `args = ["mcp"]`, and
 # config.toml takes precedence over the server the plugin declares in its
@@ -268,7 +256,6 @@ install_engram() {
     engram setup codex
     ensure_codex_plugin engram Gentleman-Programming/engram engram
     remove_codex_direct_engram_mcp
-    remove_claude_legacy_engram_mcp
 }
 
 install_integrations() {

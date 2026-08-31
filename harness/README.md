@@ -47,7 +47,7 @@ Engram is core, not optional: the policy assumes memory survives a session. `ins
 
 Setting up Codex writes `[mcp_servers.engram]` with `args = ["mcp"]`, and `config.toml` outranks the server the plugin declares in its `.mcp.json`. Measured with `codex mcp list`: with both present Codex lists one `engram` server and it is the `config.toml` one, so leaving the entry silently swaps the plugin's agent tool profile for the full one, admin tools included. It is removed after every setup, not as one-time cleanup.
 
-The Claude counterpart, `remove_claude_legacy_engram_mcp`, is one-time migration only: nothing in this flow writes that entry, since `engram setup claude-code` is never run. It exists for a machine that used bare MCP before the plugin.
+Claude Code needs no such removal, because nothing here writes a direct entry: `engram setup claude-code` is never run.
 
 The full installer uses Homebrew for Codex, OpenCode, GitHub CLI, Engram, UV, RTK, and Worktrunk; Anthropic's native latest channel for Claude Code; and official client setup/plugin commands for Engram, Ponytail, and RTK. It never starts an interactive client or authenticates for you.
 
