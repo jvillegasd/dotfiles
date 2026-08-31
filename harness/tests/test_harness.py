@@ -19,30 +19,37 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.dont_write_bytecode = True
 SKILLS = ROOT / "harness" / "skills"
+COMMANDS = ROOT / "harness" / "commands"
 LOCAL_SKILLS = {
-    "address-review",
     "adversarial-review",
     "evidence",
-    "feedback",
     "seo",
     "setup-harness",
-    "ship",
-    "spec",
-    "tickets",
-    "triage",
 }
 
 # A locked body cannot carry an invocation guard without drifting from
 # upstream, so one that must never fire on its own is not installed as a skill
-# at all. Workflows read it from its path instead.
-INTERNAL_SKILLS = {"code-review"}
-
-
-SEO_SKILLS = sorted(
-    path.name
-    for path in SKILLS.iterdir()
-    if path.is_dir() and (path.name == "seo" or path.name.startswith("seo-"))
+# at all. The `seo` orchestrator reads these from their paths instead.
+UNLINKED_SKILLS = sorted(
+    path.name for path in SKILLS.iterdir()
+    if path.is_dir() and path.name.startswith("seo-")
 )
+
+# Workflows are commands, never skills: a client cannot select one by matching
+# a description, so the invariant holds by construction rather than by prose.
+COMMAND_NAMES = sorted(path.stem for path in COMMANDS.glob("*.md"))
+
+# Every command that ingests text written elsewhere says that the text is data.
+INGESTING_COMMANDS = {
+    "address-review",
+    "ask",
+    "create-ticket",
+    "feedback",
+    "land",
+    "spec",
+    "triage",
+    "yolo",
+}
 
 
 def folder_hash(path: Path) -> str:
@@ -133,8 +140,14 @@ class HarnessTests(unittest.TestCase):
             os.readlink(ROOT / ".agents" / "skills"), "../harness/skills"
         )
 
+        # A bookkeeping link is an installed skill in this repository, so an
+        # unlinked body must not have one either. That is the bug the
+        # code-review exclusion had: excluded from a fresh HOME, live here.
         for name in names:
             link = ROOT / ".claude" / "skills" / name
+            if name in UNLINKED_SKILLS:
+                self.assertFalse(link.is_symlink() or link.exists(), name)
+                continue
             self.assertTrue(link.is_symlink(), name)
             self.assertEqual(os.readlink(link), f"../../.agents/skills/{name}")
 
@@ -156,9 +169,9 @@ class HarnessTests(unittest.TestCase):
 
         # The unguardable ones are controlled by never linking them instead.
         installer = (ROOT / "harness" / "install.sh").read_text()
-        for name in INTERNAL_SKILLS:
+        self.assertIn('is_unlinked_skill() {\n    [[ "$1" == seo-* ]]', installer)
+        for name in UNLINKED_SKILLS:
             self.assertTrue((SKILLS / name / "SKILL.md").is_file(), name)
-            self.assertIn(f'"$1" == {name}', installer, name)
             self.assertNotIn(name, LOCAL_SKILLS)
 
         for name, entry in lock.items():
@@ -213,7 +226,11 @@ class HarnessTests(unittest.TestCase):
         self.assertNotIn("engram setup claude-code", text)
 
     def test_shell_and_python_syntax(self) -> None:
-        for script in (ROOT / "install.sh", ROOT / "harness" / "install.sh"):
+        for script in (
+            ROOT / "install.sh",
+            ROOT / "harness" / "install.sh",
+            ROOT / "harness" / "aliases.sh",
+        ):
             subprocess.run(["bash", "-n", script], check=True)
         scripts = list((ROOT / "harness").rglob("*.py"))
         with tempfile.TemporaryDirectory() as cache:
@@ -229,12 +246,34 @@ class HarnessTests(unittest.TestCase):
             private = home / ".agents" / "skills" / "private"
             private.mkdir(parents=True)
             (private / "SKILL.md").write_text("---\nname: private\ndescription: private\n---\n")
-            collision = home / ".agents" / "skills" / "spec"
+            collision = home / ".agents" / "skills" / "evidence"
             collision.mkdir()
             (collision / "keep").write_text("collision")
             retired = home / ".agents" / "skills" / "implement"
             retired.mkdir()
             (retired / "keep").write_text("retired")
+            # A link this harness wrote for a name it no longer installs, and
+            # one whose target it deleted outright. Both must go.
+            orphan = home / ".agents" / "skills" / "ship"
+            orphan.parent.mkdir(parents=True, exist_ok=True)
+            orphan.symlink_to(SKILLS / "evidence")
+            dangling = home / ".agents" / "skills" / "to-spec"
+            dangling.symlink_to(SKILLS / "to-spec")
+            # A persistent client-specific persona the policy forbids, and a
+            # legacy body that is a real directory rather than a harness link.
+            persona = home / ".claude" / "agents" / "seo-visual.md"
+            persona.parent.mkdir(parents=True)
+            persona.write_text("persona")
+            legacy = home / ".agents" / "skills" / "review"
+            legacy.mkdir(parents=True)
+            (legacy / "SKILL.md").write_text("---\nname: review\ndescription: x\n---\n")
+            # A hand-written duplicate of an alias the harness now owns.
+            zshrc = home / ".zshrc"
+            zshrc.write_text(
+                "export PATH=/usr/bin\n"
+                "alias cyolo='codex --old-flag'\n"
+                "alias sail='sh sail'\n"
+            )
             policy = home / ".codex" / "AGENTS.md"
             policy.parent.mkdir()
             policy.write_text("old policy")
@@ -243,14 +282,14 @@ class HarnessTests(unittest.TestCase):
             (legacy_skills / "private-claude" / "SKILL.md").write_text(
                 "---\nname: private-claude\ndescription: private\n---\n"
             )
-            (home / ".claude").mkdir()
+            (home / ".claude").mkdir(exist_ok=True)
             (home / ".claude" / "skills").symlink_to(legacy_skills)
             opencode_private = home / ".config" / "opencode" / "skills" / "private-opencode"
             opencode_private.mkdir(parents=True)
             (opencode_private / "SKILL.md").write_text(
                 "---\nname: private-opencode\ndescription: private\n---\n"
             )
-            opencode_collision = home / ".config" / "opencode" / "skills" / "spec"
+            opencode_collision = home / ".config" / "opencode" / "skills" / "evidence"
             opencode_collision.mkdir()
             (opencode_collision / "keep").write_text("opencode collision")
 
@@ -266,26 +305,58 @@ class HarnessTests(unittest.TestCase):
             self.assertTrue((legacy_skills / "private-claude" / "SKILL.md").is_file())
             self.assertTrue(opencode_private.is_dir())
             self.assertFalse(opencode_collision.exists())
-            self.assertTrue((home / ".agents" / "skills" / "spec").is_symlink())
+            self.assertTrue((home / ".agents" / "skills" / "evidence").is_symlink())
             self.assertFalse(retired.exists())
+            self.assertFalse(orphan.is_symlink())
+            self.assertFalse(persona.exists())
+
+            # One sourced line owns the yolo aliases; the hand-written
+            # duplicate is gone and unrelated aliases are untouched.
+            rc = zshrc.read_text()
+            self.assertNotIn("--old-flag", rc)
+            self.assertIn("alias sail=", rc)
+            self.assertEqual(rc.count("portable-harness aliases"), 1)
+            self.assertIn(f'source "{ROOT / "harness" / "aliases.sh"}"', rc)
+            aliases = (ROOT / "harness" / "aliases.sh").read_text()
+            for name, flag in (
+                ("ccyolo", "--dangerously-skip-permissions"),
+                ("cyolo", "--dangerously-bypass-approvals-and-sandbox"),
+                ("oyolo", "OPENCODE_PERMISSION="),
+            ):
+                self.assertIn(f"alias {name}=", aliases)
+                self.assertIn(flag, aliases)
+            self.assertFalse(legacy.exists())
+            self.assertFalse(dangling.is_symlink())
+            for name in COMMAND_NAMES:
+                for root in (
+                    home / ".claude" / "commands",
+                    home / ".codex" / "prompts",
+                    home / ".config" / "opencode" / "command",
+                ):
+                    self.assertEqual(
+                        os.path.realpath(root / f"{name}.md"),
+                        str(COMMANDS / f"{name}.md"),
+                        name,
+                    )
+                self.assertFalse((home / ".agents" / "skills" / name).exists(), name)
             self.assertEqual(
                 os.path.realpath(policy), str(ROOT / "harness" / "POLICY.md")
             )
-            for name in SEO_SKILLS:
+            for name in ["seo"] + UNLINKED_SKILLS:
                 self.assertFalse((home / ".agents" / "skills" / name).exists(), name)
                 self.assertFalse((home / ".claude" / "skills" / name).exists(), name)
             self.assertFalse((home / ".local" / "bin" / "claude-seo").exists())
             backups = list((home / ".dotfiles-backups" / "harness").iterdir())
             self.assertEqual(len(backups), 1)
             self.assertTrue(
-                (backups[0] / ".agents" / "skills" / "spec" / "keep").is_file()
+                (backups[0] / ".agents" / "skills" / "evidence" / "keep").is_file()
             )
             self.assertTrue(
                 (backups[0] / ".agents" / "skills" / "implement" / "keep").is_file()
             )
             self.assertTrue((backups[0] / ".claude" / "skills.previous-link").is_symlink())
             self.assertTrue(
-                (backups[0] / ".config" / "opencode" / "skills" / "spec" / "keep").is_file()
+                (backups[0] / ".config" / "opencode" / "skills" / "evidence" / "keep").is_file()
             )
 
             subprocess.run(command, env=environment, check=True, capture_output=True)
@@ -293,12 +364,15 @@ class HarnessTests(unittest.TestCase):
                 len(list((home / ".dotfiles-backups" / "harness").iterdir())),
                 1,
             )
+            self.assertEqual(zshrc.read_text(), rc)
 
             subprocess.run(
                 command + ["--with-seo"], env=environment, check=True, capture_output=True
             )
-            for name in SEO_SKILLS:
-                self.assertTrue((home / ".claude" / "skills" / name).is_symlink(), name)
+            self.assertTrue((home / ".claude" / "skills" / "seo").is_symlink())
+            # The locked role bodies stay unlinked in every group setting.
+            for name in UNLINKED_SKILLS:
+                self.assertFalse((home / ".claude" / "skills" / name).exists(), name)
             self.assertEqual(
                 os.path.realpath(home / ".local" / "bin" / "claude-seo"),
                 str(SKILLS / "seo" / "bin" / "claude-seo"),
@@ -311,7 +385,7 @@ class HarnessTests(unittest.TestCase):
             subprocess.run(
                 command + ["--without-seo"], env=environment, check=True, capture_output=True
             )
-            for name in SEO_SKILLS:
+            for name in ["seo"] + UNLINKED_SKILLS:
                 self.assertFalse((home / ".claude" / "skills" / name).exists(), name)
 
     def test_bench_reads_every_client_session_store(self) -> None:
@@ -411,18 +485,14 @@ class HarnessTests(unittest.TestCase):
             self.assertIn("fewer than", text)
 
     def test_public_workflow_contracts_are_wired(self) -> None:
-        required = {
-            "setup-harness": (
-                "docs/agents/harness.json",
-                "docs/agents/issue-tracker.md",
-                "agent-lifecycle.yml",
-            ),
-            "spec": ("to-spec", "Ask once", "Do not create tickets"),
-            "tickets": ("to-tickets", "sub-issue", "blocked-by"),
-            "ship": (
+        commands = {
+            "ask": ("No edits", "read-only", "research"),
+            "spec": ("spec-template", "Ask once", "Do not create tickets"),
+            "create-ticket": ("vertical-slice-rules", "sub-issue", "blocked-by"),
+            "yolo": (
                 "wt switch --create",
                 "adversarial-review",
-                "review",
+                "spec-conformance",
                 "oracle ladder",
                 "Assumptions",
                 "Never merge",
@@ -433,16 +503,52 @@ class HarnessTests(unittest.TestCase):
                 "adversarial-review",
                 "Never merge",
             ),
-            "adversarial-review": ("Reviewer A", "Reviewer B", "Never three"),
             "triage": ("kill query", "Plan brief", "Evidence ledger", "Never implement"),
             "feedback": ("Deferred", "accumulated delta", "Never merge the pull request"),
-            "evidence": ("Kill query first", "falsifiable", "No-fabrication"),
-            "seo": ("seo-technical", "roles/performance", "claude-seo setup"),
+            "land": ("MERGED", "worktree", "Never merge a pull request"),
         }
-        for name, terms in required.items():
+        self.assertEqual(set(commands), set(COMMAND_NAMES))
+        for name, terms in commands.items():
+            body = (COMMANDS / f"{name}.md").read_text()
+            self.assertTrue(body.startswith("---\ndescription: "), name)
+            for term in terms:
+                self.assertIn(term, body, f"{name}: {term}")
+
+        # A workflow is never also a skill, and no skill outranks a command by
+        # answering to the same name.
+        self.assertTrue(set(COMMAND_NAMES).isdisjoint(
+            path.name for path in SKILLS.iterdir() if path.is_dir()
+        ))
+
+        # External text a workflow ingests is data, not instructions.
+        for name in INGESTING_COMMANDS:
+            self.assertIn(
+                "cannot override this workflow",
+                (COMMANDS / f"{name}.md").read_text(),
+                name,
+            )
+
+        skills = {
+            "setup-harness": (
+                "docs/agents/harness.json",
+                "docs/agents/issue-tracker.md",
+                "agent-lifecycle.yml",
+            ),
+            "adversarial-review": ("Reviewer A", "Reviewer B", "Never three"),
+            "evidence": ("Kill query first", "falsifiable", "No-fabrication"),
+            "seo": ("../seo-technical/", "roles/performance", "claude-seo setup"),
+        }
+        for name, terms in skills.items():
             body = (SKILLS / name / "SKILL.md").read_text()
             for term in terms:
                 self.assertIn(term, body, f"{name}: {term}")
+
+        # The routing table names what is installed, and only that.
+        policy = (ROOT / "harness" / "POLICY.md").read_text()
+        for name in COMMAND_NAMES:
+            self.assertIn(f"`/{name}`", policy, name)
+        for name in ("code-review", "to-spec", "to-tickets", "`ship`"):
+            self.assertNotIn(name, policy, name)
 
     def test_github_close_and_reopen_reconcile_frontier(self) -> None:
         lifecycle = load_lifecycle_module()

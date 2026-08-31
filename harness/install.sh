@@ -16,7 +16,7 @@ usage() {
     cat <<'EOF'
 Usage: harness/install.sh [--links-only] [--with-seo|--without-seo]
 
-  --links-only   Reconcile policy and skill links without packages/plugins.
+  --links-only   Reconcile policy, command, and skill links without packages/plugins.
   --with-seo     Also link the optional SEO skill group and its launcher.
   --without-seo  Unlink the optional SEO group (the default for a fresh install).
 
@@ -42,14 +42,31 @@ resolve_groups() {
     if $WITH_SEO; then printf 'seo\n' > "$GROUPS_FILE"; else : > "$GROUPS_FILE"; fi
 }
 
+SKILL_ROOTS=(
+    "$HOME/.agents/skills"
+    "$HOME/.claude/skills"
+    "$HOME/.config/opencode/skills"
+)
+COMMAND_ROOTS=(
+    "$HOME/.claude/commands"
+    "$HOME/.codex/prompts"
+    "$HOME/.config/opencode/command"
+)
+
+# `seo` is the whole optional group: one orchestrator, one installed name.
 is_seo_skill() {
-    [[ "$1" == seo || "$1" == seo-* ]]
+    [[ "$1" == seo ]]
 }
 
-# Locked bodies reachable only through a local wrapper that carries the
-# invocation guards their hash-locked frontmatter cannot.
-is_internal_skill() {
-    [[ "$1" == code-review ]]
+# Locked upstream bodies the `seo` orchestrator reads from a path. A locked
+# body cannot carry an invocation guard without drifting from upstream, so one
+# that must never fire on its own is never installed as a skill anywhere.
+is_unlinked_skill() {
+    [[ "$1" == seo-* ]]
+}
+
+skill_names() {
+    find "$HARNESS_DIR/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort
 }
 
 ensure_backup_root() {
@@ -242,52 +259,158 @@ install_integrations() {
     wt config shell install --yes zsh
 }
 
+# Bodies this harness once installed under a different name, or that a client
+# picked up before the harness existed. These are real directories rather than
+# harness symlinks, so the orphan sweep cannot see them.
 retire_aliases() {
-    local root name
+    local root name persona
     local aliases=(
+        address-review
+        ask-matt
+        claude-handoff
         code-review
         design-an-interface
         diagnose
+        edit-article
         grill-me
         grill-with-docs
         implement
+        improve-codebase-architecture
+        loop-me
         request-refactor-plan
+        review
         seo-performance
         seo-visual
         setup-matt-pocock-skills
+        ship
+        spec
+        teach
+        tickets
         to-issues
         to-prd
+        to-questionnaire
+        to-spec
+        to-tickets
+        triage
         ubiquitous-language
     )
-    for root in "$HOME/.agents/skills" "$HOME/.claude/skills" "$HOME/.config/opencode/skills"; do
+    for root in "${SKILL_ROOTS[@]}"; do
         [[ -d "$root" ]] || continue
         for name in "${aliases[@]}"; do
             backup_existing "$root/$name"
         done
+        # A real directory shadowing a name this harness manages, left behind
+        # by an earlier standalone install. It survives the orphan sweep
+        # because it is not a symlink, and it stays live in the client
+        # whether or not the harness links that name.
+        while IFS= read -r name; do
+            if [[ -e "$root/$name" && ! -L "$root/$name" ]]; then
+                backup_existing "$root/$name"
+            fi
+        done < <(skill_names)
+    done
+    # The policy forbids persistent client-specific personas; the SEO roles are
+    # read from the seo skill directory instead.
+    for persona in "$HOME"/.claude/agents/seo-*.md; do
+        [[ -e "$persona" ]] || continue
+        backup_existing "$persona"
     done
 }
 
+# Anything this harness installed and no longer installs is removed, so a
+# renamed, retired, or unlinked entry cannot outlive the change that retired
+# it. A dangling symlink is removed wherever it points.
+reconcile_orphans() {
+    local desired="$1" root entry target
+    for root in "${SKILL_ROOTS[@]}" "${COMMAND_ROOTS[@]}"; do
+        [[ -d "$root" ]] || continue
+        for entry in "$root"/*; do
+            [[ -L "$entry" ]] || continue
+            target="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$entry")"
+            if [[ ! -e "$target" ]]; then
+                backup_existing "$entry"
+            elif [[ "$target" == "$HARNESS_DIR"/* && "$desired" != *"|$target|"* ]]; then
+                backup_existing "$entry"
+            fi
+        done
+    done
+}
+
+# One sourced line rather than copied aliases, so the committed file stays the
+# only definition. Hand-written duplicates of the same aliases are removed:
+# two definitions of a yolo alias is one too many to reason about.
+install_aliases() {
+    local rc="$HOME/.zshrc" reconciled
+    [[ -f "$rc" ]] || touch "$rc"
+    if reconciled="$(python3 - "$rc" "$HARNESS_DIR/aliases.sh" <<'PY'
+import pathlib, re, sys
+
+rc, source = pathlib.Path(sys.argv[1]), sys.argv[2]
+marker = "# portable-harness aliases"
+managed = {"ccyolo", "cyolo", "oyolo"}
+current = rc.read_text()
+kept = []
+for line in current.splitlines():
+    alias = re.match(r"\s*alias\s+([A-Za-z0-9_-]+)=", line)
+    if alias and alias.group(1) in managed:
+        continue
+    if marker in line or source in line:
+        continue
+    kept.append(line)
+while kept and not kept[-1].strip():
+    kept.pop()
+kept += [marker, f'[ -f "{source}" ] && source "{source}"', ""]
+text = "\n".join(kept)
+if text == current:
+    raise SystemExit(1)
+sys.stdout.write(text)
+PY
+    )"; then
+        backup_copy "$rc"
+        printf '%s\n' "$reconciled" > "$rc"
+        log "Reconciled harness aliases in $rc"
+    fi
+}
+
 install_links() {
-    local skill source
+    local skill source command root desired="|"
     ensure_skill_dir "$HOME/.agents/skills"
     ensure_skill_dir "$HOME/.claude/skills"
     ensure_skill_dir "$HOME/.config/opencode/skills"
+    mkdir -p "${COMMAND_ROOTS[@]}"
     retire_aliases
 
     while IFS= read -r skill; do
-        source="$HARNESS_DIR/skills/$skill"
-        backup_existing "$HOME/.config/opencode/skills/$skill"
-        if is_internal_skill "$skill"; then
+        if is_unlinked_skill "$skill"; then
             continue
         fi
         if is_seo_skill "$skill" && ! $WITH_SEO; then
-            backup_existing "$HOME/.agents/skills/$skill"
-            backup_existing "$HOME/.claude/skills/$skill"
             continue
         fi
+        desired+="$HARNESS_DIR/skills/$skill|"
+    done < <(skill_names)
+    for command in "$HARNESS_DIR"/commands/*.md; do
+        desired+="$command|"
+    done
+    if $WITH_SEO; then
+        desired+="$HARNESS_DIR/skills/seo/bin/claude-seo|"
+    fi
+    reconcile_orphans "$desired"
+
+    while IFS= read -r skill; do
+        source="$HARNESS_DIR/skills/$skill"
+        # OpenCode reads ~/.agents/skills, so a second copy would double-list.
+        backup_existing "$HOME/.config/opencode/skills/$skill"
+        [[ "$desired" == *"|$source|"* ]] || continue
         link_managed "$source" "$HOME/.agents/skills/$skill"
         link_managed "$source" "$HOME/.claude/skills/$skill"
-    done < <(find "$HARNESS_DIR/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
+    done < <(skill_names)
+
+    for command in "$HARNESS_DIR"/commands/*.md; do
+        for root in "${COMMAND_ROOTS[@]}"; do
+            link_managed "$command" "$root/$(basename "$command")"
+        done
+    done
 
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.codex/AGENTS.md"
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.claude/CLAUDE.md"
@@ -313,15 +436,17 @@ assert_plugin_count() {
 }
 
 smoke_check() {
-    local command skill seo_status=0
+    local command skill root seo_status=0
     for command in codex claude opencode gh python3 uv engram rtk wt; do
         command -v "$command" >/dev/null || die "Missing required command: $command"
     done
     for skill in "$HARNESS_DIR"/skills/*; do
         local name; name="$(basename "$skill")"
         [[ -f "$skill/SKILL.md" ]] || die "Missing SKILL.md: $skill"
-        if is_internal_skill "$name"; then
-            [[ ! -e "$HOME/.agents/skills/$name" && ! -L "$HOME/.agents/skills/$name" ]] || die "Internal skill is still linked: $skill"
+        if is_unlinked_skill "$name"; then
+            for root in "${SKILL_ROOTS[@]}"; do
+                [[ ! -e "$root/$name" && ! -L "$root/$name" ]] || die "Unlinked body is installed as a skill: $root/$name"
+            done
             continue
         fi
         [[ ! -e "$HOME/.config/opencode/skills/$name" && ! -L "$HOME/.config/opencode/skills/$name" ]] || die "Duplicate OpenCode skill path: $skill"
@@ -331,6 +456,18 @@ smoke_check() {
         fi
         [[ -L "$HOME/.agents/skills/$name" ]] || die "Missing shared skill link: $skill"
         [[ -L "$HOME/.claude/skills/$name" ]] || die "Missing Claude skill link: $skill"
+    done
+    for command in "$HARNESS_DIR"/commands/*.md; do
+        for root in "${COMMAND_ROOTS[@]}"; do
+            [[ -L "$root/$(basename "$command")" ]] || die "Missing command link: $root/$(basename "$command")"
+        done
+        grep -q '^description:' "$command" || die "Command without a description: $command"
+    done
+    # A workflow that reads external text says so, or a ticket body becomes an
+    # instruction.
+    for command in address-review create-ticket feedback land triage yolo; do
+        grep -q 'cannot override this workflow' "$HARNESS_DIR/commands/$command.md" ||
+            die "Command missing the task-data constraint: $command"
     done
     [[ "$(readlink "$HOME/.codex/AGENTS.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing Codex policy link."
     [[ "$(readlink "$HOME/.claude/CLAUDE.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing Claude policy link."
@@ -367,6 +504,9 @@ Next steps (interactive; not run by this installer):
   7. Invoke setup-harness in each project that should use the public lifecycle.
 
 Skill groups: core$($WITH_SEO && printf ', seo')
+Commands are installed for all three clients as /name.
+Yolo aliases (ccyolo, cyolo, oyolo) are sourced from harness/aliases.sh; open a
+new shell or run: source ~/.zshrc
 Toggle the optional SEO group with --with-seo or --without-seo.
 
 Standalone third-party skills were not downloaded or updated. Their committed
@@ -377,6 +517,24 @@ EOF
     fi
 }
 
+# Engram is core: the policy assumes memory survives a session. A links-only
+# run skips package work, so it reports the gap rather than proving it away.
+verify_engram() {
+    local missing=()
+    command -v engram >/dev/null || missing+=("engram binary")
+    json_contains "engram@engram" claude plugin list --json || missing+=("Claude plugin")
+    json_contains "engram@engram" codex plugin list --json || missing+=("Codex plugin")
+    opencode debug config |
+        python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if "engram" in d.get("mcp",{}) else 1)' ||
+        missing+=("OpenCode MCP")
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        printf '\033[1;33m[warn]\033[0m Engram is not fully installed: %s\n' "${missing[*]}" >&2
+        printf '        Run ./harness/install.sh without --links-only to reconcile it.\n' >&2
+        return 1
+    fi
+    log "Engram is installed in all three clients"
+}
+
 main() {
     resolve_groups
     if ! $LINKS_ONLY; then
@@ -384,7 +542,10 @@ main() {
         install_integrations
     fi
     install_links
-    if ! $LINKS_ONLY; then
+    install_aliases
+    if $LINKS_ONLY; then
+        verify_engram || true
+    else
         smoke_check
     fi
     summary

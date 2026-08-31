@@ -83,7 +83,7 @@ the buffer. Everything else in the config works regardless of this setting.
 install.sh                # macOS bootstrap (brew + symlinks + mason + treesitter)
 README.md                 # this file
 STRUCTURE.md              # detailed Neovim layout
-harness/                  # portable three-client policy, skills, installer, tests
+harness/                  # portable three-client policy, commands, skills, installer, tests
 skills-lock.json          # reviewed standalone third-party skill lock
 .agents/skills            # symlink to the canonical harness/skills directory
 .claude/skills            # skills.sh/Claude bookkeeping symlinks

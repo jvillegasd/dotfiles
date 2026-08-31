@@ -1,5 +1,0 @@
-interface:
-  display_name: "Triage"
-  short_description: "Turn a ticket or error into an evidence-backed plan brief"
-policy:
-  allow_implicit_invocation: false
