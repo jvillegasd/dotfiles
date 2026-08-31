@@ -25,4 +25,4 @@ Rules:
 - If the question is ambiguous, ask one sharp clarifying question before answering. Do not guess.
 - If a fix is the natural next step, describe it and stop. Wait for explicit approval before touching anything.
 
-Scope check. This exists so a one-line lookup does not pay for a workflow. If the question stays one question but needs deep tracing, several sources, or evidence triangulation, hand it to `research`. If the real problem is unclear requirements, a design tradeoff, or several valid approaches, recommend `grilling` or native plan mode instead of answering shallowly here.
+Scope check. This exists so a one-line lookup does not pay for a workflow. If the question stays one question but needs deep tracing, several sources, or evidence triangulation, hand it to `/research`. If the real problem is unclear requirements, a design tradeoff, or several valid approaches, recommend `grilling` or native plan mode instead of answering shallowly here.

@@ -17,6 +17,10 @@ Require clean credentials and a contract. The contract is either a published tic
 
 In the lightweight mode the branch slug derives from the sentence, and label transitions are skipped when `docs/agents/harness.json` or the mapped labels are absent. Everything else below is unchanged. Escalate to `/spec` only if the change turns out to touch a surface the sentence did not name.
 
+A `/proto` requirements ledger is also a contract. Continue on that prototype's branch, squash its WIP checkpoints at commit time, and harden whatever the ledger marks prototype-quality. Do not re-derive what the iterations already settled.
+
+Self-grill a load-bearing ambiguity only when it survives a repository search: run `grilling` in self-grill mode, which resolves what precedent, history, and `evidence` can settle and leaves only the survivors. Ask only what survives that, per the escalation contract.
+
 With a ticket, escalate before changing code if any blocker is not closed by a merged pull request.
 
 ## Worktree and claim
@@ -46,6 +50,10 @@ With a ticket, escalate before changing code if any blocker is not closed by a m
 
 5. Watch required remote checks. Repair owned failures, rerun local rungs, commit, push, and review again. Apply the escalation contract's do-not-escalate list before counting an attempt, and stop on any rabbit-hole trip.
 
+   Watch the merge state alongside them: `gh pr view --json mergeable,mergeStateStatus`. A conflicting pull request is a failure to fix on the same footing as a red check, not a result to report. Rebase onto the base, resolve, and `git push --force-with-lease`; the task branch this run created is not shared. Resolve a mechanical conflict autonomously (adjacent-line collisions, a regenerated lockfile, import order). Escalate a semantic conflict, where both sides changed the same logic: resolving one silently would redesign someone else's concurrent change.
+
+   Do not wait for review threads. A pull request just opened has none, and any that appear arrive after this run has finished. `/address-review` owns them.
+
 6. When required checks and both review passes are green, mark the pull request ready and change the ticket from mapped `in_progress` to mapped `ready_for_human`.
 
 Return the pull request, checks, review result, and retained worktree path. Never merge the pull request or remove the worktree; `/land` owns what happens after a human merges.
@@ -54,6 +62,7 @@ Return the pull request, checks, review result, and retained worktree path. Neve
 
 - `ponytail`
 - `tdd`
+- `grilling`, self-grill mode only, for an ambiguity that survives a repository search
 - `evidence` when a load-bearing runtime claim decides the approach
 - `codebase-design` when an agreed seam needs implementation vocabulary
 - `diagnosing-bugs` for failures that do not have an obvious local cause

@@ -25,7 +25,7 @@ The input is a tracker item, a pasted ticket, or a production error signal. It m
 
 4. Investigate the code to ground the analysis, citing `path:line`. Delegate the recon to read-only subagents by default so file contents stay out of this context and only `path:line` plus mechanism come back; read directly only when the item already names the file. Then confirm or refute the root-cause hypothesis with at most two further evidence queries.
 
-5. Only now, if something load-bearing is still unresolved, stop and ask under the policy's escalation contract. Most vague symptoms resolve into a stack trace and a `path:line`, so asking before investigating wastes a round trip. Batch every question into one stop.
+5. Only now, if something load-bearing is still unresolved, run `grilling` in self-grill mode before escalating: it resolves what precedent, history, and `evidence` can settle, and kills the triage outright if the premise is refuted. Stop and ask only what survives that, under the policy's escalation contract. Most vague symptoms resolve into a stack trace and a `path:line`, so asking before investigating wastes a round trip. Batch every question into one stop.
 
 ## Output
 
@@ -47,4 +47,5 @@ The brief is contract input, not a contract. Continue into the planning route th
 ## Skills this loads
 
 - `evidence`
+- `grilling`, self-grill mode only, before escalating an unresolved load-bearing question
 - `diagnosing-bugs` when the root cause resists the first two evidence queries

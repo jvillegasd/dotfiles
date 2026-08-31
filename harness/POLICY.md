@@ -34,9 +34,9 @@ Run independent roles in parallel when the client supports it; otherwise run the
 | a bullet list of changes to work already in a pull request | `/feedback` |
 | "address the review comments", "CI is red on my PR" | `/address-review` |
 | "the PR merged", "clean this up", "close it out" | `/land` |
-| "look into X", "is it true that" | `research` |
+| "look into X", "is it true that" | `/research` |
 | "why does X happen", something broken or slow | `diagnosing-bugs` |
-| "prototype this", "spike it" | `prototype` |
+| "prototype this", "spike it", requirements that will not settle on paper | `/proto` |
 
 Routing carries the workflow's gates, not just its steps: `/spec` still asks once before publishing, and `/yolo` still never merges.
 
@@ -50,7 +50,8 @@ When a request matches a workflow but omits something the workflow needs, follow
 
 The lifecycle is `setup-harness` -> `grilling` -> `/spec` -> `/create-ticket` -> `/yolo` -> `/land`, with `/feedback` and `/address-review` for an open pull request.
 
-- `grilling` is the only interview protocol. Do not substitute another one, publish a spec from it, or act on its result. It finishes when the design-tree frontier is empty and the user confirms shared understanding.
+- `grilling` is the only interview protocol. Do not substitute another one, publish a spec from it, or act on its result. Its interactive mode finishes when the design-tree frontier is empty and the user confirms shared understanding. Its self-grill mode is what a workflow uses when serial human grilling would be the bottleneck: it resolves what precedent, history, and `evidence` can settle, kills the premise if evidence refutes it, and surfaces only the survivors in one batch.
+- `/proto` is the one workflow that writes code before a contract exists, because its job is contract discovery by building. It validates on the local rungs only, stops for the human every round by design, and ends by handing a requirements ledger to `/yolo` or by killing the premise. It never pushes and never opens a pull request: nothing reaches a pull request except through `/yolo`.
 - `/spec` owns the only substantive approval gate before publication.
 - `setup-harness` stays a skill rather than a command because it installs bundled lifecycle assets that only a skill directory can carry. Its guards are what keep it from firing on its own.
 - `docs/agents/harness.json` plus `docs/agents/issue-tracker.md`, both written by `setup-harness`, satisfy the tracker and label prerequisite of every locked skill. Never redirect the user to a legacy setup workflow.
@@ -66,9 +67,11 @@ Every change needs an agreed contract before implementation. There are two route
 
 Never do both. An approved spec is already the implementation contract, so re-entering plan mode to restate it adds a second gate over the same decisions. Go straight from the approved contract to `/yolo`.
 
-Whichever route, pressure-test with `grilling` before committing to it.
+A third path exists for requirements that cannot be settled on paper: `/proto` discovers the contract by building, and its finalized requirements ledger is the contract `/yolo` consumes.
 
-A `/triage` plan brief, a `research` finding ledger, or a `prototype` requirements ledger is the contract's input, not a suggestion to re-derive. Do not re-investigate what it already grounded with a `path:line` or a linked number. Carry its verification concerns forward verbatim and its open questions in as decisions with defaults. Re-run only evidence it marked refuted or unchecked.
+Whichever route, pressure-test with `grilling` before committing to it: interactively when the user is driving, in self-grill mode when a workflow needs its own approach broken without blocking on a human.
+
+A `/triage` plan brief, a `/research` finding ledger, or a `/proto` requirements ledger is the contract's input, not a suggestion to re-derive. Do not re-investigate what it already grounded with a `path:line` or a linked number. Carry its verification concerns forward verbatim and its open questions in as decisions with defaults. Re-run only evidence it marked refuted or unchecked.
 
 ## Record what you inferred
 

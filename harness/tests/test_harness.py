@@ -23,6 +23,9 @@ COMMANDS = ROOT / "harness" / "commands"
 LOCAL_SKILLS = {
     "adversarial-review",
     "evidence",
+    # Adopted out of the lock to gain the invocation guards the policy already
+    # claimed it had, plus a self-grill mode two workflows call.
+    "grilling",
     "seo",
     "setup-harness",
 }
@@ -46,6 +49,8 @@ INGESTING_COMMANDS = {
     "create-ticket",
     "feedback",
     "land",
+    "proto",
+    "research",
     "spec",
     "triage",
     "yolo",
@@ -54,7 +59,7 @@ INGESTING_COMMANDS = {
 # Ponytail replaced a SessionStart hook that applied to every session with an
 # explicit load in each command that writes code. Nothing else enforces it, so
 # dropping the line would silently turn lazy mode off everywhere.
-PONYTAIL_COMMANDS = {"address-review", "feedback", "yolo"}
+PONYTAIL_COMMANDS = {"address-review", "feedback", "proto", "yolo"}
 
 
 def folder_hash(path: Path) -> str:
@@ -560,24 +565,54 @@ class HarnessTests(unittest.TestCase):
 
     def test_public_workflow_contracts_are_wired(self) -> None:
         commands = {
-            "ask": ("No edits", "read-only", "research"),
+            "ask": ("No edits", "read-only", "/research"),
+            "research": (
+                "Actionable:",
+                "Confidence: confirmed",
+                "git bisect",
+                "/create-ticket findings",
+                "No file writes",
+            ),
             "spec": ("spec-template", "Ask once", "Do not create tickets"),
-            "create-ticket": ("vertical-slice-rules", "sub-issue", "blocked-by"),
+            "create-ticket": (
+                "vertical-slice-rules",
+                "sub-issue",
+                "blocked-by",
+                "prior art",
+                "Batch mode",
+            ),
+            "proto": (
+                "requirements ledger",
+                "local rungs",
+                "Promote",
+                "Kill",
+                "never open a pull request",
+            ),
             "yolo": (
                 "wt switch --create",
                 "adversarial-review",
                 "spec-conformance",
                 "oracle ladder",
                 "Assumptions",
+                "mergeStateStatus",
+                "self-grill",
                 "Never merge",
             ),
             "address-review": (
                 "headRefName",
                 "wt list --format=json",
                 "adversarial-review",
+                "comments/{comment_id}/replies",
+                "Stop and confirm before any external write",
                 "Never merge",
             ),
-            "triage": ("kill query", "Plan brief", "Evidence ledger", "Never implement"),
+            "triage": (
+                "kill query",
+                "Plan brief",
+                "Evidence ledger",
+                "self-grill",
+                "Never implement",
+            ),
             "feedback": ("Deferred", "accumulated delta", "Never merge the pull request"),
             "land": ("MERGED", "worktree", "Never merge a pull request"),
         }
@@ -615,7 +650,14 @@ class HarnessTests(unittest.TestCase):
                 "agent-lifecycle.yml",
             ),
             "adversarial-review": ("Reviewer A", "Reviewer B", "Never three"),
-            "evidence": ("Kill query first", "falsifiable", "No-fabrication"),
+            "evidence": (
+                "Kill query first",
+                "falsifiable",
+                "No-fabrication",
+                "Source map, by capability",
+                "Version history",
+            ),
+            "grilling": ("Mode: interactive", "Mode: self-grill", "load-bearing"),
             "seo": ("../seo-technical/", "roles/performance", "claude-seo setup"),
         }
         for name, terms in skills.items():

@@ -417,7 +417,7 @@ smoke_check() {
     done
     # A workflow that reads external text says so, or a ticket body becomes an
     # instruction.
-    for command in address-review create-ticket feedback land triage yolo; do
+    for command in address-review create-ticket feedback land proto research triage yolo; do
         grep -q 'cannot override this workflow' "$HARNESS_DIR/commands/$command.md" ||
             die "Command missing the task-data constraint: $command"
     done

@@ -46,6 +46,40 @@ the work unnecessary:
 Report a kill result loudly. "Zero occurrences in 30 days" outranks any amount
 of code analysis.
 
+## Source map, by capability
+
+Name a tool as its server plus its bare tool name, per the policy. Skip
+entirely any capability the project has not configured, and say so: that is a
+normal state, never a blocker, and never a reason to invent a number.
+
+- **Error tracking.** Issue search for frequency, first seen, and last seen.
+  Event aggregation for counts grouped by release or environment, and for a
+  timeseries. Issue detail for the stack. Automated root-cause analysis is a
+  hypothesis to verify in code, never a finding on its own.
+- **Product analytics.** Affected-person counts and funnel step conversion.
+  Session replay when the claim is about what a user actually saw or did; one
+  replay confirming the reproduction outranks inference from event counts.
+  Respect the project's test-account filtering. Where person properties are
+  recorded at ingest time rather than queried live, never write a query whose
+  conclusion depends on a person's current property value.
+- **Metrics, logs, and traces.** Rate and percentile latency from metrics. Log
+  search to confirm, and to find failure modes nobody instrumented as errors.
+  Trace search for where the time actually goes. Incident and alert history for
+  whether this has paged before. Produce every deep link with the tool's own
+  link generator; never hand-assemble a dashboard URL.
+- **Database.** Confirm a table, column, or constraint exists before asserting
+  it. Row counts for blast radius. Advisors for security and performance
+  warnings on the changed surface. Migration history before proposing a
+  migration.
+- **Tracker.** Search for prior art before treating something as new.
+  Duplicate detection is evidence.
+- **Version history.** `git log` and `git blame` for when a behavior changed
+  and what shipped alongside it. Release or deploy history to correlate a
+  telemetry inflection with a commit range. Pull request discussion as prior
+  art on why the code is the way it is. A regression claim ("this got slower
+  recently") is checked against history exactly the way an impact claim is
+  checked against telemetry, and it is the one capability every repository has.
+
 ## No-fabrication guard
 
 Every number carries its source deep link and its timeframe, both as complete
