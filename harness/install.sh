@@ -205,7 +205,7 @@ ensure_claude_plugin() {
     fi
 }
 
-remove_codex_legacy_engram_mcp() {
+remove_codex_direct_engram_mcp() {
     local config="$HOME/.codex/config.toml"
     [[ -f "$config" ]] || return
     if grep -Eq '^\[mcp_servers\.engram(\.|\])' "$config"; then
@@ -221,7 +221,7 @@ text = re.sub(
 ).rstrip() + "\n"
 path.write_text(text)
 PY
-        log "Removed legacy direct Codex Engram MCP; the official plugin owns it"
+        log "Removed the direct Codex Engram MCP; the plugin's agent profile owns it"
     fi
 }
 
@@ -254,9 +254,12 @@ PY
 #   summary. Its own plugin install is best-effort, so the explicit pin below
 #   still runs.
 #
-# Setting up Codex then leaves `[mcp_servers.engram]` in config.toml next to
-# the identical server the plugin declares in its .mcp.json, so the duplicate
-# is removed afterwards. All of it is idempotent.
+# Setting up Codex writes `[mcp_servers.engram]` with `args = ["mcp"]`, and
+# config.toml takes precedence over the server the plugin declares in its
+# .mcp.json. Measured with `codex mcp list`: with both present Codex lists one
+# `engram` server and it is the config.toml one, so the entry silently swaps
+# the plugin's agent tool profile for the full one, admin tools included. It is
+# removed after every setup, not as one-time cleanup. All of it is idempotent.
 install_engram() {
     log "Reconciling Engram"
     command -v engram >/dev/null || die "Engram is missing; run without --links-only to install it."
@@ -264,7 +267,7 @@ install_engram() {
     engram setup opencode
     engram setup codex
     ensure_codex_plugin engram Gentleman-Programming/engram engram
-    remove_codex_legacy_engram_mcp
+    remove_codex_direct_engram_mcp
     remove_claude_legacy_engram_mcp
 }
 

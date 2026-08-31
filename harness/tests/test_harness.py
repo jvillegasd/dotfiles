@@ -229,8 +229,8 @@ class HarnessTests(unittest.TestCase):
         self.assertNotIn("engram setup claude-code", text)
         for command in ("engram setup codex", "engram setup opencode"):
             self.assertIn(command, text, command)
-        # Setting up Codex re-adds the server its plugin already declares.
-        self.assertIn("remove_codex_legacy_engram_mcp", text)
+        # Setting up Codex re-adds an entry that outranks the plugin's own.
+        self.assertIn("remove_codex_direct_engram_mcp", text)
 
     def test_shell_and_python_syntax(self) -> None:
         for script in (
