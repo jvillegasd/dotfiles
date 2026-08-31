@@ -240,15 +240,30 @@ PY
     fi
 }
 
-# Codex and Claude Code get Engram through its official plugin; OpenCode has
-# no plugin marketplace for it, so `engram setup` writes its plugin and MCP
-# entry. All three steps are idempotent.
+# Per-agent setup, as https://github.com/Gentleman-Programming/engram documents
+# it in docs/AGENT-SETUP.md:
+#
+# - Claude Code: the plugin, and nothing else. It registers the MCP server, the
+#   hooks, and the Memory Protocol skill by itself.
+# - OpenCode: `engram setup opencode`. There is no marketplace entry; the
+#   command writes the plugin, the MCP entry, and the statusline.
+# - Codex: `engram setup codex`. The plugin alone is not the documented setup:
+#   it carries the MCP server and hooks, but the instructions file and the
+#   compaction prompt file are written only by the setup command, and the
+#   compaction prompt is what puts a memory-save instruction into a compaction
+#   summary. Its own plugin install is best-effort, so the explicit pin below
+#   still runs.
+#
+# Setting up Codex then leaves `[mcp_servers.engram]` in config.toml next to
+# the identical server the plugin declares in its .mcp.json, so the duplicate
+# is removed afterwards. All of it is idempotent.
 install_engram() {
     log "Reconciling Engram"
     command -v engram >/dev/null || die "Engram is missing; run without --links-only to install it."
-    ensure_codex_plugin engram Gentleman-Programming/engram engram
     ensure_claude_plugin engram Gentleman-Programming/engram engram
     engram setup opencode
+    engram setup codex
+    ensure_codex_plugin engram Gentleman-Programming/engram engram
     remove_codex_legacy_engram_mcp
     remove_claude_legacy_engram_mcp
 }

@@ -37,7 +37,15 @@ The SEO group is optional and is not linked by default. Add or remove it with `-
 ./harness/install.sh --with-seo
 ```
 
-Engram is core, not optional: the policy assumes memory survives a session. `install_engram` reconciles all three clients, and it is idempotent, so both run modes reach it. Codex and Claude Code get the official plugin; OpenCode has no marketplace entry for it, so `engram setup opencode` writes the plugin and the MCP entry. A links-only run checks the binary, both plugins, and the OpenCode MCP, and repairs whatever is missing instead of reporting a gap it could close. A legacy direct MCP entry in either client's config is removed, because the plugin owns that server now.
+Engram is core, not optional: the policy assumes memory survives a session. `install_engram` reconciles all three clients the way https://github.com/Gentleman-Programming/engram documents each of them, and it is idempotent, so both run modes reach it. A links-only run checks the binary, both plugins, and the OpenCode MCP, and repairs whatever is missing instead of reporting a gap it could close.
+
+| Client | Setup | Why |
+| --- | --- | --- |
+| Claude Code | plugin only | The plugin registers the MCP server, the hooks, and the Memory Protocol skill by itself. `engram setup claude-code` would duplicate all three. |
+| OpenCode | `engram setup opencode` | No marketplace entry exists. The command writes the plugin, the MCP entry, and the statusline. |
+| Codex | `engram setup codex`, then the explicit plugin pin | The plugin carries the MCP server and hooks, but only the setup command writes `engram-instructions.md` and `engram-compact-prompt.md`, and the compaction prompt is what puts a memory-save instruction into a compaction summary. The command's own plugin install is best-effort, so the pin still runs. |
+
+Setting up Codex leaves `[mcp_servers.engram]` in `config.toml` next to the identical server the plugin declares in its `.mcp.json`, so the duplicate is removed afterwards. The same removal runs for Claude Code.
 
 The full installer uses Homebrew for Codex, OpenCode, GitHub CLI, Engram, UV, RTK, and Worktrunk; Anthropic's native latest channel for Claude Code; and official client setup/plugin commands for Engram, Ponytail, and RTK. It never starts an interactive client or authenticates for you.
 
