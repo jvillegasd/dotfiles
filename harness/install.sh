@@ -381,6 +381,29 @@ PY
     fi
 }
 
+# The committed statusline is linked to the path Claude Code already reads, so
+# settings.json only ever needs the one command line pointing at it. Rewritten
+# only when it differs, which keeps a hand-edited settings.json otherwise alone.
+point_statusline_at_link() {
+    local settings="$HOME/.claude/settings.json"
+    [[ -f "$settings" ]] || printf '{}\n' > "$settings"
+    backup_copy "$settings"
+    python3 - "$settings" <<'PY'
+import json, sys
+
+path = sys.argv[1]
+with open(path) as handle:
+    settings = json.load(handle)
+wanted = {"type": "command", "command": 'bash "$HOME/.claude/statusline.sh"'}
+if settings.get("statusLine") == wanted:
+    sys.exit(0)
+settings["statusLine"] = wanted
+with open(path, "w") as handle:
+    json.dump(settings, handle, indent=2)
+    handle.write("\n")
+PY
+}
+
 install_links() {
     local skill source command root desired="|"
     ensure_skill_dir "$HOME/.agents/skills"
@@ -420,6 +443,9 @@ install_links() {
             link_managed "$command" "$root/$(basename "$command")"
         done
     done
+
+    link_managed "$HARNESS_DIR/statusline.sh" "$HOME/.claude/statusline.sh"
+    point_statusline_at_link
 
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.codex/AGENTS.md"
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.claude/CLAUDE.md"
