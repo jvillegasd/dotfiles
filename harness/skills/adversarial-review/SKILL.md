@@ -49,6 +49,14 @@ broken because a fix landed at one call site only; dead code and leftovers;
 for a few lines, or config for a constant; anything whose correctness depends
 on information not visible in the diff.
 
+On a landing-page, portfolio, or redesign diff, add the `design-taste-frontend`
+lenses. Grep the mechanical tells before judging anything: em-dashes anywhere
+visible (9.G), `window.addEventListener('scroll')` (5.D), scroll cues and
+section-number eyebrows (9.F), and more `uppercase tracking` micro-labels than
+`ceil(sectionCount / 3)` (4.7). Everything else in that body, and the section
+14 pre-flight that restates those four as boxes, is a lens here and never a
+ladder rung, so report what it catches as findings rather than as a gate.
+
 ## Reviewer output
 
 One line per finding:

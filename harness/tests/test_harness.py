@@ -920,7 +920,12 @@ class HarnessTests(unittest.TestCase):
                 "docs/agents/issue-tracker.md",
                 "agent-lifecycle.yml",
             ),
-            "adversarial-review": ("Reviewer A", "Reviewer B", "Never three"),
+            "adversarial-review": (
+                "Reviewer A",
+                "Reviewer B",
+                "Never three",
+                "design-taste-frontend",
+            ),
             "evidence": (
                 "Kill query first",
                 "falsifiable",
@@ -942,6 +947,20 @@ class HarnessTests(unittest.TestCase):
         architecture_rule = "`improve-codebase-architecture` produces planning input, never a change contract: keep its report and grilling read-only, do not edit `CONTEXT.md` or ADRs inline, and route a selected candidate through native plan mode, `/spec`, or `/proto` before changing files."
         for body in (policy, readme):
             self.assertIn(architecture_rule, body)
+
+        # A locked body carries no invocation guard, so the boundary that keeps
+        # taste off ponytail's surface is prose. Prose nothing asserts is prose
+        # that can be deleted without a test noticing.
+        taste_boundary = "`ponytail` keeps everything else, including dashboards, data tables, multi-step forms, and every non-UI change"
+        self.assertIn(taste_boundary, policy)
+        self.assertIn("not an oracle-ladder rung", policy)
+        for name in PONYTAIL_COMMANDS:
+            self.assertIn(
+                "- `design-taste-frontend` only on a landing-page, portfolio, or redesign brief",
+                (COMMANDS / f"{name}.md").read_text(),
+                name,
+            )
+
         for name in COMMAND_NAMES:
             self.assertIn(f"`/{name}`", policy, name)
         for name in ("code-review", "to-spec", "to-tickets", "`ship`"):

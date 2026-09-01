@@ -45,4 +45,5 @@ Never push, never open a pull request, never merge from here. If the human asks 
 ## Skills this loads
 
 - `ponytail`
+- `design-taste-frontend` only on a landing-page, portfolio, or redesign brief
 - `adversarial-review`, Reviewer B only, and only for a slice touching data, auth, concurrency, migration, or a public contract
