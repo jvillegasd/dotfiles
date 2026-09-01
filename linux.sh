@@ -37,7 +37,7 @@ BREW_FORMULAE=(
     lazygit
     tree
     make
-    python@3.11
+    python@3.14
     node
     tree-sitter
     tree-sitter-cli

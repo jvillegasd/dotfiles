@@ -173,7 +173,7 @@ install_packages() {
     log "Installing current AI clients and harness tools"
     brew tap anomalyco/tap
     brew tap gentleman-programming/tap
-    for formula in node gh python@3.11 uv rtk worktrunk anomalyco/tap/opencode gentleman-programming/tap/engram; do
+    for formula in node gh python@3.14 uv rtk worktrunk anomalyco/tap/opencode gentleman-programming/tap/engram; do
         brew_latest_formula "$formula"
     done
     if [[ "$platform" == Darwin ]]; then

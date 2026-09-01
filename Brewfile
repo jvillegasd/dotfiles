@@ -6,6 +6,12 @@
 # macos.sh applies it with `brew bundle --file Brewfile`. harness/install.sh
 # installs the AI clients and integrations it needs on its own, so it stays
 # runnable without this file.
+#
+# One Homebrew Python, 3.14, matching linux.sh and harness/install.sh. Older
+# python@ and python-tk@ formulae still installed here are deliberately not
+# listed, so a fresh machine gets one version rather than five; per-project
+# interpreters are pyenv's job. A regenerated dump will list whatever is
+# installed, so drop the extra python lines again after regenerating.
 
 tap "anomalyco/tap"
 tap "benbjohnson/litestream"
@@ -56,8 +62,6 @@ brew "go"
 brew "htop"
 # Image manipulation library
 brew "jpeg"
-# Interpreted, interactive, object-oriented programming language
-brew "python@3.10"
 # Implementation of JSON Schema for Python
 brew "jsonschema", link: false
 # Simple terminal UI for git commands
@@ -89,13 +93,9 @@ brew "pyenv"
 # Pyenv plugin to manage virtualenv
 brew "pyenv-virtualenv"
 # Python interface to Tcl/Tk
-brew "python-tk@3.12"
-# Python interface to Tcl/Tk
-brew "python-tk@3.13"
+brew "python-tk@3.14"
 # Interpreted, interactive, object-oriented programming language
-brew "python@3.11"
-# Interpreted, interactive, object-oriented programming language
-brew "python@3.8"
+brew "python@3.14"
 # Better WHOIS and domain intelligence toolkit
 brew "quien"
 # Install various Ruby versions and implementations
