@@ -20,6 +20,16 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.dont_write_bytecode = True
 SKILLS = ROOT / "harness" / "skills"
 COMMANDS = ROOT / "harness" / "commands"
+
+# The two platform entry points plus the library they both source. They differ
+# only in how packages arrive, so anything asserted about "the installer" has
+# to read the library too.
+ROOT_INSTALLERS = (
+    ROOT / "macos.sh",
+    ROOT / "linux.sh",
+    ROOT / "lib" / "common.sh",
+)
+INSTALLERS = (*ROOT_INSTALLERS, ROOT / "harness" / "install.sh")
 LOCAL_SKILLS = {
     "adversarial-review",
     "evidence",
@@ -224,10 +234,7 @@ class HarnessTests(unittest.TestCase):
             self.assertIn(pattern, ignored)
 
     def test_installers_do_not_fetch_standalone_skills(self) -> None:
-        text = "\n".join(
-            path.read_text()
-            for path in (ROOT / "install.sh", ROOT / "harness" / "install.sh")
-        )
+        text = "\n".join(path.read_text() for path in INSTALLERS)
         self.assertNotRegex(
             text,
             r"skills(?:@\d+)?\s+(?:add|update|experimental_install)",
@@ -240,11 +247,7 @@ class HarnessTests(unittest.TestCase):
             )
 
     def test_shell_and_python_syntax(self) -> None:
-        for script in (
-            ROOT / "install.sh",
-            ROOT / "harness" / "install.sh",
-            ROOT / "harness" / "aliases.sh",
-        ):
+        for script in (*INSTALLERS, ROOT / "harness" / "aliases.sh"):
             subprocess.run(["bash", "-n", script], check=True)
         scripts = list((ROOT / "harness").rglob("*.py"))
         with tempfile.TemporaryDirectory() as cache:
@@ -318,6 +321,18 @@ class HarnessTests(unittest.TestCase):
             policy = home / ".codex" / "AGENTS.md"
             policy.parent.mkdir()
             policy.write_text("old policy")
+            # config.toml carries trust decisions and hook hashes, so the
+            # status line reconciler has to leave everything else alone.
+            codex_config = home / ".codex" / "config.toml"
+            codex_config.write_text(
+                'model = "keep-me"\n\n'
+                "[tui]\n"
+                'status_line = [\n  "stale",\n]\n'
+                "status_line_use_colors = false\n"
+                'theme = "keep-me-too"\n\n'
+                "[tui.model_availability_nux]\n"
+                'status_line = "not-ours"\n'
+            )
             legacy_skills = home / "legacy-claude-skills"
             (legacy_skills / "private-claude").mkdir(parents=True)
             (legacy_skills / "private-claude" / "SKILL.md").write_text(
@@ -387,6 +402,33 @@ class HarnessTests(unittest.TestCase):
             self.assertEqual(
                 os.path.realpath(policy), str(ROOT / "harness" / "POLICY.md")
             )
+            # Claude runs the committed script; Codex cannot, so it gets the
+            # equivalent built-in items written into its own [tui] table.
+            self.assertEqual(
+                os.path.realpath(home / ".claude" / "statusline.sh"),
+                str(ROOT / "harness" / "statusline.sh"),
+            )
+            claude_settings = json.loads(
+                (home / ".claude" / "settings.json").read_text()
+            )
+            self.assertEqual(
+                claude_settings["statusLine"],
+                {"type": "command", "command": 'bash "$HOME/.claude/statusline.sh"'},
+            )
+            codex = codex_config.read_text()
+            self.assertIn(
+                'status_line = ["model-with-reasoning", "context-used", '
+                '"current-dir", "git-branch", "five-hour-limit", "weekly-limit"]',
+                codex,
+            )
+            self.assertIn("status_line_use_colors = true\n", codex)
+            self.assertNotIn('"stale"', codex)
+            self.assertNotIn("status_line_use_colors = false", codex)
+            # Unrelated keys, including a same-named key in a subtable, survive.
+            self.assertIn('model = "keep-me"', codex)
+            self.assertIn('theme = "keep-me-too"', codex)
+            self.assertIn('status_line = "not-ours"', codex)
+            self.assertEqual(codex.count("[tui]"), 1)
             for name in ["seo"] + UNLINKED_SKILLS:
                 self.assertFalse((home / ".agents" / "skills" / name).exists(), name)
                 self.assertFalse((home / ".claude" / "skills" / name).exists(), name)
@@ -460,12 +502,15 @@ class HarnessTests(unittest.TestCase):
             self.assertTrue(private.is_dir())
             self.assertTrue((private / "SKILL.md").is_file())
 
-    def test_no_backup_is_documented_in_both_installers(self) -> None:
-        for script in (ROOT / "install.sh", ROOT / "harness" / "install.sh"):
-            text = script.read_text()
-            self.assertIn("--no-backup", text, script)
+    def test_no_backup_is_documented_in_every_installer(self) -> None:
+        # The platform entry points offer the flag through their shared
+        # library, so they are read together; the harness installer parses and
+        # documents its own copy.
+        for group in (ROOT_INSTALLERS, (ROOT / "harness" / "install.sh",)):
+            text = "\n".join(path.read_text() for path in group)
+            self.assertIn("--no-backup", text, group)
             # The flag is destructive, so the usage text has to say so.
-            self.assertIn("Destructive and unrecoverable", text, script)
+            self.assertIn("Destructive and unrecoverable", text, group)
 
     def test_bench_reads_every_client_session_store(self) -> None:
         measure = load_module("measure", ROOT / "harness" / "bench" / "measure.py")

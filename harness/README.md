@@ -7,7 +7,70 @@ One committed source for Codex, Claude Code, and OpenCode:
 - `skills/` holds protocol, vocabulary, and locked third-party bodies.
 - `install.sh` installs current clients/integrations, preserves mutable client state, and reconciles policy, command, and skill links individually.
 - `bench/measure.py` compares the real session population before and after a harness change, reading all three clients' own session stores.
+- `statusline.sh` is the Claude Code status line, and the installer configures Codex's built-in one to match.
 - `tests/test_harness.py` checks supply-chain and installer invariants.
+
+## Development lifecycle
+
+Every change reaches `/yolo` through one of three contract routes, and exactly one of them is required. `grilling` pressure-tests whichever route is chosen before it is committed to, interactively when a human is driving and in self-grill mode when a workflow needs its own approach broken without blocking. Delivery ends at a green, reviewed, ready-for-human pull request; a human merges it, and `/land` closes the lifecycle.
+
+```mermaid
+flowchart TD
+    subgraph CONTRACT["contract"]
+        ask_in["a bounded question"] --> ask["/ask<br>read-only, changes nothing"]
+        ask -.->|escalates when it is bigger than one answer| ask
+
+        research_in["a question or a claim"] --> research["/research"]
+        research --> ledger["finding ledger<br>planning input, not a contract"]
+
+        triage_in["a ticket or a production error"] --> triage["/triage"]
+        triage --> brief["plan brief<br>evidence-backed, path:line"]
+
+        doc_in["work worth documenting"] --> spec["/spec<br>the only approval gate<br>before publication"]
+        spec --> createticket["/create-ticket"]
+        ledger --> createticket
+        createticket --> ticket["implementation-ready tickets"]
+
+        proto_in["requirements that<br>will not settle on paper"] --> proto["/proto<br>build a slice, local rungs green,<br>a human tries it, fold feedback in"]
+        proto --> protoledger["requirements ledger"]
+        proto -.->|premise refuted: kill it, record why| proto
+
+        else_in["everything else"] --> plan["native plan mode"]
+        brief --> plan
+        brief --> spec
+
+        grill["grilling<br>interactive, or self-grill:<br>settle what evidence can settle,<br>surface only the survivors"]
+        grill -.-> spec
+        grill -.-> plan
+        grill -.-> proto
+
+        ticket --> approval(["approved contract"])
+        plan --> approval
+        protoledger --> approval
+    end
+
+    subgraph BUILD["build"]
+        approval --> yolo["/yolo<br>worktree and branch first,<br>never the default branch"]
+        yolo --> ladder["resolve the oracle ladder<br>project instructions, else task runner,<br>else the toolchain"]
+        ladder --> implement["implement<br>loading ponytail"]
+        implement --> rungs["local rungs green:<br>types, lint, tests, build"]
+        rungs --> conform["spec-conformance pass<br>diff against the contract"]
+        conform --> review["adversarial-review<br>blind reviewers, told the diff is wrong"]
+        review --> commit["commit"] --> push["push"] --> pr["open the pull request<br>inline contract, assumptions,<br>refuted evidence, rejected findings"]
+        pr --> checks(["remote required checks green<br>terminal state"])
+    end
+
+    subgraph AFTER["after"]
+        checks --> feedback["/feedback<br>a bullet list from you;<br>deferred rounds apply only,<br>a full round settles the debt"]
+        checks --> addressreview["/address-review<br>review threads, red CI"]
+        feedback --> merge["a human merges"]
+        addressreview --> merge
+        checks --> merge
+        merge --> land["/land<br>verify conformance, reconcile the tracker,<br>retire the worktree"]
+    end
+```
+
+The escalation contract can stop any run: the same check failing three times under three different fixes, two attempts that produced no new information, three unchanged external failures, a diff far past the size the contract implied, evidence contradicting the premise, a second review round raising a new blocking finding, or a first touch of a migration, CI config, lockfile, shared contract, infrastructure, or auth surface the request never named. The counters live in `git config` rather than in the conversation, so a restart or a compaction cannot reset them.
 
 ## Commands and skills
 
@@ -23,7 +86,7 @@ That exclusion now also applies inside this repository. A committed `.claude/ski
 
 ## Install
 
-The root `../install.sh` installs the harness by default. To reconcile only policy, commands, and skills:
+The root `../macos.sh` and `../linux.sh` install the harness by default. To reconcile only policy, commands, and skills:
 
 ```sh
 ./harness/install.sh --links-only
@@ -61,6 +124,8 @@ Setting up Codex also writes `[mcp_servers.engram]` in `config.toml`, which outr
 
 The full installer uses Homebrew for Codex, OpenCode, GitHub CLI, Engram, UV, RTK, and Worktrunk; Anthropic's native latest channel for Claude Code; and official client setup commands for Engram and RTK. It never starts an interactive client or authenticates for you.
 
+It runs on macOS and on Linux. Homebrew carries every tool on both, because four of them (OpenCode, Engram, RTK, and Worktrunk) ship only as taps, and packaging those a second way for Linux would mean four more update paths to keep honest. Codex is the single exception: its Homebrew formula is a macOS cask, so a Linux box takes `@openai/codex` from npm, which is the channel OpenAI publishes for exactly that case.
+
 With the SEO group enabled it also links the portable `claude-seo` launcher. SEO Python dependencies and Chromium remain lazy and live only in the ignored per-user harness cache.
 
 ## Shell aliases
@@ -74,6 +139,32 @@ With the SEO group enabled it also links the portable `claude-seo` launcher. SEO
 | `oyolo` | `opencode` with `OPENCODE_PERMISSION` set to allow edit, bash, and webfetch |
 
 OpenCode has no bypass flag: its permissions are configuration, and `OPENCODE_PERMISSION` overrides them for one run.
+
+## Status line
+
+The three clients expose three different amounts of surface here, so one committed script cannot serve all of them.
+
+| Client | Mechanism | What the installer does |
+| --- | --- | --- |
+| Claude Code | Runs an arbitrary command and renders its stdout | Links `statusline.sh` to `~/.claude/statusline.sh` and points `statusLine` in `settings.json` at that path |
+| Codex | Built in, and configured only by choosing from a fixed set of item ids | Writes `status_line` and `status_line_use_colors` into the `[tui]` table of `~/.codex/config.toml` |
+| OpenCode | None | Nothing |
+
+`statusline.sh` renders the model, context-window percentage, directory and branch with a dirty marker, session duration, and reasoning effort on one line, then the five-hour and weekly rate-limit bars underneath, fetched from the OAuth usage endpoint and cached for sixty seconds in `/tmp/claude`.
+
+Codex renders its own status line and cannot run a script, so what ports is the content rather than the code. `status_line` takes an ordered list of built-in item ids, and the installer sets the six that come closest to the Claude line:
+
+```toml
+[tui]
+status_line = ["model-with-reasoning", "context-used", "current-dir", "git-branch", "five-hour-limit", "weekly-limit"]
+status_line_use_colors = true
+```
+
+Session duration is dropped, because Codex has no item for it. `/statusline` inside Codex edits the same two keys, so a later choice made there survives until the next install run reconciles it back.
+
+`config.toml` is hand-maintained and holds project trust decisions and hook trust hashes, so the reconciler rewrites only those two keys and leaves every other line byte for byte. Idempotence is textual: the reconciled file is a fixed point, so an unchanged run writes nothing and mints no backup. That also avoids `tomllib`, which needs Python 3.11 and so is absent from the system `python3` macOS ships.
+
+OpenCode gets neither. Its configuration schema at https://opencode.ai/config.json has no status line field, and `@opencode-ai/plugin` exposes no hook for one, so there is nothing to reconcile. A third-party TUI plugin can draw one, but it would be reverse-engineering an unsupported surface that any OpenCode release can break, which is a worse trade than doing without.
 
 ## Third-party skill updates
 
@@ -113,7 +204,7 @@ The trade is deliberate. `/ponytail lite|ultra` switching, the statusline, subag
 
 Commands are `/ask`, `/research`, `/triage`, `/spec`, `/create-ticket`, `/proto`, `/yolo`, `/feedback`, `/address-review`, and `/land`.
 
-Local skills are `adversarial-review`, `evidence`, `grilling`, `seo`, and `setup-harness`. `setup-harness` stays a skill because it installs bundled lifecycle assets that only a skill directory can carry; its guards keep it from firing on its own. `grilling` is the `grill-me` body from https://github.com/sjdonado/dotfiles/tree/master/agents, kept under the local name the routing table already used, with the three guards added and `AGENTS.md` resolved to this policy. It replaced the locked Matt Pocock body, whose design-tree rounds ask a whole frontier at once: that is the batching this protocol exists to prevent, and it carried no self-grill mode for `/yolo` and `/triage` to call. The trade is that this body tracks a source with no lock entry, so an upstream change to it arrives only when someone looks.
+Local skills are `adversarial-review`, `evidence`, `grilling`, `seo`, and `setup-harness`. `setup-harness` stays a skill because it installs bundled lifecycle assets that only a skill directory can carry; its guards keep it from firing on its own. `grilling` is maintained locally, under the name the routing table already used, and carries the three guards plus a self-grill mode. It replaced the locked Matt Pocock body, whose design-tree rounds ask a whole frontier at once: that is the batching this protocol exists to prevent, and it carried no self-grill mode for `/yolo` and `/triage` to call. The trade is that this body has no lock entry, so it is reviewed the way any other file here is rather than diffed against an upstream.
 
 `/research` and `/proto` replace two locked bodies that were workflows wearing a skill's clothes: they could fire on description matching, and neither produced the artifacts `POLICY.md` now distinguishes. A `/research` finding ledger remains planning input until a planning route produces a complete contract. Publication confirmation alone does not make a research ticket implementation-ready; agreed behavior, acceptance criteria, and verification or test seams are also required. A finalized `/proto` requirements ledger is an implementation contract. As commands they are typed or they do not run, and each now emits the artifact the policy promised.
 
@@ -128,6 +219,45 @@ Deliberately removed: `to-spec` and `to-tickets`, whose templates now live inlin
 ## GitHub lifecycle
 
 `setup-harness` writes `docs/agents/harness.json`, creates the four configured labels, writes the Matt-skill tracker compatibility file, and copies the workflow and reconciler bundled in its skill directory. The workflow becomes active when that human-reviewed change reaches the default branch. GitHub native sub-issue and dependency relationships remain the source of truth. A blocker satisfies the ready frontier only when a merged pull request closed it; the parent closes only after every child has that same merge evidence. Closing or reopening a child always reconciles both states.
+
+```mermaid
+flowchart TD
+    setup["setup-harness<br>invoked by hand, per repository"] --> config["docs/agents/harness.json<br>tracker, spec home, label mapping"]
+    setup --> labels["gh label create --force<br>blocked · ready-for-agent<br>in-progress · ready-for-human"]
+    setup --> trackerdoc["docs/agents/issue-tracker.md<br>compatibility contract for locked skills"]
+    setup --> files[".github/workflows/agent-lifecycle.yml<br>.github/scripts/reconcile-agent-lifecycle.py"]
+    files --> active(["active once that reviewed change<br>reaches the default branch"])
+
+    subgraph GRAPH["issue graph, GitHub native"]
+        parent["parent issue"] --- children["sub-issues"]
+        children --- deps["blocked-by / blocking"]
+    end
+
+    subgraph RUN["reconciler, on issues closed or reopened"]
+        active --> trigger["workflow run"]
+        trigger --> frontier["reconcile_frontier<br>on the event issue and everything it blocks"]
+        frontier -->|any blocker unsatisfied| blocked["label: blocked<br>in-progress and ready-for-human cleared"]
+        frontier -->|every blocker satisfied,<br>nothing active| ready["label: ready-for-agent"]
+        trigger --> parentstate["reconcile_parent"]
+        parentstate -->|every child closed by a merged PR| closeparent["parent closed"]
+        parentstate -->|a child reopened| reopenparent["parent reopened,<br>label: in-progress"]
+        frontier --> walk["walk to parents and dependents,<br>each issue reconciled once"]
+        parentstate --> walk
+    end
+
+    GRAPH --> trigger
+
+    subgraph AGENT["what the agent does with it"]
+        ready --> yolo["/yolo picks up a ready ticket<br>branch: type/tracker-id-slug"]
+        yolo --> inprogress["label: in-progress"]
+        inprogress --> prready["pull request green and reviewed<br>label: ready-for-human"]
+        prready --> humanmerge["a human merges,<br>the closing reference closes the ticket"]
+        humanmerge --> trigger
+        humanmerge --> land["/land reconciles the tracker<br>and retires the worktree"]
+    end
+```
+
+A blocker counts as satisfied only when the issue is closed *and* a merged pull request closed it, which is why `blocker_satisfied` walks `closedByPullRequestsReferences` rather than trusting the closed state. Closing an issue by hand therefore does not open the frontier behind it.
 
 Three contract routes converge on `/yolo`: `/spec` plus `/create-ticket` for a published ticket contract that is tracker-bound only when a tracker exists, an approved native plan that retains an existing tracker binding or remains trackerless, or `/proto` for a requirements ledger discovered by building. Contract source and tracker binding are independent: the source controls conformance, while the binding controls branch names, closing references, and label transitions. A native-plan, `/proto`, or trackerless ticket contract is preserved in an inline `## Contract`; only a tracker-bound ticket-sourced contract can remain solely in the ticket.
 
