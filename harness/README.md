@@ -12,7 +12,7 @@ One committed source for Codex, Claude Code, and OpenCode:
 
 ## Development lifecycle
 
-Every change reaches `/yolo` through one of three contract routes, and exactly one of them is required. `grilling` pressure-tests whichever route is chosen before it is committed to, interactively when a human is driving and in self-grill mode when a workflow needs its own approach broken without blocking. Delivery ends at a green, reviewed, ready-for-human pull request; a human merges it, and `/land` closes the lifecycle.
+Every change reaches `/yolo` through one of three contract routes, and exactly one of them is required. `grilling` pressure-tests whichever route is chosen before it is committed to, interactively when a human is driving and in self-grill mode when a workflow needs its own approach broken without blocking. Delivery ends at a green, reviewed, ready-for-human pull request; a human decides to merge it, and `/land` closes the lifecycle, or `/squash-land` does both at once when that human invokes it by name.
 
 ```mermaid
 flowchart TD
@@ -63,10 +63,11 @@ flowchart TD
     subgraph AFTER["after"]
         checks --> feedback["/feedback<br>a bullet list from you;<br>deferred rounds apply only,<br>a full round settles the debt"]
         checks --> addressreview["/address-review<br>review threads, red CI"]
-        feedback --> merge["a human merges"]
+        feedback --> merge{"a human decides to merge"}
         addressreview --> merge
         checks --> merge
-        merge --> land["/land<br>verify conformance, reconcile the tracker,<br>retire the worktree"]
+        merge -->|someone else merged it| land["/land<br>verify conformance, reconcile the tracker,<br>retire the worktree"]
+        merge -->|they merge it themselves| squashland["/squash-land<br>gates and conformance first,<br>then squash merge, then land"]
     end
 ```
 
