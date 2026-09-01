@@ -64,6 +64,7 @@ INGESTING_COMMANDS = {
     "proto",
     "research",
     "spec",
+    "squash-land",
     "triage",
     "yolo",
 }
@@ -736,6 +737,12 @@ class HarnessTests(unittest.TestCase):
             ),
             "feedback": ("Deferred", "accumulated delta", "Never merge the pull request"),
             "land": ("MERGED", "worktree", "Never merge a pull request"),
+            "squash-land": (
+                "gh pr merge <n> --squash",
+                "Verify conformance before merging, not after",
+                "Invoking it is the merge approval",
+                "only a clean worktree",
+            ),
         }
         self.assertEqual(set(commands), set(COMMAND_NAMES))
         for name, terms in commands.items():
@@ -864,6 +871,37 @@ class HarnessTests(unittest.TestCase):
         self.assertIn("Reconcile the tracker only for ticket-bound work", land)
         self.assertLess(land.index("Prefer the inline `## Contract`"), land.index("complete ticket contract"))
         self.assertLess(land.index("complete ticket contract"), land.index("legacy trackerless"))
+
+        # /squash-land is the one workflow that merges, and only because a human
+        # typed its name. Every other pull-request workflow still refuses.
+        squash_land = (COMMANDS / "squash-land.md").read_text()
+        self.assertIn("`/squash-land` is the only workflow that merges", policy)
+        self.assertIn("`/squash-land` is the single exception", policy)
+        for body in (yolo, feedback, address_review):
+            self.assertIn("Never merge", body)
+
+        # The merge is irreversible, so every gate that could stop it comes
+        # first. Reversing this order would only let it report a mismatch it
+        # had already shipped, which is exactly what /land is stuck doing.
+        for gate in ("Gate before merging", "Verify conformance before merging, not after"):
+            self.assertLess(squash_land.index(gate), squash_land.index("Squash merge."), gate)
+        self.assertIn("stops here with the criterion and the code side by side, and nothing is merged", squash_land)
+        self.assertIn("Never merge past a red required check", squash_land)
+        # gh's own post-merge checkout fails when the default branch is checked
+        # out in another worktree, after the merge has already succeeded.
+        self.assertIn("Do not pass `--delete-branch`", squash_land)
+        self.assertIn("do not assume either outcome", squash_land)
+        # It lands the same way /land does, rather than reimplementing it.
+        for shared in (
+            "Prefer the inline `## Contract`",
+            "complete ticket contract",
+            "conformance cannot be reconstructed",
+            "Reconcile the tracker only for ticket-bound work",
+            "skip tracker transitions",
+            "only a clean worktree",
+            "default-branch health",
+        ):
+            self.assertIn(shared, squash_land, shared)
 
         # Open-pull-request workflows preserve the contract and keep ticket transitions conditional.
         self.assertIn("Prefer the inline `## Contract`", feedback)

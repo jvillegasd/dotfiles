@@ -34,11 +34,12 @@ Run independent roles in parallel when the client supports it; otherwise run the
 | a bullet list of changes to work already in a pull request | `/feedback` |
 | "address the review comments", "CI is red on my PR" | `/address-review` |
 | "the PR merged", "clean this up", "close it out" | `/land` |
+| "merge it", "squash and merge", "ship it" on a reviewed pull request | `/squash-land` |
 | "look into X", "is it true that" | `/research` |
 | "why does X happen", something broken or slow | `diagnosing-bugs` |
 | "prototype this", "spike it", requirements that will not settle on paper | `/proto` |
 
-Routing carries the workflow's gates, not just its steps: `/spec` still asks once before publishing, and `/yolo` still never merges.
+Routing carries the workflow's gates, not just its steps: `/spec` still asks once before publishing, and `/yolo` still never merges. `/squash-land` is the only workflow that merges, and only because a human typed its name; never route into it from a request that did not ask for a merge.
 
 Do not route when the request is conversational or a one-line lookup where the workflow costs more than the answer; that is what `/ask` is for. Do not route when two entries match and the choice changes the outcome. Name both and ask.
 
@@ -48,7 +49,7 @@ When a request matches a workflow but omits something the workflow needs, follow
 
 ## Public workflow
 
-Three contract routes converge on `/yolo`: `/spec` plus `/create-ticket` publishes a ticket contract that is tracker-bound only when a tracker exists, an approved native plan supplies an in-conversation contract that may retain a tracker binding or be trackerless, and `/proto` discovers a requirements ledger by building. `/feedback` and `/address-review` handle an open pull request, a human merges it, and `/land` closes the lifecycle.
+Three contract routes converge on `/yolo`: `/spec` plus `/create-ticket` publishes a ticket contract that is tracker-bound only when a tracker exists, an approved native plan supplies an in-conversation contract that may retain a tracker binding or be trackerless, and `/proto` discovers a requirements ledger by building. `/feedback` and `/address-review` handle an open pull request, a human decides to merge it, and `/land` closes the lifecycle, or `/squash-land` does both at once when that human invokes it by name.
 
 Contract source and tracker binding are independent. The source determines what later conformance checks use: a ticket, an approved native plan, or a finalized `/proto` ledger. The binding determines only the branch form, closing reference, and tracker transitions. `/yolo` persists a plan-derived, prototype-derived, or trackerless ticket contract inline in the pull request, so retaining or lacking a ticket never replaces the contract that actually governed implementation.
 
@@ -58,7 +59,8 @@ Contract source and tracker binding are independent. The source determines what 
 - `setup-harness` stays a skill rather than a command because it installs bundled lifecycle assets that only a skill directory can carry. Its guards are what keep it from firing on its own.
 - `docs/agents/harness.json` plus `docs/agents/issue-tracker.md`, both written by `setup-harness`, satisfy the tracker and label prerequisite of every locked skill. Never redirect the user to a legacy setup workflow.
 - GitHub lifecycle labels are `blocked`, `ready-for-agent`, `in-progress`, and `ready-for-human`, or the mappings recorded in `docs/agents/harness.json`.
-- Delivery ends at a green, reviewed, ready-for-human pull request. A human merges it. `/land` then resolves the pull request first, prefers its inline contract for conformance, falls back to the ticket when no inline contract exists, reconciles the tracker when one is bound, and removes the worktree.
+- Delivery ends at a green, reviewed, ready-for-human pull request. A human decides to merge it. `/land` then resolves the pull request first, prefers its inline contract for conformance, falls back to the ticket when no inline contract exists, reconciles the tracker when one is bound, and removes the worktree.
+- `/squash-land` is `/land` for the case where the human deciding to merge is the one typing the command. It squash merges first and then lands, and it moves every gate that could stop the merge ahead of it, so a conformance mismatch stops the merge rather than being reported after it. Typing the command is the merge approval; it never asks twice. The decision to merge is still the human's, which is what keeps this from being a workflow that merges on its own.
 
 ## Planning
 
@@ -86,7 +88,7 @@ On approval, continue without being asked. An approved spec goes directly throug
 
 Stop early only when implementation reveals the contract is invalid against repository evidence, a load-bearing decision is genuinely unresolvable, or pre-existing unrelated changes cannot be safely separated. Otherwise pick the minimal option, record it in the pull request body, and continue.
 
-Never commit implementation to the default branch, in any mode. `/yolo` branches before editing; interactive work does the same. Work found sitting on the default branch moves to a branch before pushing, not after. The one exception is `/land`'s bookkeeping after a merge, on a repository whose default branch is unprotected.
+Never commit implementation to the default branch, in any mode. `/yolo` branches before editing; interactive work does the same. Work found sitting on the default branch moves to a branch before pushing, not after. The one exception is the post-merge bookkeeping in `/land` and `/squash-land`, on a repository whose default branch is unprotected.
 
 ## Oracle ladder
 
@@ -181,7 +183,7 @@ These instructions load in three clients, so anything client-specific written he
 
 - Use branches named `<type>/<tracker-id>-<short-slug>` when tracker-bound and `<type>/<short-slug>` otherwise.
 - Make the fewest independently coherent Conventional Commits and keep each commit green.
-- Never merge a pull request as part of `/yolo`, `/feedback`, or `/address-review`. Only `/land` removes a worktree, and only after the pull request merged.
+- Never merge a pull request as part of `/yolo`, `/feedback`, or `/address-review`. `/squash-land` is the single exception, and only because a human invoked it by name. Only `/land` and `/squash-land` remove a worktree, and only after the pull request merged.
 
 ## Validating harness changes
 
