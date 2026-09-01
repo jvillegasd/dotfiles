@@ -7,11 +7,12 @@
 # installs the AI clients and integrations it needs on its own, so it stays
 # runnable without this file.
 #
-# One Homebrew Python, 3.14, matching linux.sh and harness/install.sh. Older
-# python@ and python-tk@ formulae still installed here are deliberately not
-# listed, so a fresh machine gets one version rather than five; per-project
-# interpreters are pyenv's job. A regenerated dump will list whatever is
-# installed, so drop the extra python lines again after regenerating.
+# No python@ or python-tk@ formula: harness/install.sh installs 3.14 and 3.11
+# with uv, which resolves them by its own registry rather than by PATH, and
+# whose standalone builds already bundle tkinter. Homebrew still pulls a python@
+# in as a dependency of other formulae; that copy is nobody's declared
+# interpreter. A regenerated dump will list every python@ installed here, so
+# drop those lines again after regenerating.
 
 tap "anomalyco/tap"
 tap "benbjohnson/litestream"
@@ -92,10 +93,6 @@ brew "postgresql@14"
 brew "pyenv"
 # Pyenv plugin to manage virtualenv
 brew "pyenv-virtualenv"
-# Python interface to Tcl/Tk
-brew "python-tk@3.14"
-# Interpreted, interactive, object-oriented programming language
-brew "python@3.14"
 # Better WHOIS and domain intelligence toolkit
 brew "quien"
 # Install various Ruby versions and implementations

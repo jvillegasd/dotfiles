@@ -126,6 +126,18 @@ The full installer uses Homebrew for Codex, OpenCode, GitHub CLI, Engram, UV, RT
 
 It runs on macOS and on Linux. Homebrew carries every tool on both, because four of them (OpenCode, Engram, RTK, and Worktrunk) ship only as taps, and packaging those a second way for Linux would mean four more update paths to keep honest. Codex is the single exception: its Homebrew formula is a macOS cask, so a Linux box takes `@openai/codex` from npm, which is the channel OpenAI publishes for exactly that case.
 
+Python is the other exception, and it belongs to uv rather than to Homebrew:
+
+```sh
+uv python install 3.14 3.11
+```
+
+`PYTHON_VERSIONS` in `install.sh` is the one declaration; neither `Brewfile` nor `linux.sh` names a `python@` formula any more. uv resolves a managed version through its own registry rather than through `PATH`, so `uv venv --managed-python --python 3.11` and `uv run --python 3.14` find these whatever pyenv or Homebrew have done to `python3`. That is also why the smoke check asks `uv python find --managed-python` instead of testing `PATH`: a shadowing Homebrew `python3.11` would pass a `PATH` check while uv still had nothing to resolve. 3.11 is there because it is the version the SEO runtime pins, so its first run no longer stops to download an interpreter. `python-tk` is gone too, since uv's standalone builds already bundle tkinter.
+
+What this deliberately does not do is claim the name `python3`. Each version also lands as `~/.local/bin/python3.14` and `~/.local/bin/python3.11`, but that directory usually sits behind the pyenv shims on `PATH`, so bare `python3` keeps resolving wherever it already did. `uv python install --default` would take `python3` as well; it is experimental in uv 0.12, and taking over the interpreter every other project on the machine resolves is a bigger change than provisioning the harness needs. Run `uv python update-shell` by hand if you want uv's bin directory in front.
+
+Homebrew still installs a `python@` of its own as a dependency of other formulae. That copy is nobody's declared interpreter, and nothing here reads it on purpose.
+
 With the SEO group enabled it also links the portable `claude-seo` launcher. SEO Python dependencies and Chromium remain lazy and live only in the ignored per-user harness cache.
 
 ## Shell aliases
