@@ -29,6 +29,8 @@ DNF_PACKAGES=(procps-ng curl file git ca-certificates unzip)
 
 # The macOS side installs from Brewfile, which also carries casks and fonts
 # that do not exist on Linux. This is the subset a Linux box actually needs.
+# No python@ formula on either side: harness/install.sh installs the
+# interpreters with uv.
 BREW_FORMULAE=(
     neovim
     ripgrep
@@ -37,7 +39,6 @@ BREW_FORMULAE=(
     lazygit
     tree
     make
-    python@3.11
     node
     tree-sitter
     tree-sitter-cli
