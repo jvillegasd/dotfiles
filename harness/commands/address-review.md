@@ -19,7 +19,7 @@ Resolve the effective input:
 
 Load and follow the `ponytail` skill for every code change: the laziest solution that works, root cause over symptom, no over-engineering.
 
-1. Locate and reuse the pull request's existing Orca worktree when running inside Orca; otherwise read its `headRefName` with `gh pr view`, find that exact branch in `wt list --format=json`, and switch to it with `wt switch <branch> --no-cd --format=json --yes`. Escalate if the retained worktree is missing. Do not use the `pr:<number>` shortcut here, because Worktrunk creates a worktree when none exists.
+1. Resolve the implementation contract from the pull request body. Prefer the inline `## Contract` when present; otherwise fall back to the ticket from its closing reference. If neither exists, continue in legacy mode and report that contract conformance cannot be reconstructed rather than blocking review or CI repair. Locate and reuse the pull request's existing Orca worktree when running inside Orca; otherwise read its `headRefName` with `gh pr view`, find that exact branch in `wt list --format=json`, and switch to it with `wt switch <branch> --no-cd --format=json --yes`. Escalate if the retained worktree is missing. Do not use the `pr:<number>` shortcut here, because Worktrunk creates a worktree when none exists.
 
 2. Fetch every review thread through `gh api graphql` with its resolution state and its existing comment ids, plus every failing required check. Process only unresolved existing threads: ignore resolved threads, review summaries, and top-level conversation comments unless the user explicitly includes them. Group by root cause and distinguish owned failures from unchanged external failures. Inspect `git status --short`; stop and ask if the worktree holds pre-existing changes unrelated to this review. Never absorb unrelated changes.
 
@@ -33,7 +33,7 @@ Load and follow the `ponytail` skill for every code change: the laziest solution
 
    Commit as you go. Do not push and do not reply yet; every external write is batched behind step 5.
 
-4. Review the new diff the way `/yolo` does: `adversarial-review` first, then your own spec-conformance pass against the contract and the repository's documented standards. Repair all findings and make coherent Conventional Commits.
+4. Review the new diff the way `/yolo` does: `adversarial-review` first, then your own spec-conformance pass against the resolved contract and the repository's documented standards. In legacy mode, report that contract conformance is unavailable and check the explicit review requests, CI failures, and documented standards instead. Repair all findings and make coherent Conventional Commits.
 
    If `mergeStateStatus` is `BEHIND` or the base has moved, prepare the update plan without applying it. Default to merging the actual base branch into the pull request branch, to preserve history and avoid rewriting pushed commits. Never assume the base is `main`.
 
@@ -47,9 +47,9 @@ Load and follow the `ponytail` skill for every code change: the laziest solution
 
    Never create a new inline review comment on a file or line, a new review, or a top-level pull request comment. The only line-level write this workflow makes is a reply inside an existing unresolved thread. Where an item cannot be replied to through its thread, report it to the user rather than posting it somewhere else.
 
-7. Keep the pull request body's `Assumptions`, `Refuted evidence`, and `Rejected review findings` sections current with anything this pass decided or rejected.
+7. Keep the pull request body's `Assumptions`, `Refuted evidence`, and `Rejected review findings` sections current with anything this pass decided or rejected. When an approved clarification changes agreed behavior, acceptance criteria, or verification and a complete contract resolved in step 1, update the inline `## Contract` before landing. Never reconstruct a contract from review threads in legacy mode; retain the unavailable-conformance report unless the human explicitly approves a complete reconstruction.
 
-8. Repeat until feedback, required CI, and both review passes are green. Apply the escalation contract's rabbit-hole detector unchanged. Then keep the pull request ready and the ticket mapped `ready_for_human`.
+8. Repeat until feedback, required CI, and all applicable review passes are green. In legacy mode the conformance pass remains explicitly unavailable rather than green. Apply the escalation contract's rabbit-hole detector unchanged. Then keep the pull request ready and, when ticket-bound, keep the ticket mapped `ready_for_human`; skip the ticket transition for trackerless work.
 
 Never merge the pull request or remove its worktree. Never force-push or rebase a shared branch without explicit approval, and never resolve a conflict by dropping changes.
 
