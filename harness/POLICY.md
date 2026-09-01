@@ -29,8 +29,8 @@ Run independent roles in parallel when the client supports it; otherwise run the
 | "poke holes in this", "challenge this design" | `grilling` |
 | "spec this out", "write it up" | `/spec` |
 | "break this into tickets", "slice this" | `/create-ticket` |
-| "how should we do this", a design with no contract yet | native plan mode |
-| "implement this", "go build it", an approved plan, a ticket id | `/yolo` |
+| "how should we do this", a design with no contract yet, "implement this" with no approved contract | native plan mode |
+| "implement this" with an approved contract, "go build it", an approved plan, a ticket id | `/yolo` |
 | a bullet list of changes to work already in a pull request | `/feedback` |
 | "address the review comments", "CI is red on my PR" | `/address-review` |
 | "the PR merged", "clean this up", "close it out" | `/land` |
@@ -48,7 +48,9 @@ When a request matches a workflow but omits something the workflow needs, follow
 
 ## Public workflow
 
-The lifecycle is `setup-harness` -> `grilling` -> `/spec` -> `/create-ticket` -> `/yolo` -> `/land`, with `/feedback` and `/address-review` for an open pull request.
+Three contract routes converge on `/yolo`: `/spec` plus `/create-ticket` publishes a ticket contract that is tracker-bound only when a tracker exists, an approved native plan supplies an in-conversation contract that may retain a tracker binding or be trackerless, and `/proto` discovers a requirements ledger by building. `/feedback` and `/address-review` handle an open pull request, a human merges it, and `/land` closes the lifecycle.
+
+Contract source and tracker binding are independent. The source determines what later conformance checks use: a ticket, an approved native plan, or a finalized `/proto` ledger. The binding determines only the branch form, closing reference, and tracker transitions. `/yolo` persists a plan-derived, prototype-derived, or trackerless ticket contract inline in the pull request, so retaining or lacking a ticket never replaces the contract that actually governed implementation.
 
 - `grilling` is the only interview protocol. Do not substitute another one, publish a spec from it, or act on its result. It attacks the load-bearing assumptions first, ranked by consequence. Its interactive mode asks one question at a time, hardest first, and finishes when the design either survives, in which case it names what would still break it, or breaks, in which case it names the smaller version. Its self-grill mode is what a workflow uses when serial human grilling would be the bottleneck: it resolves what precedent, history, and `evidence` can settle, kills the premise if evidence refutes it, and surfaces only the survivors in one batch.
 - `/proto` is the one workflow that writes code before a contract exists, because its job is contract discovery by building. It validates on the local rungs only, stops for the human every round by design, and ends by handing a requirements ledger to `/yolo` or by killing the premise. It never pushes and never opens a pull request: nothing reaches a pull request except through `/yolo`.
@@ -56,22 +58,21 @@ The lifecycle is `setup-harness` -> `grilling` -> `/spec` -> `/create-ticket` ->
 - `setup-harness` stays a skill rather than a command because it installs bundled lifecycle assets that only a skill directory can carry. Its guards are what keep it from firing on its own.
 - `docs/agents/harness.json` plus `docs/agents/issue-tracker.md`, both written by `setup-harness`, satisfy the tracker and label prerequisite of every locked skill. Never redirect the user to a legacy setup workflow.
 - GitHub lifecycle labels are `blocked`, `ready-for-agent`, `in-progress`, and `ready-for-human`, or the mappings recorded in `docs/agents/harness.json`.
-- Delivery ends at a green, reviewed, ready-for-human pull request. A human merges it. `/land` then reconciles the tracker, verifies the merged state, and removes the worktree.
+- Delivery ends at a green, reviewed, ready-for-human pull request. A human merges it. `/land` then resolves the pull request first, prefers its inline contract for conformance, falls back to the ticket when no inline contract exists, reconciles the tracker when one is bound, and removes the worktree.
 
 ## Planning
 
-Every change needs an agreed contract before implementation. There are two routes to one, and exactly one of them is required.
+Every change needs an agreed contract before implementation. There are three routes to one, and exactly one of them is required.
 
-- **`/spec` plus `/create-ticket`**, for work worth documenting: a large feature, anything touching several surfaces, or anything whose reasoning should outlive the pull request. The published spec is the contract.
-- **Native plan mode**, for everything else. Cheaper, in-conversation, nothing to publish. Trace the relevant system end to end, name the source of truth and the lifecycle implications, clarify only load-bearing ambiguity, and recommend the smallest coherent change with its files and verification. The approved plan is the contract `/yolo` consumes in its lightweight mode.
+- **`/spec` plus `/create-ticket`**, for work worth documenting: a large feature, anything touching several surfaces, or anything whose reasoning should outlive the pull request. The published spec is the source contract, and its implementation-ready tickets carry the slices into `/yolo`. A `/research` ledger remains planning input when `/create-ticket` publishes selected findings. Publication confirmation alone does not make a research ticket implementation-ready; agreed behavior, acceptance criteria, and verification or test seams are also required. Only tickets with those complete contract fields enter `/yolo`; the rest remain planning-only.
+- **Native plan mode**, for everything else. Cheaper, in-conversation, nothing to publish. Trace the relevant system end to end, name the source of truth and the lifecycle implications, clarify only load-bearing ambiguity, and recommend the smallest coherent change with its files. Every plan states the agreed behavior, acceptance criteria, and verification that `/yolo` will preserve inline after approval. The approved plan is the contract `/yolo` consumes in its lightweight mode.
+- **`/proto`**, for requirements that cannot be settled on paper. Its finalized requirements ledger is the contract `/yolo` consumes.
 
-Never do both. An approved spec is already the implementation contract, so re-entering plan mode to restate it adds a second gate over the same decisions. Go straight from the approved contract to `/yolo`.
-
-A third path exists for requirements that cannot be settled on paper: `/proto` discovers the contract by building, and its finalized requirements ledger is the contract `/yolo` consumes.
+Never combine routes. An approved spec continues through `/create-ticket` without another approval, because re-entering plan mode to restate it would add a second gate over the same decisions. Its implementation-ready tickets then go to `/yolo`.
 
 Whichever route, pressure-test with `grilling` before committing to it: interactively when the user is driving, in self-grill mode when a workflow needs its own approach broken without blocking on a human.
 
-A `/triage` plan brief, a `/research` finding ledger, or a `/proto` requirements ledger is the contract's input, not a suggestion to re-derive. Do not re-investigate what it already grounded with a `path:line` or a linked number. Carry its verification concerns forward verbatim and its open questions in as decisions with defaults. Re-run only evidence it marked refuted or unchecked.
+A `/triage` plan brief or `/research` finding ledger is planning input, not an implementation contract. Do not re-investigate what either already grounded with a `path:line` or a linked number. Carry its verification concerns forward verbatim and its open questions in as decisions with defaults. Re-run only evidence it marked refuted or unchecked. A finalized `/proto` requirements ledger is itself a contract, so do not re-derive what its iterations settled.
 
 ## Record what you inferred
 
@@ -79,9 +80,9 @@ Where a project declares something, follow it. Where it declares nothing and you
 
 ## Approval means autonomous execution
 
-Approving a contract is the go-ahead to run to completion. This applies to every surface that produces one: native plan mode, `ExitPlanMode`, a published spec, or a ticket.
+Approving a contract is the go-ahead to run to completion. This applies to every surface that produces one: native plan mode, `ExitPlanMode`, a published spec, a finalized `/proto` ledger, or an implementation-ready ticket.
 
-On approval, follow `/yolo` without being asked. Treat the contract as the implementation contract, work autonomously, and do not stop until `/yolo` reaches its terminal state: a pull request open with every resolved rung green. Do not ask for confirmation to begin, between steps, before committing, or before pushing. Do not re-present the contract or ask which part to start.
+On approval, continue without being asked. An approved spec goes directly through `/create-ticket`, then each ready ticket enters `/yolo`; an approved native plan or finalized `/proto` ledger enters `/yolo` directly. Work autonomously and do not stop until `/yolo` reaches its terminal state: a pull request open with every resolved rung green. Do not ask for confirmation to begin, between steps, before committing, or before pushing. Do not re-present the contract or ask which part to start.
 
 Stop early only when implementation reveals the contract is invalid against repository evidence, a load-bearing decision is genuinely unresolvable, or pre-existing unrelated changes cannot be safely separated. Otherwise pick the minimal option, record it in the pull request body, and continue.
 
@@ -178,7 +179,7 @@ These instructions load in three clients, so anything client-specific written he
 
 ## Git discipline
 
-- Use branches named `<type>/<tracker-id>-<short-slug>`.
+- Use branches named `<type>/<tracker-id>-<short-slug>` when tracker-bound and `<type>/<short-slug>` otherwise.
 - Make the fewest independently coherent Conventional Commits and keep each commit green.
 - Never merge a pull request as part of `/yolo`, `/feedback`, or `/address-review`. Only `/land` removes a worktree, and only after the pull request merged.
 

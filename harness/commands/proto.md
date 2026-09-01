@@ -19,7 +19,7 @@ Load and follow the `ponytail` skill. Prototype code is still the laziest code t
 
 ## Setup, once
 
-1. Establish a safe branch before editing, the same rule as `/yolo`: never the default branch, even for throwaway code. Derive `<type>/<id>-<short-slug>` from the input and create the worktree with Worktrunk (`wt switch --create <branch> --base origin/<default> --no-cd --format=json --yes`), or the runtime-provided Orca CLI guide inside Orca.
+1. Establish a safe branch before editing, the same rule as `/yolo`: never the default branch, even for throwaway code. Derive `<type>/<tracker-id>-<short-slug>` when the input is bound to a ticket and `<type>/<short-slug>` for a plain description. Never fabricate a tracker ID. Create the worktree with Worktrunk (`wt switch --create <branch> --base origin/<default> --no-cd --format=json --yes`), or the runtime-provided Orca CLI guide inside Orca.
 2. Resolve the local rungs of the oracle ladder only: type check, lint, and the tests for the touched surface. Record them per the policy. The remote rungs do not exist in this workflow.
 3. Open the requirements ledger in the conversation: the initial requirements as understood, each marked assumed or confirmed.
 
@@ -37,7 +37,7 @@ Each iteration:
 
 Exactly one of:
 
-- **Promote.** The shape is right. Finalize the ledger: the confirmed requirements, each decision made with its rejected alternative, and everything left deliberately prototype-quality that `/yolo` must harden. Hand off the branch and the ledger. `/yolo` takes the ledger as its contract, squashes the WIP checkpoints, and runs its full pipeline over the accumulated diff. Nothing is weakened by the cheap iterations, because both of `/yolo`'s review passes cover the final diff regardless of how it was built.
+- **Promote.** The shape is right. Finalize the ledger with the agreed behavior, acceptance criteria, and verification or test seams, plus each decision made with its rejected alternative and everything left deliberately prototype-quality that `/yolo` must harden. Hand off the branch and the ledger. `/yolo` takes the ledger as its contract, squashes the WIP checkpoints, and runs its full pipeline over the accumulated diff. Nothing is weakened by the cheap iterations, because both of `/yolo`'s review passes cover the final diff regardless of how it was built.
 - **Kill.** The prototype disproved the premise. That is a success. Record what died and the evidence that killed it, delete the branch, and offer `/spec` or `/create-ticket` for whatever replaces it.
 
 Never push, never open a pull request, never merge from here. If the human asks to ship straight from this workflow, route to `/yolo` with the ledger instead: nothing reaches a pull request except through `/yolo`.

@@ -32,7 +32,7 @@ Pick the type at the start of the round. If the input says to defer or that more
 
 ## Steps
 
-1. Resolve the current branch and its open pull request with `gh pr view`, then inspect `git status --short`. If no open pull request exists, or the worktree holds pre-existing changes not part of this feedback run, stop and ask. Never absorb unrelated changes.
+1. Resolve the current branch and its open pull request with `gh pr view`, then resolve its contract and inspect `git status --short`. Prefer the inline `## Contract` when present; otherwise fall back to the ticket from its closing reference. If neither exists, continue in legacy mode, state that contract conformance cannot be reconstructed, and evaluate only the explicit feedback and current implementation. Stop only if no open pull request exists or the worktree holds pre-existing changes not part of this feedback run. Never absorb unrelated changes.
 
 2. Parse every bullet into a separate actionable item and investigate the relevant code before deciding how to implement it.
 
@@ -44,7 +44,7 @@ Pick the type at the start of the round. If the input says to defer or that more
 
 6. Make the fewest coherent Conventional Commits and push. Then drive the required remote checks green: a red required check is a failure to fix, not a result to report.
 
-7. Keep the pull request body's `Assumptions`, `Refuted evidence`, and `Rejected review findings` sections current with anything this pass decided or rejected. Ask whether more rounds are expected. If yes, report the branch pushed and awaiting feedback and stop. If the loop is finalized, offer to update the pull request description to the final scope, preserving issue links, closing keywords, and manually written context, and apply it with `gh pr edit` only after explicit confirmation.
+7. Keep the pull request body's `Assumptions`, `Refuted evidence`, and `Rejected review findings` sections current with anything this pass decided or rejected. When a complete contract resolved in step 1 and approved feedback changes the agreed behavior, acceptance criteria, or verification, create or update the inline `## Contract` so it becomes the durable conformance source regardless of tracker binding. Never promote a feedback delta into a complete contract in legacy mode; leave conformance degraded unless the human explicitly approves a full reconstruction covering all three fields. Ask whether more rounds are expected. If yes, report the branch pushed and awaiting feedback and stop. If the loop is finalized, offer to update the rest of the pull request description to the final scope, preserving issue links, closing keywords, and manually written context, and apply it with `gh pr edit` only after explicit confirmation.
 
 Never merge the pull request or remove its worktree. Never ask for review consent on its behalf; step 5 already reviewed. Replying inside an existing review thread belongs to `/address-review`.
 

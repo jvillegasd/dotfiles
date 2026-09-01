@@ -672,6 +672,99 @@ class HarnessTests(unittest.TestCase):
         for name in ("code-review", "to-spec", "to-tickets", "`ship`"):
             self.assertNotIn(name, policy, name)
 
+    def test_workflow_continuity_contract(self) -> None:
+        policy = (ROOT / "harness" / "POLICY.md").read_text()
+        yolo = (COMMANDS / "yolo.md").read_text()
+        proto = (COMMANDS / "proto.md").read_text()
+        land = (COMMANDS / "land.md").read_text()
+        create_ticket = (COMMANDS / "create-ticket.md").read_text()
+        feedback = (COMMANDS / "feedback.md").read_text()
+        address_review = (COMMANDS / "address-review.md").read_text()
+        readme = (ROOT / "harness" / "README.md").read_text()
+
+        # All three contract routes must converge on the only delivery workflow.
+        self.assertIn("Three contract routes converge on `/yolo`", policy)
+        for route in ("`/spec` plus `/create-ticket`", "approved native plan", "`/proto`"):
+            self.assertIn(route, policy)
+            self.assertIn(route, yolo)
+        self.assertIn("never implementation contracts", yolo)
+        self.assertIn("An approved spec continues through `/create-ticket`", policy)
+        self.assertNotIn("Go straight from the approved contract to `/yolo`", policy)
+        self.assertNotIn("one sentence", yolo)
+        self.assertIn("If no contract resolves, enter native plan mode", yolo)
+        self.assertIn('"implement this" with no approved contract', policy)
+        self.assertIn("agreed behavior, acceptance criteria, and verification", policy)
+
+        # A confirmed research batch becomes a ticket contract only after /create-ticket publishes it.
+        self.assertIn("From a `/research` finding ledger", create_ticket)
+        self.assertIn("exactly one confirmation", create_ticket)
+        self.assertIn("confirmed `/research` batch", yolo)
+        self.assertIn("planning-only", create_ticket)
+        self.assertIn("complete contract fields", yolo)
+        readiness_rule = "Publication confirmation alone does not make a research ticket implementation-ready; agreed behavior, acceptance criteria, and verification or test seams are also required."
+        for body in (policy, readme):
+            self.assertIn(readiness_rule, body)
+
+        # Tracker binding changes the branch and pull-request metadata, not the delivery pipeline.
+        for body in (policy, yolo, proto):
+            self.assertIn("`<type>/<tracker-id>-<short-slug>`", body)
+            self.assertIn("`<type>/<short-slug>`", body)
+        for body in (policy, yolo, readme):
+            self.assertIn("Contract source and tracker binding are independent", body)
+        self.assertIn("Retain an existing tracker binding", yolo)
+        self.assertIn("reuse its existing branch", yolo)
+        self.assertIn("closing reference", yolo)
+        self.assertIn("whether tracker-bound or trackerless", yolo)
+        self.assertIn("inline `## Contract`", yolo)
+        self.assertIn("ticket-sourced but trackerless", yolo)
+        self.assertIn("agreed behavior, acceptance criteria, and verification", yolo)
+        for body in (policy, readme):
+            self.assertIn("tracker-bound only when a tracker exists", body)
+
+        # A plain prototype has no fabricated tracker identity but still hands a contract to /yolo.
+        self.assertIn("plain description", proto)
+        self.assertIn("`<type>/<short-slug>`", proto)
+        self.assertIn("Never fabricate a tracker ID", proto)
+        self.assertIn("requirements ledger", proto)
+        self.assertIn("agreed behavior, acceptance criteria, and verification", proto)
+
+        # Landing resolves the pull request first and handles every compatibility case explicitly.
+        self.assertIn("Resolve the pull request first", land)
+        self.assertIn("The ticket is optional", land)
+        self.assertIn("inline `## Contract`", land)
+        self.assertIn("legacy trackerless", land)
+        self.assertIn("conformance cannot be reconstructed", land)
+        self.assertIn("default-branch health", land)
+        self.assertIn("skip tracker transitions", land)
+        self.assertIn("Anything but `MERGED` stops here", land)
+        self.assertIn("only a clean worktree", land)
+        self.assertIn("complete ticket contract", land)
+        self.assertIn("Prefer the inline `## Contract`", land)
+        self.assertIn("Reconcile the tracker only for ticket-bound work", land)
+        self.assertLess(land.index("Prefer the inline `## Contract`"), land.index("complete ticket contract"))
+        self.assertLess(land.index("complete ticket contract"), land.index("legacy trackerless"))
+
+        # Open-pull-request workflows preserve the contract and keep ticket transitions conditional.
+        self.assertIn("Prefer the inline `## Contract`", feedback)
+        self.assertIn("continue in legacy mode", feedback)
+        self.assertIn("create or update the inline `## Contract`", feedback)
+        self.assertIn("Never promote a feedback delta", feedback)
+        self.assertIn("Prefer the inline `## Contract`", address_review)
+        self.assertIn("continue in legacy mode", address_review)
+        self.assertIn("update the inline `## Contract`", address_review)
+        self.assertIn("Never reconstruct a contract", address_review)
+        self.assertIn("all applicable review passes", address_review)
+        self.assertNotIn("both review passes", address_review)
+        self.assertIn("skip the ticket transition for trackerless work", address_review)
+
+        # Public documentation must describe the same three routes and trackerless landing behavior.
+        self.assertIn("Three contract routes converge on `/yolo`", readme)
+        self.assertIn("inline `## Contract`", readme)
+        self.assertIn("ticket is optional", readme)
+        self.assertIn("finding ledger remains planning input", readme)
+        self.assertIn("finalized `/proto` requirements ledger is an implementation contract", readme)
+        self.assertNotIn("verifies the merged state against the ticket, applies the transitions", readme)
+
     def test_github_close_and_reopen_reconcile_frontier(self) -> None:
         lifecycle = load_lifecycle_module()
         api = FakeIssues()
