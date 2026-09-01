@@ -13,6 +13,10 @@ GROUPS_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/portable-harness/groups"
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[err]\033[0m %s\n' "$*" >&2; exit 1; }
 
+# The interpreter set, shared with macos.sh and linux.sh so the versions have
+# one declaration. After log and die, which it uses.
+source "$(dirname "$HARNESS_DIR")/lib/python.sh"
+
 usage() {
     cat <<'EOF'
 Usage: harness/install.sh [--links-only] [--with-seo|--without-seo] [--no-backup]
@@ -157,14 +161,6 @@ brew_latest_cask() {
     fi
 }
 
-# Interpreters uv manages, newest first. Homebrew no longer supplies one: uv
-# resolves a managed version by its own registry rather than by PATH, so
-# `uv venv --managed-python --python 3.11` and `uv run --python 3.14` find these
-# whatever pyenv or Homebrew have done to `python3`. 3.11 is what the SEO
-# runtime pins, so installing it here means its first run does not stop to
-# download an interpreter.
-PYTHON_VERSIONS=(3.14 3.11)
-
 # Homebrew carries every tool here on both platforms, because four of them
 # (opencode, engram, rtk, worktrunk) ship only as taps. Codex is the one
 # exception: its Homebrew formula is a macOS cask, so a Linux box takes the npm
@@ -184,14 +180,6 @@ install_packages() {
     for formula in node gh uv rtk worktrunk anomalyco/tap/opencode gentleman-programming/tap/engram; do
         brew_latest_formula "$formula"
     done
-
-    # After uv, since uv is what installs them. Idempotent: an already-installed
-    # version is a no-op, and each also lands as ~/.local/bin/python3.<minor>.
-    # Nothing here claims `python3`: that name belongs to whatever comes first
-    # on PATH, which on a machine running pyenv is not uv's bin directory.
-    log "Installing uv-managed Python: ${PYTHON_VERSIONS[*]}"
-    uv python install "${PYTHON_VERSIONS[@]}"
-
     if [[ "$platform" == Darwin ]]; then
         brew_latest_cask codex
     else
@@ -495,7 +483,7 @@ assert_plugin_count() {
 }
 
 smoke_check() {
-    local command skill root version seo_status=0
+    local command skill root seo_status=0
     for command in codex claude opencode gh python3 uv engram rtk wt; do
         command -v "$command" >/dev/null || die "Missing required command: $command"
     done
@@ -536,13 +524,9 @@ smoke_check() {
     [[ -f "$HARNESS_DIR/skills/ponytail/SKILL.md" ]] || die "Missing the ponytail skill body."
     [[ "$(readlink "$HOME/.claude/statusline.sh")" == "$HARNESS_DIR/statusline.sh" ]] || die "Missing the Claude statusline link."
     grep -q '^status_line = \[' "$HOME/.codex/config.toml" || die "Missing the Codex status line."
-    # Asked of uv rather than of PATH, because that is how every caller reaches
-    # them: a shadowing Homebrew or pyenv python3.<minor> would pass a PATH
-    # check while uv still had nothing to resolve.
-    for version in "${PYTHON_VERSIONS[@]}"; do
-        uv python find --managed-python "$version" >/dev/null ||
-            die "Missing uv-managed Python $version."
-    done
+    # Installed by the root script, asserted here: the harness is what consumes
+    # them, so this is where a missing one has to fail loudly.
+    assert_pythons
 
     opencode debug config |
         python3 -c 'import json,sys; d=json.load(sys.stdin); p=d.get("plugin",[]); assert sum("engram" in x for x in p)==1; assert "engram" in d.get("mcp",{})'

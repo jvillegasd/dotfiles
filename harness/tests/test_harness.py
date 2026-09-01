@@ -28,6 +28,7 @@ ROOT_INSTALLERS = (
     ROOT / "macos.sh",
     ROOT / "linux.sh",
     ROOT / "lib" / "common.sh",
+    ROOT / "lib" / "python.sh",
 )
 INSTALLERS = (*ROOT_INSTALLERS, ROOT / "harness" / "install.sh")
 LOCAL_SKILLS = {
@@ -246,6 +247,25 @@ class HarnessTests(unittest.TestCase):
                 text, rf"(?m)^\s*engram setup {command} < /dev/null", command
             )
 
+    def test_python_versions_have_one_declaration(self) -> None:
+        # The point of lib/python.sh: the platform scripts install the
+        # interpreters and the harness asserts them, but neither restates which
+        # versions those are. A second assignment anywhere is a drift waiting
+        # to happen, and the two halves would disagree silently.
+        shared = ROOT / "lib" / "python.sh"
+        self.assertRegex(shared.read_text(), r"(?m)^PYTHON_VERSIONS=\(")
+        for script in INSTALLERS:
+            if script == shared:
+                continue
+            self.assertNotIn("PYTHON_VERSIONS=(", script.read_text(), script)
+
+        # Installing belongs to the platform scripts, asserting to the harness.
+        harness = (ROOT / "harness" / "install.sh").read_text()
+        self.assertIn("assert_pythons", harness)
+        self.assertNotIn("install_pythons", harness)
+        for script in (ROOT / "macos.sh", ROOT / "linux.sh"):
+            self.assertRegex(script.read_text(), r"(?m)^\s+install_pythons$", script)
+
     def test_shell_and_python_syntax(self) -> None:
         for script in (*INSTALLERS, ROOT / "harness" / "aliases.sh"):
             subprocess.run(["bash", "-n", script], check=True)
@@ -274,9 +294,16 @@ class HarnessTests(unittest.TestCase):
                 )
                 stub.chmod(0o755)
 
+            # Laid out like the repository, because the installer sources the
+            # shared interpreter declaration as ../lib/python.sh relative to
+            # itself. Flattening it here would only prove the copy parses.
             installer = (ROOT / "harness" / "install.sh").read_text()
-            library = root / "library.sh"
+            library = root / "harness" / "library.sh"
+            library.parent.mkdir()
             library.write_text(installer[: installer.rindex("\nmain\n")])
+            shared = root / "lib" / "python.sh"
+            shared.parent.mkdir()
+            shared.write_text((ROOT / "lib" / "python.sh").read_text())
             environment = os.environ | {
                 "PATH": f"{binaries}:{os.environ['PATH']}"
             }
