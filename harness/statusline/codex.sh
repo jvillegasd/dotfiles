@@ -19,13 +19,19 @@
 
 set -euo pipefail
 
-# The closest match to the Claude line's model, context, directory, branch, and
-# two rate-limit fields. Session duration is dropped: Codex has no item for it.
+# The closest match to the Claude line: model, context, directory, branch,
+# reasoning effort, and the two rate-limit fields. `model` and `reasoning` are
+# separate items rather than the combined `model-with-reasoning`, so effort sits
+# after the branch the way it does in claude.sh. `project-name` falls back to
+# the directory name, which is the basename claude.sh prints; `current-dir`
+# would print the whole path. Session duration is dropped: Codex has no item
+# for it.
 ITEMS=(
-    model-with-reasoning
+    model
     context-used
-    current-dir
+    project-name
     git-branch
+    reasoning
     five-hour-limit
     weekly-limit
 )
