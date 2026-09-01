@@ -1,0 +1,20 @@
+# Linked to ~/.config/worktrunk/config.toml by macos.sh and linux.sh.
+#
+# Worktrunk is what the harness workflows branch and land through: `/yolo`
+# creates the worktree, `/land` removes it, and the escalation counters in
+# POLICY.md live in this tool's per-branch vars under .git.
+
+# A fresh worktree starts with the ignored files the checkout needs (.env,
+# node_modules, vendor). On APFS this is a clonefile copy, so it costs almost
+# nothing until a file is modified.
+[[pre-start]]
+copy = "wt step copy-ignored"
+
+# Reap worktrees already merged into the default branch. Runs in the background
+# after a merge, so it costs nothing at the call site, and merges are frequent
+# enough to keep the count bounded without a scheduler.
+[[post-merge]]
+prune = "wt step prune --min-age 7d"
+
+[list]
+json-schema = 1

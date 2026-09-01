@@ -1,35 +1,50 @@
 # dotfiles
 
-Personal macOS dotfiles — **Neovim**, **Ghostty**, and a portable AI harness
-for Codex, Claude Code, and OpenCode. The Neovim config is built
-around `lazy.nvim` with a grouped, mnemonic `<leader>` keymap scheme (Space as
-leader); the Ghostty config picks up the same JetBrains Mono Nerd Font and
-catppuccin-mocha theme so the editor and terminal match.
+Personal dotfiles — **Neovim**, **Ghostty**, **git**, **Worktrunk**, and a
+portable AI harness for Codex, Claude Code, and OpenCode. The Neovim config is
+built around `lazy.nvim` with a grouped, mnemonic `<leader>` keymap scheme
+(Space as leader); the Ghostty config picks up the same JetBrains Mono Nerd Font
+and catppuccin-mocha theme so the editor and terminal match.
 
-## Quick install (macOS)
+## Quick install
 
 ```bash
-./install.sh
+./macos.sh    # macOS
+./linux.sh    # Linux
 ```
 
-The script installs Homebrew and the required formulae/casks, symlinks the
-editor and terminal configs, installs the current AI clients/integrations,
-links the shared harness policy and skills, and bootstraps Neovim headlessly.
-Re-runnable: existing managed collisions get backed up, matching symlinks are
-left alone, and unrelated private skills are preserved.
+Each script installs the packages for its platform, symlinks the tracked
+configs, installs the current AI clients and integrations, links the shared
+harness policy and skills, and bootstraps Neovim headlessly. Re-runnable:
+existing managed collisions get backed up, matching symlinks are left alone,
+and unrelated private skills are preserved. Add `--no-backup` to delete what is
+in the way instead of renaming it, which is destructive and unrecoverable.
+
+Both share `lib/common.sh`, which owns the symlinking, the harness call, and
+the Neovim bootstrap. Only the package step differs: `macos.sh` applies
+`Brewfile` through `brew bundle`, while `linux.sh` installs the build
+prerequisites with the distribution's package manager and everything after that
+with Homebrew on Linux.
 
 Ghostty picks up `ghostty/config` automatically; nothing to set in its UI.
 
 ## Requirements
 
-- macOS (Darwin)
-- Homebrew
+- macOS or Linux
+- Homebrew, installed by either script when missing
 - Neovim ≥ 0.10 (installed by the script)
-- A Nerd Font (JetBrains Mono Nerd Font is installed by the script)
+- A Nerd Font (JetBrains Mono Nerd Font is installed on macOS; install one
+  yourself on Linux)
 
-The AI harness is macOS/GitHub-first and uses Homebrew plus each integration's
+The AI harness is GitHub-first and uses Homebrew plus each integration's
 official setup command. Authentication and hook trust remain interactive
 post-install steps printed by the installer.
+
+Regenerate the macOS package manifest after installing or removing something:
+
+```bash
+brew bundle dump --describe --force --file=Brewfile
+```
 
 Sanity check inside nvim: `:checkhealth`, `:Lazy`, `:Mason`.
 
@@ -80,20 +95,29 @@ the buffer. Everything else in the config works regardless of this setting.
 ## Directory layout
 
 ```
-install.sh                # macOS bootstrap (brew + symlinks + mason + treesitter)
+macos.sh                  # macOS bootstrap (brew bundle + symlinks + mason + treesitter)
+linux.sh                  # Linux bootstrap (apt/dnf + Homebrew on Linux + the same rest)
+lib/common.sh             # symlinking, harness call, nvim bootstrap — shared by both
+Brewfile                  # macOS package manifest, applied by macos.sh
+.editorconfig             # editor defaults for this repo
 README.md                 # this file
 STRUCTURE.md              # detailed Neovim layout
 harness/                  # portable three-client policy, commands, skills, installer, tests
 skills-lock.json          # reviewed standalone third-party skill lock
 .agents/skills            # symlink to the canonical harness/skills directory
 .claude/skills            # skills.sh/Claude bookkeeping symlinks
-nvim/                     # → ~/.config/nvim (symlinked by install.sh)
+nvim/                     # → ~/.config/nvim
 │   ├── init.lua            # entry: loads core + plugins
 │   ├── lazy-lock.json      # pinned plugin versions
 │   └── lua/                # core/ + plugins/<category>/<plugin>.lua
-ghostty/                  # → ~/.config/ghostty (symlinked by install.sh)
+ghostty/                  # → ~/.config/ghostty
     └── config              # font, theme, macOS Option-as-Alt, padding, …
+git/                      # gitconfig → ~/.gitconfig, ignore → ~/.config/git/ignore
+worktrunk/                # config.toml → ~/.config/worktrunk/config.toml
 ```
+
+Machine-local git settings go in `~/.gitconfig.local`, which `git/gitconfig`
+includes and this repo never tracks.
 
 See [`harness/README.md`](harness/README.md) for the public workflow, skill
 supply-chain procedure, and validation commands.
@@ -374,7 +398,8 @@ files: `gcd`, `lcm`, `isPrime`, `fori`, `forin`, `convertToBinaryString`, `nCr`,
   to pass Option as Meta. See setup step 2.
 - **"Who overrode my keymap?"** → `:verbose nmap <leader>ff` shows the defining
   file and line. Everything should point at `lua/config/maps.lua`.
-- **`:Mason` / `:Lazy` empty on first run** → re-run `./install.sh` or run
+- **`:Mason` / `:Lazy` empty on first run** → re-run `./macos.sh` (or
+  `./linux.sh`) or run
   `:Lazy sync` and `:MasonInstall lua-language-server pyright ...` manually.
 - **LSP silent on a language not in the ensure_installed list** →
   `lua/plugins/mason.lua` → add to `ensure_installed`, restart nvim.

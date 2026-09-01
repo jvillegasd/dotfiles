@@ -1,0 +1,27 @@
+# Linked to ~/.gitconfig by macos.sh and linux.sh.
+# Machine-local overrides belong in ~/.gitconfig.local, which is included below
+# and never tracked here.
+
+[user]
+	name = Jvillegasd
+	email = johnnyvillegaslrs@gmail.com
+
+[init]
+	defaultBranch = main
+
+[push]
+	# Every workflow here pushes a fresh branch before opening a pull request.
+	autoSetupRemote = true
+
+# `gh` is resolved through PATH rather than /opt/homebrew, so the same file
+# works on a Linux box where Homebrew is not the install prefix.
+[credential "https://github.com"]
+	helper =
+	helper = !/usr/bin/env gh auth git-credential
+
+[credential "https://gist.github.com"]
+	helper =
+	helper = !/usr/bin/env gh auth git-credential
+
+[include]
+	path = ~/.gitconfig.local
