@@ -795,6 +795,10 @@ class HarnessTests(unittest.TestCase):
 
         # The routing table names what is installed, and only that.
         policy = (ROOT / "harness" / "POLICY.md").read_text()
+        readme = (ROOT / "harness" / "README.md").read_text()
+        architecture_rule = "`improve-codebase-architecture` produces planning input, never a change contract: keep its report and grilling read-only, do not edit `CONTEXT.md` or ADRs inline, and route a selected candidate through native plan mode, `/spec`, or `/proto` before changing files."
+        for body in (policy, readme):
+            self.assertIn(architecture_rule, body)
         for name in COMMAND_NAMES:
             self.assertIn(f"`/{name}`", policy, name)
         for name in ("code-review", "to-spec", "to-tickets", "`ship`"):

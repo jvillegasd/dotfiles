@@ -161,8 +161,8 @@ brew_latest_cask() {
     fi
 }
 
-# Homebrew carries every tool here on both platforms, because four of them
-# (opencode, engram, rtk, worktrunk) ship only as taps. Codex is the one
+# Homebrew carries every tool here on both platforms, because three of them
+# (opencode, engram, worktrunk) ship only as taps. Codex is the one
 # exception: its Homebrew formula is a macOS cask, so a Linux box takes the npm
 # package OpenAI publishes for exactly that case.
 install_packages() {
@@ -177,7 +177,7 @@ install_packages() {
     log "Installing current AI clients and harness tools"
     brew tap anomalyco/tap
     brew tap gentleman-programming/tap
-    for formula in node gh uv rtk worktrunk anomalyco/tap/opencode gentleman-programming/tap/engram; do
+    for formula in node gh uv worktrunk anomalyco/tap/opencode gentleman-programming/tap/engram; do
         brew_latest_formula "$formula"
     done
     if [[ "$platform" == Darwin ]]; then
@@ -223,9 +223,7 @@ install_engram() {
 install_integrations() {
     install_engram
 
-    log "Reconciling RTK and Worktrunk"
-    rtk init --global --hook-only --auto-patch --no-trust-filters
-    rtk init --global --opencode --hook-only --auto-patch --no-trust-filters
+    log "Reconciling Worktrunk"
     wt config shell install --yes zsh
 }
 
@@ -424,7 +422,7 @@ assert_plugin_count() {
 
 smoke_check() {
     local command skill root script seo_status=0
-    for command in codex claude opencode gh python3 uv engram rtk wt; do
+    for command in codex claude opencode gh python3 uv engram wt; do
         command -v "$command" >/dev/null || die "Missing required command: $command"
     done
     for skill in "$HARNESS_DIR"/skills/*; do
@@ -475,7 +473,6 @@ smoke_check() {
         python3 -c 'import json,sys; d=json.load(sys.stdin); p=d.get("plugin",[]); assert sum("engram" in x for x in p)==1; assert "engram" in d.get("mcp",{})'
     claude plugin validate "$HARNESS_DIR/skills" >/dev/null
     wt switch --help | grep -q -- '--no-cd'
-    rtk --version >/dev/null
     if $WITH_SEO; then
         command -v claude-seo >/dev/null || die "Missing required command: claude-seo"
         claude-seo doctor --json >/dev/null || seo_status=$?
@@ -494,7 +491,7 @@ Next steps (interactive; not run by this installer):
   3. Authenticate: opencode auth login
   4. Authenticate: gh auth login
   5. Restart Codex, Claude Code, and OpenCode.
-  6. In Codex, open /hooks and trust the Engram and RTK hooks you reviewed.
+  6. In Codex, open /hooks and trust the Engram hooks you reviewed.
   7. Invoke setup-harness in each project that should use the public lifecycle.
 
 Status line: one file per provider under harness/statusline/. Claude Code runs
