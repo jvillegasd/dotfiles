@@ -6,6 +6,7 @@ One committed source for Codex, Claude Code, and OpenCode:
 - `commands/` holds the workflows. They are reachable only as `/name`, in all three clients.
 - `skills/` holds protocol, vocabulary, and locked third-party bodies.
 - `install.sh` installs current clients/integrations, preserves mutable client state, and reconciles policy, command, and skill links individually.
+- `locked-skills.sh` adds, updates, removes, and validates reviewed third-party skill locks.
 - `bench/measure.py` compares the real session population before and after a harness change, reading all three clients' own session stores.
 - `statusline/` holds one file per provider: `claude.sh` renders Claude Code's line, `codex.sh` reconciles Codex's built-in one to match.
 - `tests/test_harness.py` checks supply-chain and installer invariants.
@@ -123,9 +124,9 @@ Measured on a clean HOME, each command installs the full plugin, marketplace ent
 
 Setting up Codex also writes `[mcp_servers.engram]` in `config.toml`, which outranks the server the plugin declares in its `.mcp.json`. Nothing is lost by that: engram 1.20.0 writes `args = ["mcp", "--tools=agent"]` and the stable `/opt/homebrew/bin/engram` path, so the entry that wins carries the same agent tool profile the plugin asks for. Verified with `codex mcp list`. Upstream's configuration is kept as shipped.
 
-The full installer uses Homebrew for Codex, OpenCode, GitHub CLI, Engram, UV, RTK, and Worktrunk; Anthropic's native latest channel for Claude Code; and official client setup commands for Engram and RTK. It never starts an interactive client or authenticates for you.
+The full installer uses Homebrew for Codex, OpenCode, GitHub CLI, Engram, UV, and Worktrunk; Anthropic's native latest channel for Claude Code; and official client setup commands for Engram. It never starts an interactive client or authenticates for you.
 
-It runs on macOS and on Linux. Homebrew carries every tool on both, because four of them (OpenCode, Engram, RTK, and Worktrunk) ship only as taps, and packaging those a second way for Linux would mean four more update paths to keep honest. Codex is the single exception: its Homebrew formula is a macOS cask, so a Linux box takes `@openai/codex` from npm, which is the channel OpenAI publishes for exactly that case.
+It runs on macOS and on Linux. Homebrew carries every tool on both, because three of them (OpenCode, Engram, and Worktrunk) ship only as taps, and packaging those a second way for Linux would mean three more update paths to keep honest. Codex is the single exception: its Homebrew formula is a macOS cask, so a Linux box takes `@openai/codex` from npm, which is the channel OpenAI publishes for exactly that case.
 
 Python is the other exception, and it belongs to uv rather than to Homebrew:
 
@@ -195,25 +196,22 @@ OpenCode has no file in `statusline/` at all. Its configuration schema at https:
 
 ## Third-party skill updates
 
-`.agents/skills` points to `harness/skills`. Every standalone third-party skill is installed with skills.sh and committed with its `skills-lock.json` entry:
+`.agents/skills` points to `harness/skills`. `locked-skills.sh` keeps the skills.sh call, `skills-lock.json`, and Claude bookkeeping link in one reviewed workflow:
 
 ```sh
-npx skills@1 add <owner>/<repo> --skill <name> --agent universal -y
-ln -s ../../.agents/skills/<name> .claude/skills/<name>
+./harness/locked-skills.sh add <owner/repo> <name>
+./harness/locked-skills.sh update
+./harness/locked-skills.sh remove <name>
+./harness/locked-skills.sh check
 ```
 
-Add the bookkeeping link only for a skill that is actually installed. Review the installed body and security report before committing. Locked bodies stay pristine; behavior changes belong in a command or in `POLICY.md`.
+`add` refuses invalid GitHub sources and existing lock, body, command, or bookkeeping paths before it delegates to skills.sh. The existing `seo-*` role rule still wins, so those bodies never get a Claude bookkeeping link. `update` deliberately updates every locked body. `remove` accepts only a current lock entry and refuses unexpected body or Claude-link types. Every mutation prints the affected paths, while `check` runs Bash syntax, diff hygiene, and the harness acceptance suite.
 
-To check and deliberately update all locked bodies:
+The helper's `--help` is side-effect free. Do not probe the upstream update subcommand with `--help`: skills.sh currently treats that invocation as a full update.
 
-```sh
-npx skills@1 update --project --yes
-git diff -- harness/skills skills-lock.json .claude/skills
-```
+Review every upstream body, security report, and diff, then commit only the approved change. Locked bodies stay pristine; behavior changes belong in a command or in `POLICY.md`. Provisioning never runs the helper, `skills add`, `skills update`, or a lockfile restore command.
 
-Review every upstream diff, run the acceptance suite, and commit only the approved update. Provisioning never runs `skills add`, `skills update`, or a lockfile restore command.
-
-Delete a locked skill in one reviewed change: remove `harness/skills/<name>`, its `skills-lock.json` entry, and `.claude/skills/<name>`. A copied skill with unknown provenance remains an attributed local fork until its exact upstream is identified.
+A copied skill with unknown provenance remains an attributed local fork until its exact upstream is identified.
 
 Engram and Orca-provided skills are runtime/plugin managed and never belong in `skills-lock.json`.
 
@@ -237,7 +235,9 @@ Local skills are `adversarial-review`, `evidence`, `grilling`, `seo`, and `setup
 
 `/research` and `/proto` replace two locked bodies that were workflows wearing a skill's clothes: they could fire on description matching, and neither produced the artifacts `POLICY.md` now distinguishes. A `/research` finding ledger remains planning input until a planning route produces a complete contract. Publication confirmation alone does not make a research ticket implementation-ready; agreed behavior, acceptance criteria, and verification or test seams are also required. A finalized `/proto` requirements ledger is an implementation contract. As commands they are typed or they do not run, and each now emits the artifact the policy promised.
 
-Locked Matt Pocock skills provide domain/module vocabulary, TDD, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode. Locked `AgriciDaniel/claude-seo` bodies provide the SEO roles, none of them installed.
+Locked Matt Pocock skills provide domain/module vocabulary, architecture surveys through `improve-codebase-architecture`, TDD, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode. Locked `AgriciDaniel/claude-seo` bodies provide the SEO roles, none of them installed.
+
+`improve-codebase-architecture` produces planning input, never a change contract: keep its report and grilling read-only, do not edit `CONTEXT.md` or ADRs inline, and route a selected candidate through native plan mode, `/spec`, or `/proto` before changing files.
 
 Deliberately removed: `to-spec` and `to-tickets`, whose templates now live inline in `/spec` and `/create-ticket` rather than behind a wrapper that overrode most of what it loaded; `code-review`, whose second axis is now a spec-conformance pass `/yolo` runs itself while holding the contract; the `grill-me` and `review` command wrappers, retired earlier, which is a separate thing from the `grill-me` skill body `grilling` now carries; and twelve globally invocable SEO names.
 
@@ -310,4 +310,4 @@ It reads Claude Code JSONL transcripts, Codex rollout JSONL, and the OpenCode SQ
 
 Populations, not pairs. Cost and friction are the measured part; quality stays a human read of the sessions.
 
-The suite validates shell/Python syntax, unique skill names, lock hashes, Claude bookkeeping links, local-vs-locked separation, command shape and task-data framing, command-versus-skill name disjointness, routing-table coverage, secret/generated-state exclusions, installer safety, collision backups, orphan retirement, idempotency, and GitHub close/reopen behavior.
+The suite validates shell/Python syntax, the locked-skill lifecycle helper, unique skill names, lock hashes, Claude bookkeeping links, local-vs-locked separation, command shape and task-data framing, command-versus-skill name disjointness, routing-table coverage, secret/generated-state exclusions, installer safety, collision backups, orphan retirement, idempotency, and GitHub close/reopen behavior.

@@ -54,6 +54,7 @@ Three contract routes converge on `/yolo`: `/spec` plus `/create-ticket` publish
 Contract source and tracker binding are independent. The source determines what later conformance checks use: a ticket, an approved native plan, or a finalized `/proto` ledger. The binding determines only the branch form, closing reference, and tracker transitions. `/yolo` persists a plan-derived, prototype-derived, or trackerless ticket contract inline in the pull request, so retaining or lacking a ticket never replaces the contract that actually governed implementation.
 
 - `grilling` is the only interview protocol. Do not substitute another one, publish a spec from it, or act on its result. It attacks the load-bearing assumptions first, ranked by consequence. Its interactive mode asks one question at a time, hardest first, and finishes when the design either survives, in which case it names what would still break it, or breaks, in which case it names the smaller version. Its self-grill mode is what a workflow uses when serial human grilling would be the bottleneck: it resolves what precedent, history, and `evidence` can settle, kills the premise if evidence refutes it, and surfaces only the survivors in one batch.
+- `improve-codebase-architecture` produces planning input, never a change contract: keep its report and grilling read-only, do not edit `CONTEXT.md` or ADRs inline, and route a selected candidate through native plan mode, `/spec`, or `/proto` before changing files.
 - `/proto` is the one workflow that writes code before a contract exists, because its job is contract discovery by building. It validates on the local rungs only, stops for the human every round by design, and ends by handing a requirements ledger to `/yolo` or by killing the premise. It never pushes and never opens a pull request: nothing reaches a pull request except through `/yolo`.
 - `/spec` owns the only substantive approval gate before publication.
 - `setup-harness` stays a skill rather than a command because it installs bundled lifecycle assets that only a skill directory can carry. Its guards are what keep it from firing on its own.
@@ -166,8 +167,6 @@ Flaky or timed-out CI (rerun once; only a second failure counts as an attempt). 
 - Keep secrets, authentication, histories, trust decisions, approvals, databases, caches, backups, and mutable client configuration out of source control.
 - Prefer primary sources for research, and follow `evidence` before asserting a load-bearing claim about runtime behavior, impact, or frequency. Re-verify time-sensitive technical and SEO guidance before presenting it as current.
 - A claim is load-bearing only if being wrong about it changes the decision. Check those against telemetry, or mark them explicitly unchecked. Never state a number without its source deep link and timeframe. Where a project has not configured a telemetry capability, say so and move on: absence of data never blocks the work and never justifies inventing a number.
-- When `rtk` is available, prefix shell commands with `rtk`.
-
 ## Conventions
 
 These instructions load in three clients, so anything client-specific written here is wrong somewhere.

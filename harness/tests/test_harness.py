@@ -21,6 +21,7 @@ sys.dont_write_bytecode = True
 SKILLS = ROOT / "harness" / "skills"
 COMMANDS = ROOT / "harness" / "commands"
 STATUSLINE = ROOT / "harness" / "statusline"
+LOCKED_SKILLS = ROOT / "harness" / "locked-skills.sh"
 
 # The two platform entry points plus the library they both source. They differ
 # only in how packages arrive, so anything asserted about "the installer" has
@@ -316,7 +317,7 @@ class HarnessTests(unittest.TestCase):
 
     def test_shell_and_python_syntax(self) -> None:
         statusline = sorted(STATUSLINE.glob("*.sh"))
-        for script in (*INSTALLERS, ROOT / "harness" / "aliases.sh", *statusline):
+        for script in (*INSTALLERS, ROOT / "harness" / "aliases.sh", LOCKED_SKILLS, *statusline):
             subprocess.run(["bash", "-n", script], check=True)
         scripts = list((ROOT / "harness").rglob("*.py"))
         with tempfile.TemporaryDirectory() as cache:
@@ -325,6 +326,148 @@ class HarnessTests(unittest.TestCase):
                 check=True,
                 env=os.environ | {"PYTHONPYCACHEPREFIX": cache},
             )
+
+    def test_locked_skills_helper_manages_the_reviewed_lifecycle(self) -> None:
+        help_result = subprocess.run(
+            ["bash", LOCKED_SKILLS, "--help"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        for command in ("add <owner/repo> <name>", "update", "remove <name>", "check"):
+            self.assertIn(command, help_result.stdout)
+        readme = (ROOT / "harness" / "README.md").read_text()
+        for command in ("locked-skills.sh add", "locked-skills.sh update", "locked-skills.sh remove", "locked-skills.sh check"):
+            self.assertIn(command, readme)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            harness = root / "harness"
+            skills = harness / "skills"
+            claude = root / ".claude" / "skills"
+            binaries = root / "bin"
+            tests = harness / "tests"
+            commands = harness / "commands"
+            for directory in (skills, claude, binaries, tests, commands):
+                directory.mkdir(parents=True)
+            subprocess.run(
+                ["git", "init", "--quiet", root],
+                check=True,
+            )
+            helper = harness / "locked-skills.sh"
+            helper.write_bytes(LOCKED_SKILLS.read_bytes())
+            (root / "skills-lock.json").write_text('{"version": 1, "skills": {}}\n')
+            (tests / "test_harness.py").write_text("print('checked')\n")
+            calls = root / "calls"
+            npx = binaries / "npx"
+            npx.write_text(
+                "#!/bin/sh\n"
+                "printf '%s\\n' \"$*\" >> \"$CALLS\"\n"
+                "if [ \"$2\" = add ]; then\n"
+                "  mkdir -p \"$PWD/harness/skills/$5\"\n"
+                "  printf '%s\\n' '---' \"name: $5\" 'description: test' '---' > \"$PWD/harness/skills/$5/SKILL.md\"\n"
+                "  node -e 'const fs=require(\"fs\");const [p,s,n]=process.argv.slice(1);const d=JSON.parse(fs.readFileSync(p));d.skills[n]={source:s};fs.writeFileSync(p,JSON.stringify(d,null,2)+\"\\n\")' \"$PWD/skills-lock.json\" \"$3\" \"$5\"\n"
+                "fi\n"
+            )
+            npx.chmod(0o755)
+            environment = os.environ | {
+                "CALLS": str(calls),
+                "PATH": f"{binaries}:{os.environ['PATH']}",
+            }
+
+            def run(*arguments: str, check: bool = True) -> subprocess.CompletedProcess:
+                return subprocess.run(
+                    ["bash", helper, *arguments],
+                    check=check,
+                    capture_output=True,
+                    text=True,
+                    env=environment,
+                )
+
+            def locked() -> dict:
+                return json.loads((root / "skills-lock.json").read_text())["skills"]
+
+            self.assertNotEqual(run("add", "../outside", "bad-source", check=False).returncode, 0)
+            self.assertNotEqual(run("add", "owner/repo", "../outside", check=False).returncode, 0)
+            self.assertFalse(calls.exists())
+
+            (commands / "collision.md").write_text("collision\n")
+            self.assertNotEqual(run("add", "owner/repo", "collision", check=False).returncode, 0)
+            self.assertFalse((skills / "collision").exists())
+            self.assertNotIn("collision", locked())
+
+            (skills / "occupied").mkdir()
+            self.assertNotEqual(run("add", "owner/repo", "occupied", check=False).returncode, 0)
+            self.assertNotIn("occupied", locked())
+
+            run("add", "owner/repo", "demo")
+            self.assertTrue((skills / "demo" / "SKILL.md").is_file())
+            self.assertEqual(
+                os.readlink(claude / "demo"),
+                "../../.agents/skills/demo",
+            )
+            self.assertIn("demo", locked())
+            self.assertNotEqual(run("add", "owner/repo", "demo", check=False).returncode, 0)
+
+            run("add", "owner/repo", "seo-demo")
+            self.assertTrue((skills / "seo-demo" / "SKILL.md").is_file())
+            self.assertFalse((claude / "seo-demo").is_symlink())
+
+            stale_link = claude / "seo-stale"
+            stale_link.symlink_to("../../.agents/skills/seo-stale")
+            self.assertNotEqual(run("add", "owner/repo", "seo-stale", check=False).returncode, 0)
+            self.assertTrue(stale_link.is_symlink())
+            self.assertFalse((skills / "seo-stale").exists())
+            self.assertNotIn("seo-stale", locked())
+
+            run("update")
+            self.assertEqual(
+                calls.read_text().splitlines(),
+                [
+                    "skills@1 add owner/repo --skill demo --agent universal -y",
+                    "skills@1 add owner/repo --skill seo-demo --agent universal -y",
+                    "skills@1 update --project --yes",
+                ],
+            )
+
+            self.assertIn("checked", run("check").stdout)
+            bad_diff = root / "bad.txt"
+            bad_diff.write_text("trailing whitespace \n")
+            subprocess.run(["git", "add", bad_diff], check=True, cwd=root)
+            self.assertNotEqual(run("check", check=False).returncode, 0)
+            subprocess.run(["git", "rm", "--cached", "-f", bad_diff], check=True, cwd=root, capture_output=True)
+            bad_diff.unlink()
+            (tests / "test_harness.py").write_text("raise SystemExit(7)\n")
+            self.assertNotEqual(run("check", check=False).returncode, 0)
+            (tests / "test_harness.py").write_text("print('checked')\n")
+
+            (claude / "demo").unlink()
+            (claude / "demo").symlink_to("../../unexpected")
+            self.assertNotEqual(run("remove", "demo", check=False).returncode, 0)
+            self.assertTrue((skills / "demo").is_dir())
+            self.assertIn("demo", locked())
+            (claude / "demo").unlink()
+            (claude / "demo").symlink_to("../../.agents/skills/demo")
+            run("remove", "demo")
+            self.assertFalse((skills / "demo").exists())
+            self.assertFalse((claude / "demo").exists())
+            self.assertNotIn("demo", locked())
+
+            unsafe_body = skills / "unsafe-body"
+            unsafe_body.write_text("keep me\n")
+            lock = json.loads((root / "skills-lock.json").read_text())
+            lock["skills"]["unsafe-body"] = {"source": "owner/repo"}
+            (root / "skills-lock.json").write_text(json.dumps(lock, indent=2) + "\n")
+            self.assertNotEqual(run("remove", "unsafe-body", check=False).returncode, 0)
+            self.assertTrue(unsafe_body.is_file())
+            self.assertIn("unsafe-body", locked())
+            unsafe_body.unlink()
+            lock = json.loads((root / "skills-lock.json").read_text())
+            del lock["skills"]["unsafe-body"]
+            (root / "skills-lock.json").write_text(json.dumps(lock, indent=2) + "\n")
+
+            run("remove", "seo-demo")
+            self.assertNotEqual(run("remove", "../outside", check=False).returncode, 0)
 
     def test_installer_functions_parse_under_system_bash(self) -> None:
         # bash 3.2 ships on every macOS and cannot parse `case ... esac` inside
@@ -795,6 +938,10 @@ class HarnessTests(unittest.TestCase):
 
         # The routing table names what is installed, and only that.
         policy = (ROOT / "harness" / "POLICY.md").read_text()
+        readme = (ROOT / "harness" / "README.md").read_text()
+        architecture_rule = "`improve-codebase-architecture` produces planning input, never a change contract: keep its report and grilling read-only, do not edit `CONTEXT.md` or ADRs inline, and route a selected candidate through native plan mode, `/spec`, or `/proto` before changing files."
+        for body in (policy, readme):
+            self.assertIn(architecture_rule, body)
         for name in COMMAND_NAMES:
             self.assertIn(f"`/{name}`", policy, name)
         for name in ("code-review", "to-spec", "to-tickets", "`ship`"):
