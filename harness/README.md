@@ -280,9 +280,12 @@ flowchart TD
         ready --> yolo["/yolo picks up a ready ticket<br>branch: type/tracker-id-slug"]
         yolo --> inprogress["label: in-progress"]
         inprogress --> prready["pull request green and reviewed<br>label: ready-for-human"]
-        prready --> humanmerge["a human merges,<br>the closing reference closes the ticket"]
-        humanmerge --> trigger
-        humanmerge --> land["/land reconciles the tracker<br>and retires the worktree"]
+        prready --> humanmerge["a human decides to merge"]
+        humanmerge -->|they merge it on GitHub| merged["merged, the closing reference<br>closes the ticket"]
+        humanmerge -->|they type /squash-land| squashland["/squash-land<br>gates and conformance first,<br>then squash merge, then land"]
+        squashland --> merged
+        merged --> trigger
+        merged -->|merged by someone else| land["/land reconciles the tracker<br>and retires the worktree"]
     end
 ```
 
@@ -291,6 +294,8 @@ A blocker counts as satisfied only when the issue is closed *and* a merged pull 
 Three contract routes converge on `/yolo`: `/spec` plus `/create-ticket` for a published ticket contract that is tracker-bound only when a tracker exists, an approved native plan that retains an existing tracker binding or remains trackerless, or `/proto` for a requirements ledger discovered by building. Contract source and tracker binding are independent: the source controls conformance, while the binding controls branch names, closing references, and label transitions. A native-plan, `/proto`, or trackerless ticket contract is preserved in an inline `## Contract`; only a tracker-bound ticket-sourced contract can remain solely in the ticket.
 
 `/land` is the local half of the same step: it resolves the pull request first, gates on the merge, prefers the inline contract for conformance, and falls back to the ticket when no inline contract exists. The ticket is optional, so trackerless work skips tracker transitions. A legacy trackerless pull request without either source reports that conformance cannot be reconstructed, verifies merge and default-branch health, and removes only a clean retained worktree.
+
+`/squash-land` reaches the same local half by the other door, for the case where the human deciding to merge is the one typing the command. It runs the mergeability gate and the conformance check before the irreversible step, squash merges, and then lands exactly as above: tracker reconciled when bound, worktree retired. The reconciler sees no difference, because the closing reference closes the ticket either way.
 
 ## Validation
 
