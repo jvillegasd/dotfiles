@@ -1,7 +1,7 @@
 # Structure
 
 Organization guide for this dotfiles repo. It holds the application configs
-and one portable AI harness:
+and one Harness AI installation:
 
 ```
 macos.sh                        # macOS bootstrap (brew bundle + symlinks + mason + treesitter)
@@ -35,7 +35,7 @@ it too. The platform scripts install the uv-managed interpreters and the
 harness asserts them, and this is what keeps the version list from being
 declared twice.
 
-## AI harness layout
+## Harness AI layout
 
 ```
 harness/

@@ -1,7 +1,7 @@
 # dotfiles
 
-Personal dotfiles — **Neovim**, **Ghostty**, **git**, **Worktrunk**, and a
-portable AI harness for Codex, Claude Code, and OpenCode. The Neovim config is
+Personal dotfiles — **Neovim**, **Ghostty**, **git**, **Worktrunk**, and
+**Harness AI** for Codex, Claude Code, and OpenCode. The Neovim config is
 built around `lazy.nvim` with a grouped, mnemonic `<leader>` keymap scheme
 (Space as leader); the Ghostty config picks up the same JetBrains Mono Nerd Font
 and catppuccin-mocha theme so the editor and terminal match.
@@ -40,7 +40,7 @@ Ghostty picks up `ghostty/config` automatically; nothing to set in its UI.
 - A Nerd Font (JetBrains Mono Nerd Font is installed on macOS; install one
   yourself on Linux)
 
-The AI harness is GitHub-first and uses Homebrew plus each integration's
+Harness AI is GitHub-first and uses Homebrew plus each integration's
 official setup command. Authentication and hook trust remain interactive
 post-install steps printed by the installer.
 
