@@ -42,7 +42,9 @@ harness/
 ├── POLICY.md                   # one vendor-neutral global policy
 ├── README.md                   # maintenance and update procedure
 ├── install.sh                  # current clients/integrations + safe link reconcile
-├── statusline.sh               # → ~/.claude/statusline.sh; Codex's own is configured in config.toml
+├── statusline/                 # one file per provider, named after it
+│   ├── claude.sh               # → ~/.claude/statusline.sh; the renderer Claude Code runs
+│   └── codex.sh                # reconciles [tui] status_line in ~/.codex/config.toml
 ├── aliases.sh                  # yolo-mode launchers, sourced from ~/.zshrc
 ├── commands/                   # the workflows, reachable only as /name in all three clients
 ├── skills/

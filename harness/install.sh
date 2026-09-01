@@ -305,7 +305,7 @@ PY
     fi
 }
 
-# The committed statusline is linked to the path Claude Code already reads, so
+# statusline/claude.sh is linked to the path Claude Code already reads, so
 # settings.json only ever needs the one command line pointing at it. Rewritten
 # only when it differs, which keeps a hand-edited settings.json otherwise alone.
 # The reconciled file is emitted on stdout and written here, rather than
@@ -335,76 +335,16 @@ PY
     fi
 }
 
-# Codex renders its own status line and cannot run a script, so the committed
-# statusline.sh does not port to it. What ports is the content: `[tui]
-# status_line` takes an ordered list of built-in item ids, and these six are the
-# closest match to the Claude line's model, context, directory, branch, and two
-# rate-limit fields. Session duration has no Codex item and is dropped.
-#
-# OpenCode gets neither. Its config schema has no status line field and
-# @opencode-ai/plugin exposes no hook for one, so there is nothing to reconcile.
-CODEX_STATUS_LINE_ITEMS=(
-    model-with-reasoning
-    context-used
-    current-dir
-    git-branch
-    five-hour-limit
-    weekly-limit
-)
-
-# config.toml is hand-maintained and full of trust decisions and hook hashes, so
-# this rewrites the two managed keys in place and leaves every other line byte
-# for byte. Idempotence is textual rather than parsed: the reconciled file is a
-# fixed point, so an unchanged run exits 1 and writes nothing. That also avoids
-# tomllib, which needs Python 3.11 and is therefore not on the system python3
-# that macOS ships.
+# Each provider's status line lives in statusline/, one file per provider.
+# claude.sh is the renderer Claude Code runs on every draw; codex.sh is a
+# reconciler, because Codex draws its own and takes a list of built-in item ids
+# instead of a command. The write stays here so the backup is taken only on a
+# real change: codex.sh prints the reconciled file and exits 1 when the config
+# already says this.
 point_codex_statusline() {
     local config="$HOME/.codex/config.toml" reconciled
     mkdir -p "$(dirname "$config")"
-    if reconciled="$(python3 - "$config" "${CODEX_STATUS_LINE_ITEMS[@]}" <<'PY'
-import pathlib, re, sys
-
-path = pathlib.Path(sys.argv[1])
-items = ", ".join(f'"{item}"' for item in sys.argv[2:])
-managed = [f"status_line = [{items}]", "status_line_use_colors = true"]
-current = path.read_text() if path.exists() else ""
-lines = current.splitlines()
-
-kept, index, in_tui = [], 0, False
-while index < len(lines):
-    line = lines[index]
-    stripped = line.strip()
-    if stripped.startswith("["):
-        in_tui = stripped == "[tui]"
-    key = re.match(r"\s*(status_line|status_line_use_colors)\s*=\s*(.*)$", line)
-    if in_tui and key:
-        # An array the previous writer wrapped across lines is dropped whole.
-        value = key.group(2)
-        while value.count("[") > value.count("]") and index + 1 < len(lines):
-            index += 1
-            value += lines[index]
-        index += 1
-        continue
-    kept.append(line)
-    index += 1
-
-headers = [line.strip() for line in kept]
-if "[tui]" in headers:
-    at = headers.index("[tui]") + 1
-    kept[at:at] = managed
-else:
-    # Declaring [tui] after an existing [tui.*] subtable is valid TOML, so
-    # appending is safe even on a config that already configures one.
-    while kept and not kept[-1].strip():
-        kept.pop()
-    kept += ["", "[tui]", *managed]
-
-text = "\n".join(kept).strip("\n") + "\n"
-if text == current:
-    raise SystemExit(1)
-sys.stdout.write(text)
-PY
-    )"; then
+    if reconciled="$("$HARNESS_DIR/statusline/codex.sh" "$config")"; then
         backup_copy "$config"
         printf '%s\n' "$reconciled" > "$config"
         log "Reconciled the Codex status line in $config"
@@ -450,7 +390,7 @@ install_links() {
         done
     done
 
-    link_managed "$HARNESS_DIR/statusline.sh" "$HOME/.claude/statusline.sh"
+    link_managed "$HARNESS_DIR/statusline/claude.sh" "$HOME/.claude/statusline.sh"
     point_statusline_at_link
     point_codex_statusline
 
@@ -483,7 +423,7 @@ assert_plugin_count() {
 }
 
 smoke_check() {
-    local command skill root seo_status=0
+    local command skill root script seo_status=0
     for command in codex claude opencode gh python3 uv engram rtk wt; do
         command -v "$command" >/dev/null || die "Missing required command: $command"
     done
@@ -522,7 +462,10 @@ smoke_check() {
     assert_plugin_count codex engram 1
     assert_plugin_count claude engram 1
     [[ -f "$HARNESS_DIR/skills/ponytail/SKILL.md" ]] || die "Missing the ponytail skill body."
-    [[ "$(readlink "$HOME/.claude/statusline.sh")" == "$HARNESS_DIR/statusline.sh" ]] || die "Missing the Claude statusline link."
+    [[ "$(readlink "$HOME/.claude/statusline.sh")" == "$HARNESS_DIR/statusline/claude.sh" ]] || die "Missing the Claude statusline link."
+    for script in "$HARNESS_DIR"/statusline/*.sh; do
+        [[ -x "$script" ]] || die "Status line script is not executable: $script"
+    done
     grep -q '^status_line = \[' "$HOME/.codex/config.toml" || die "Missing the Codex status line."
     # Installed by the root script, asserted here: the harness is what consumes
     # them, so this is where a missing one has to fail loudly.
@@ -554,9 +497,10 @@ Next steps (interactive; not run by this installer):
   6. In Codex, open /hooks and trust the Engram and RTK hooks you reviewed.
   7. Invoke setup-harness in each project that should use the public lifecycle.
 
-Status line: Claude Code runs harness/statusline.sh; Codex renders the matching
-built-in items from [tui] status_line in ~/.codex/config.toml. OpenCode exposes
-no status line surface, so it gets none.
+Status line: one file per provider under harness/statusline/. Claude Code runs
+claude.sh on every draw; codex.sh wrote the matching built-in items into [tui]
+status_line in ~/.codex/config.toml. OpenCode exposes no status line surface,
+so it gets none.
 
 Skill groups: core$($WITH_SEO && printf ', seo')
 Commands are installed for all three clients as /name.
