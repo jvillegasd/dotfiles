@@ -7,6 +7,7 @@ and one portable AI harness:
 macos.sh                        # macOS bootstrap (brew bundle + symlinks + mason + treesitter)
 linux.sh                        # Linux bootstrap (apt/dnf + Homebrew on Linux + the same rest)
 lib/common.sh                   # Sourced by both: symlinks, harness call, nvim bootstrap
+lib/python.sh                   # The uv-managed interpreter set; also sourced by harness/install.sh
 Brewfile                        # macOS package manifest, applied by macos.sh
 .editorconfig                   # Editor defaults for this repo
 README.md                       # User-facing docs
@@ -28,6 +29,11 @@ worktrunk/
 The two entry points differ only in how packages arrive. Everything after
 that lives in `lib/common.sh`, so the link set, the harness call, and the
 Neovim bootstrap have exactly one definition.
+
+`lib/python.sh` is the exception to that split: `harness/install.sh` sources
+it too. The platform scripts install the uv-managed interpreters and the
+harness asserts them, and this is what keeps the version list from being
+declared twice.
 
 ## AI harness layout
 

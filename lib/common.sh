@@ -33,6 +33,10 @@ die()  { printf '\033[1;31m[err]\033[0m %s\n' "$*" >&2; exit 1; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# After log and die, which it uses. Resolved against this file rather than
+# against the caller, so sourcing common.sh is all an entry point has to do.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/python.sh"
+
 usage() {
     cat <<EOF
 Usage: $(basename "$0") [--no-backup]
