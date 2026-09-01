@@ -29,8 +29,9 @@ DNF_PACKAGES=(procps-ng curl file git ca-certificates unzip)
 
 # The macOS side installs from Brewfile, which also carries casks and fonts
 # that do not exist on Linux. This is the subset a Linux box actually needs.
-# No python@ formula on either side: harness/install.sh installs the
-# interpreters with uv.
+# No python@ formula on either side: install_pythons provisions the
+# interpreters with uv, which is why uv is here rather than left to
+# harness/install.sh. macOS gets it from Brewfile for the same reason.
 BREW_FORMULAE=(
     neovim
     ripgrep
@@ -40,6 +41,7 @@ BREW_FORMULAE=(
     tree
     make
     node
+    uv
     tree-sitter
     tree-sitter-cli
 )
@@ -89,6 +91,7 @@ main() {
     ensure_brew
     ensure_repo
     install_packages
+    install_pythons
     place_configs
     install_harness
     bootstrap_nvim

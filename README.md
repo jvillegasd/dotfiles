@@ -26,6 +26,10 @@ the Neovim bootstrap. Only the package step differs: `macos.sh` applies
 prerequisites with the distribution's package manager and everything after that
 with Homebrew on Linux.
 
+Python does not come from either package manager. `lib/python.sh` declares the
+uv-managed interpreter set once; both entry points install it with
+`install_pythons`, and `harness/install.sh` sources the same file to assert it.
+
 Ghostty picks up `ghostty/config` automatically; nothing to set in its UI.
 
 ## Requirements
@@ -98,6 +102,7 @@ the buffer. Everything else in the config works regardless of this setting.
 macos.sh                  # macOS bootstrap (brew bundle + symlinks + mason + treesitter)
 linux.sh                  # Linux bootstrap (apt/dnf + Homebrew on Linux + the same rest)
 lib/common.sh             # symlinking, harness call, nvim bootstrap — shared by both
+lib/python.sh             # uv-managed interpreter set — shared with harness/install.sh
 Brewfile                  # macOS package manifest, applied by macos.sh
 .editorconfig             # editor defaults for this repo
 README.md                 # this file

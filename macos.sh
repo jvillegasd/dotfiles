@@ -57,6 +57,7 @@ main() {
     ensure_brew
     ensure_repo
     install_packages
+    install_pythons
     place_configs
     install_harness
     bootstrap_nvim
