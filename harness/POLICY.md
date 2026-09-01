@@ -1,4 +1,4 @@
-# Portable AI Harness Policy
+# Harness AI Policy
 
 This policy is the shared global instruction surface for Codex, Claude Code, and OpenCode. Project instructions override it when they are more specific.
 

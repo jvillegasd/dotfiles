@@ -1,4 +1,4 @@
-# Portable AI harness
+# Harness AI
 
 One committed source for Codex, Claude Code, and OpenCode:
 

@@ -483,7 +483,7 @@ smoke_check() {
 summary() {
     cat <<EOF
 
-$(printf '\033[1;32m✓ Portable AI harness installed.\033[0m')
+$(printf '\033[1;32m✓ Harness AI installed.\033[0m')
 
 Next steps (interactive; not run by this installer):
   1. Authenticate: codex login

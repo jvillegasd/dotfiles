@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Linux dotfiles installer — Neovim + git + worktrunk + the portable AI harness.
+# Linux dotfiles installer — Neovim + git + worktrunk + Harness AI.
 #
 # Same end state as macos.sh, reached differently: the distribution's package
 # manager supplies the build prerequisites, Homebrew on Linux supplies
