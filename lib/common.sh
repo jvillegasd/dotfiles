@@ -152,7 +152,7 @@ Next steps:
   1. Launch: nvim
   2. Sanity: :checkhealth   ·   :Lazy   ·   :Mason
   3. Authenticate when needed: codex login · claude auth login · opencode auth login · gh auth login
-  4. Restart the three AI clients, then review and trust the Engram and RTK hooks in Codex /hooks.
+  4. Restart the three AI clients, then review and trust the Engram hooks in Codex /hooks.
   5. Machine-local git settings go in ~/.gitconfig.local, which git/gitconfig includes and this repo never tracks.
 
 EOF

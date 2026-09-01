@@ -6,9 +6,7 @@
 # everything after that, and the macOS-only pieces (Xcode CLT, casks, fonts,
 # Ghostty) are skipped.
 #
-# Homebrew is not optional here. Four of the tools the harness requires
-# (opencode, engram, rtk, worktrunk) ship only as Homebrew taps, so packaging
-# them a second way for Linux would mean four more update paths to keep honest.
+# Homebrew is not optional here. Three of the tools the harness requires (opencode, engram, worktrunk) ship only as Homebrew taps, so packaging them a second way for Linux would mean three more update paths to keep honest.
 #
 # Safe to re-run: package installs are idempotent, existing real configs get
 # backed up, and matching symlinks are left alone.
