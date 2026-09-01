@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.dont_write_bytecode = True
 SKILLS = ROOT / "harness" / "skills"
 COMMANDS = ROOT / "harness" / "commands"
+STATUSLINE = ROOT / "harness" / "statusline"
 
 # The two platform entry points plus the library they both source. They differ
 # only in how packages arrive, so anything asserted about "the installer" has
@@ -266,8 +267,55 @@ class HarnessTests(unittest.TestCase):
         for script in (ROOT / "macos.sh", ROOT / "linux.sh"):
             self.assertRegex(script.read_text(), r"(?m)^\s+install_pythons$", script)
 
+    def test_statusline_is_one_file_per_provider(self) -> None:
+        # Claude's is a renderer it runs on every draw; Codex's is a reconciler,
+        # because Codex draws its own and takes item ids rather than a command.
+        # Different shapes, same folder, one file per provider that has a status
+        # line at all. OpenCode has none, so it has no file here.
+        scripts = sorted(path.name for path in STATUSLINE.glob("*.sh"))
+        self.assertEqual(scripts, ["claude.sh", "codex.sh"])
+        for path in STATUSLINE.glob("*.sh"):
+            self.assertTrue(os.access(path, os.X_OK), path)
+
+        # The item ids belong to the provider's own file, not to the installer.
+        installer = (ROOT / "harness" / "install.sh").read_text()
+        self.assertNotIn("model-with-reasoning", installer)
+        self.assertIn("model-with-reasoning", (STATUSLINE / "codex.sh").read_text())
+        self.assertIn('"$HARNESS_DIR/statusline/codex.sh"', installer)
+
+    def test_codex_statusline_reconciler_is_idempotent(self) -> None:
+        # Exit 1 with no output is how it says "already correct", which is what
+        # keeps a re-run from minting a backup root and rewriting the file.
+        reconciler = STATUSLINE / "codex.sh"
+        with tempfile.TemporaryDirectory() as temporary:
+            config = Path(temporary) / "config.toml"
+            config.write_text(
+                'model = "keep-me"\n\n'
+                "[tui]\n"
+                'status_line = [\n  "stale",\n]\n'
+                'theme = "keep-me-too"\n\n'
+                "[tui.model_availability_nux]\n"
+                'status_line = "not-ours"\n'
+            )
+            first = subprocess.run(
+                [reconciler, config], capture_output=True, text=True
+            )
+            self.assertEqual(first.returncode, 0, first.stderr)
+            self.assertIn("status_line_use_colors = true", first.stdout)
+            self.assertNotIn('"stale"', first.stdout)
+            self.assertIn('theme = "keep-me-too"', first.stdout)
+            self.assertIn('status_line = "not-ours"', first.stdout)
+
+            config.write_text(first.stdout)
+            second = subprocess.run(
+                [reconciler, config], capture_output=True, text=True
+            )
+            self.assertEqual(second.returncode, 1, second.stdout)
+            self.assertEqual(second.stdout, "")
+
     def test_shell_and_python_syntax(self) -> None:
-        for script in (*INSTALLERS, ROOT / "harness" / "aliases.sh"):
+        statusline = sorted(STATUSLINE.glob("*.sh"))
+        for script in (*INSTALLERS, ROOT / "harness" / "aliases.sh", *statusline):
             subprocess.run(["bash", "-n", script], check=True)
         scripts = list((ROOT / "harness").rglob("*.py"))
         with tempfile.TemporaryDirectory() as cache:
@@ -429,11 +477,12 @@ class HarnessTests(unittest.TestCase):
             self.assertEqual(
                 os.path.realpath(policy), str(ROOT / "harness" / "POLICY.md")
             )
-            # Claude runs the committed script; Codex cannot, so it gets the
-            # equivalent built-in items written into its own [tui] table.
+            # Claude runs statusline/claude.sh; Codex cannot run anything, so
+            # statusline/codex.sh writes the equivalent built-in items into its
+            # own [tui] table instead.
             self.assertEqual(
                 os.path.realpath(home / ".claude" / "statusline.sh"),
-                str(ROOT / "harness" / "statusline.sh"),
+                str(STATUSLINE / "claude.sh"),
             )
             claude_settings = json.loads(
                 (home / ".claude" / "settings.json").read_text()

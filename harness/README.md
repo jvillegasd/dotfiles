@@ -7,7 +7,7 @@ One committed source for Codex, Claude Code, and OpenCode:
 - `skills/` holds protocol, vocabulary, and locked third-party bodies.
 - `install.sh` installs current clients/integrations, preserves mutable client state, and reconciles policy, command, and skill links individually.
 - `bench/measure.py` compares the real session population before and after a harness change, reading all three clients' own session stores.
-- `statusline.sh` is the Claude Code status line, and the installer configures Codex's built-in one to match.
+- `statusline/` holds one file per provider: `claude.sh` renders Claude Code's line, `codex.sh` reconciles Codex's built-in one to match.
 - `tests/test_harness.py` checks supply-chain and installer invariants.
 
 ## Development lifecycle
@@ -160,17 +160,25 @@ OpenCode has no bypass flag: its permissions are configuration, and `OPENCODE_PE
 
 ## Status line
 
-The three clients expose three different amounts of surface here, so one committed script cannot serve all of them.
+The three clients expose three different amounts of surface here, so one committed script cannot serve all of them. `statusline/` holds one file per provider that has a status line at all, named after it:
 
-| Client | Mechanism | What the installer does |
-| --- | --- | --- |
-| Claude Code | Runs an arbitrary command and renders its stdout | Links `statusline.sh` to `~/.claude/statusline.sh` and points `statusLine` in `settings.json` at that path |
-| Codex | Built in, and configured only by choosing from a fixed set of item ids | Writes `status_line` and `status_line_use_colors` into the `[tui]` table of `~/.codex/config.toml` |
-| OpenCode | None | Nothing |
+| Client | File | Mechanism | What it does |
+| --- | --- | --- | --- |
+| Claude Code | `statusline/claude.sh` | Runs an arbitrary command and renders its stdout | Linked to `~/.claude/statusline.sh`, with `statusLine` in `settings.json` pointed at that path |
+| Codex | `statusline/codex.sh` | Built in, and configured only by choosing from a fixed set of item ids | Writes `status_line` and `status_line_use_colors` into the `[tui]` table of `~/.codex/config.toml` |
+| OpenCode | none | None | Nothing |
 
-`statusline.sh` renders the model, context-window percentage, directory and branch with a dirty marker, session duration, and reasoning effort on one line, then the five-hour and weekly rate-limit bars underneath, fetched from the OAuth usage endpoint and cached for sixty seconds in `/tmp/claude`.
+The two files are different kinds of thing, which is the whole point of the folder. `claude.sh` is a renderer Claude Code runs on every draw. `codex.sh` is a reconciler the installer runs once, because Codex draws its own line and takes item ids rather than a command. Whichever provider you are chasing, its file is the one named after it.
 
-Codex renders its own status line and cannot run a script, so what ports is the content rather than the code. `status_line` takes an ordered list of built-in item ids, and the installer sets the six that come closest to the Claude line:
+`claude.sh` renders the model, context-window percentage, directory and branch with a dirty marker, session duration, and reasoning effort on one line, then the five-hour and weekly rate-limit bars underneath, fetched from the OAuth usage endpoint and cached for sixty seconds in `/tmp/claude`.
+
+`codex.sh` owns the item ids, so the installer never names them. It prints the reconciled `config.toml` on stdout and exits 1 when the file already says this, which is what lets `install.sh` take its backup only on a real change rather than mint a fresh backup root every run. Run it by hand to see the diff it would make:
+
+```sh
+./harness/statusline/codex.sh ~/.codex/config.toml
+```
+
+`status_line` takes an ordered list of built-in item ids, and the six chosen come closest to the Claude line:
 
 ```toml
 [tui]
@@ -182,7 +190,7 @@ Session duration is dropped, because Codex has no item for it. `/statusline` ins
 
 `config.toml` is hand-maintained and holds project trust decisions and hook trust hashes, so the reconciler rewrites only those two keys and leaves every other line byte for byte. Idempotence is textual: the reconciled file is a fixed point, so an unchanged run writes nothing and mints no backup. That also avoids `tomllib`, which needs Python 3.11 and so is absent from the system `python3` macOS ships.
 
-OpenCode gets neither. Its configuration schema at https://opencode.ai/config.json has no status line field, and `@opencode-ai/plugin` exposes no hook for one, so there is nothing to reconcile. A third-party TUI plugin can draw one, but it would be reverse-engineering an unsupported surface that any OpenCode release can break, which is a worse trade than doing without.
+OpenCode has no file in `statusline/` at all. Its configuration schema at https://opencode.ai/config.json has no status line field, and `@opencode-ai/plugin` exposes no hook for one, so there is nothing to render into and nothing to reconcile. A third-party TUI plugin can draw one, but it would be reverse-engineering an unsupported surface that any OpenCode release can break, which is a worse trade than doing without. An empty `opencode.sh` would only make the absence look like an oversight.
 
 ## Third-party skill updates
 
