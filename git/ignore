@@ -1,0 +1,8 @@
+# Global gitignore, linked to ~/.config/git/ignore.
+# Patterns that belong in every repository rather than in one repository's
+# own .gitignore.
+
+.DS_Store
+
+# Per-project Claude Code permission state: machine-local, never shared.
+**/.claude/settings.local.json

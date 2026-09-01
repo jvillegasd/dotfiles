@@ -157,9 +157,18 @@ brew_latest_cask() {
     fi
 }
 
+# Homebrew carries every tool here on both platforms, because four of them
+# (opencode, engram, rtk, worktrunk) ship only as taps. Codex is the one
+# exception: its Homebrew formula is a macOS cask, so a Linux box takes the npm
+# package OpenAI publishes for exactly that case.
 install_packages() {
-    [[ "$(uname -s)" == "Darwin" ]] || die "The v1 harness installer supports macOS."
-    command -v brew >/dev/null || die "Homebrew is required; run the root install.sh first."
+    local platform
+    platform="$(uname -s)"
+    case "$platform" in
+        Darwin|Linux) ;;
+        *) die "The harness installer supports macOS and Linux, not $platform." ;;
+    esac
+    command -v brew >/dev/null || die "Homebrew is required; run the root ./macos.sh or ./linux.sh first."
 
     log "Installing current AI clients and harness tools"
     brew tap anomalyco/tap
@@ -167,7 +176,12 @@ install_packages() {
     for formula in node gh python@3.11 uv rtk worktrunk anomalyco/tap/opencode gentleman-programming/tap/engram; do
         brew_latest_formula "$formula"
     done
-    brew_latest_cask codex
+    if [[ "$platform" == Darwin ]]; then
+        brew_latest_cask codex
+    else
+        log "Installing Codex from npm (the Homebrew cask is macOS only)"
+        npm install --global @openai/codex@latest
+    fi
 
     log "Installing Claude Code from Anthropic's latest native channel"
     curl -fsSL https://claude.ai/install.sh | bash
@@ -317,6 +331,82 @@ PY
     fi
 }
 
+# Codex renders its own status line and cannot run a script, so the committed
+# statusline.sh does not port to it. What ports is the content: `[tui]
+# status_line` takes an ordered list of built-in item ids, and these six are the
+# closest match to the Claude line's model, context, directory, branch, and two
+# rate-limit fields. Session duration has no Codex item and is dropped.
+#
+# OpenCode gets neither. Its config schema has no status line field and
+# @opencode-ai/plugin exposes no hook for one, so there is nothing to reconcile.
+CODEX_STATUS_LINE_ITEMS=(
+    model-with-reasoning
+    context-used
+    current-dir
+    git-branch
+    five-hour-limit
+    weekly-limit
+)
+
+# config.toml is hand-maintained and full of trust decisions and hook hashes, so
+# this rewrites the two managed keys in place and leaves every other line byte
+# for byte. Idempotence is textual rather than parsed: the reconciled file is a
+# fixed point, so an unchanged run exits 1 and writes nothing. That also avoids
+# tomllib, which needs Python 3.11 and is therefore not on the system python3
+# that macOS ships.
+point_codex_statusline() {
+    local config="$HOME/.codex/config.toml" reconciled
+    mkdir -p "$(dirname "$config")"
+    if reconciled="$(python3 - "$config" "${CODEX_STATUS_LINE_ITEMS[@]}" <<'PY'
+import pathlib, re, sys
+
+path = pathlib.Path(sys.argv[1])
+items = ", ".join(f'"{item}"' for item in sys.argv[2:])
+managed = [f"status_line = [{items}]", "status_line_use_colors = true"]
+current = path.read_text() if path.exists() else ""
+lines = current.splitlines()
+
+kept, index, in_tui = [], 0, False
+while index < len(lines):
+    line = lines[index]
+    stripped = line.strip()
+    if stripped.startswith("["):
+        in_tui = stripped == "[tui]"
+    key = re.match(r"\s*(status_line|status_line_use_colors)\s*=\s*(.*)$", line)
+    if in_tui and key:
+        # An array the previous writer wrapped across lines is dropped whole.
+        value = key.group(2)
+        while value.count("[") > value.count("]") and index + 1 < len(lines):
+            index += 1
+            value += lines[index]
+        index += 1
+        continue
+    kept.append(line)
+    index += 1
+
+headers = [line.strip() for line in kept]
+if "[tui]" in headers:
+    at = headers.index("[tui]") + 1
+    kept[at:at] = managed
+else:
+    # Declaring [tui] after an existing [tui.*] subtable is valid TOML, so
+    # appending is safe even on a config that already configures one.
+    while kept and not kept[-1].strip():
+        kept.pop()
+    kept += ["", "[tui]", *managed]
+
+text = "\n".join(kept).strip("\n") + "\n"
+if text == current:
+    raise SystemExit(1)
+sys.stdout.write(text)
+PY
+    )"; then
+        backup_copy "$config"
+        printf '%s\n' "$reconciled" > "$config"
+        log "Reconciled the Codex status line in $config"
+    fi
+}
+
 install_links() {
     local skill source command root desired="|"
     ensure_skill_dir "$HOME/.agents/skills"
@@ -358,6 +448,7 @@ install_links() {
 
     link_managed "$HARNESS_DIR/statusline.sh" "$HOME/.claude/statusline.sh"
     point_statusline_at_link
+    point_codex_statusline
 
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.codex/AGENTS.md"
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.claude/CLAUDE.md"
@@ -427,6 +518,8 @@ smoke_check() {
     assert_plugin_count codex engram 1
     assert_plugin_count claude engram 1
     [[ -f "$HARNESS_DIR/skills/ponytail/SKILL.md" ]] || die "Missing the ponytail skill body."
+    [[ "$(readlink "$HOME/.claude/statusline.sh")" == "$HARNESS_DIR/statusline.sh" ]] || die "Missing the Claude statusline link."
+    grep -q '^status_line = \[' "$HOME/.codex/config.toml" || die "Missing the Codex status line."
 
     opencode debug config |
         python3 -c 'import json,sys; d=json.load(sys.stdin); p=d.get("plugin",[]); assert sum("engram" in x for x in p)==1; assert "engram" in d.get("mcp",{})'
@@ -453,6 +546,10 @@ Next steps (interactive; not run by this installer):
   5. Restart Codex, Claude Code, and OpenCode.
   6. In Codex, open /hooks and trust the Engram and RTK hooks you reviewed.
   7. Invoke setup-harness in each project that should use the public lifecycle.
+
+Status line: Claude Code runs harness/statusline.sh; Codex renders the matching
+built-in items from [tui] status_line in ~/.codex/config.toml. OpenCode exposes
+no status line surface, so it gets none.
 
 Skill groups: core$($WITH_SEO && printf ', seo')
 Commands are installed for all three clients as /name.

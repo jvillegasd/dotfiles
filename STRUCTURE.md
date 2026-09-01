@@ -1,20 +1,33 @@
 # Structure
 
-Organization guide for this dotfiles repo. It holds two application configs
+Organization guide for this dotfiles repo. It holds the application configs
 and one portable AI harness:
 
 ```
-install.sh                      # macOS bootstrap (brew + symlinks + mason + treesitter)
+macos.sh                        # macOS bootstrap (brew bundle + symlinks + mason + treesitter)
+linux.sh                        # Linux bootstrap (apt/dnf + Homebrew on Linux + the same rest)
+lib/common.sh                   # Sourced by both: symlinks, harness call, nvim bootstrap
+Brewfile                        # macOS package manifest, applied by macos.sh
+.editorconfig                   # Editor defaults for this repo
 README.md                       # User-facing docs
 STRUCTURE.md                    # This file
 harness/                        # Canonical policy, skills, installer, tests
 skills-lock.json                # Reviewed third-party skill hashes/provenance
 .agents/skills                  # → harness/skills
 .claude/skills/                 # Claude bookkeeping links to .agents/skills
-nvim/                           # → ~/.config/nvim  (symlinked by install.sh)
-ghostty/                        # → ~/.config/ghostty (symlinked by install.sh)
+nvim/                           # → ~/.config/nvim
+ghostty/                        # → ~/.config/ghostty
     └── config                  # font, theme, padding, macOS Option-as-Alt
+git/
+    ├── gitconfig               # → ~/.gitconfig
+    └── ignore                  # → ~/.config/git/ignore
+worktrunk/
+    └── config.toml             # → ~/.config/worktrunk/config.toml
 ```
+
+The two entry points differ only in how packages arrive. Everything after
+that lives in `lib/common.sh`, so the link set, the harness call, and the
+Neovim bootstrap have exactly one definition.
 
 ## AI harness layout
 
@@ -23,12 +36,14 @@ harness/
 ├── POLICY.md                   # one vendor-neutral global policy
 ├── README.md                   # maintenance and update procedure
 ├── install.sh                  # current clients/integrations + safe link reconcile
+├── statusline.sh               # → ~/.claude/statusline.sh; Codex's own is configured in config.toml
+├── aliases.sh                  # yolo-mode launchers, sourced from ~/.zshrc
+├── commands/                   # the workflows, reachable only as /name in all three clients
 ├── skills/
 │   ├── <locked>/               # pristine skills.sh-managed upstream bodies
 │   ├── setup-harness/          # config + GitHub lifecycle templates
-│   ├── spec|tickets/           # repaired planning entries
-│   ├── ship|address-review/    # isolated worktree/PR delivery entries
-│   ├── adversarial-review|evidence/  # protocols the delivery entries load
+│   ├── grilling/               # the one interview protocol, interactive and self-grill
+│   ├── adversarial-review|evidence/  # protocols the delivery commands load
 │   └── seo*/                   # optional SEO group (--with-seo)
 ├── bench/measure.py            # session-population comparison for harness changes
 └── tests/test_harness.py       # supply-chain, lifecycle, and installer checks

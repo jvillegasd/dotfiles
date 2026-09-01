@@ -1,0 +1,21 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{lua,json,yml,yaml,md}]
+indent_size = 2
+
+# Markdown prose is never hard-wrapped here, and a trailing double space is a
+# line break in the syntax, so neither rule applies.
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = off
+
+[Makefile]
+indent_style = tab
