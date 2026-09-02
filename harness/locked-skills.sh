@@ -98,7 +98,7 @@ check_skills() {
     bash -n "$0"
     git -C "$ROOT" diff --check
     git -C "$ROOT" diff --cached --check
-    python3 "$HARNESS_DIR/tests/test_harness.py"
+    python3 -m unittest discover -s "$HARNESS_DIR/tests" -t "$HARNESS_DIR/tests"
 }
 
 main() {

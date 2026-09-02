@@ -7,9 +7,9 @@ One committed source for Codex, Claude Code, and OpenCode:
 - `skills/` holds protocol, vocabulary, and locked third-party bodies.
 - `install.sh` installs current clients/integrations, preserves mutable client state, and reconciles policy, command, and skill links individually.
 - `locked-skills.sh` adds, updates, removes, and validates reviewed third-party skill locks.
-- `bench/measure.py` compares the real session population before and after a harness change, reading all three clients' own session stores.
+- `bench/measure.py` compares the real session population before and after a harness change, reading all three clients' own session stores. Its manual is `bench/README.md`.
 - `statusline/` holds one file per provider: `claude.sh` renders Claude Code's line, `codex.sh` reconciles Codex's built-in one to match.
-- `tests/test_harness.py` checks supply-chain and installer invariants.
+- `tests/` checks supply-chain, installer, and contract invariants, one file per subject.
 
 ## Development lifecycle
 
@@ -290,10 +290,12 @@ Three contract routes converge on `/yolo`: `/spec` plus `/create-ticket` for a p
 ## Validation
 
 ```sh
-python3 harness/tests/test_harness.py
+python3 -m unittest discover -s harness/tests -t harness/tests
 ```
 
-A structural suite proves nothing about behavior. Validate a change to this directory against the sessions it actually produced:
+One file per subject, and a single file runs on its own: `python3 harness/tests/test_commands.py`. Shared paths and readers live in `harness/tests/fixtures.py`; anything used by one file stays in that file.
+
+A structural suite proves nothing about behavior. Validate a change to this directory against the sessions it actually produced, as `harness/bench/README.md` explains:
 
 ```sh
 python3 harness/bench/measure.py --split <commit-date> --since <window-start>
