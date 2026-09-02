@@ -59,6 +59,7 @@ INGESTING_COMMANDS = {
     "address-review",
     "ask",
     "create-ticket",
+    "design",
     "feedback",
     "land",
     "proto",
@@ -72,7 +73,7 @@ INGESTING_COMMANDS = {
 # Ponytail replaced a SessionStart hook that applied to every session with an
 # explicit load in each command that writes code. Nothing else enforces it, so
 # dropping the line would silently turn lazy mode off everywhere.
-PONYTAIL_COMMANDS = {"address-review", "feedback", "proto", "yolo"}
+PONYTAIL_COMMANDS = {"address-review", "design", "feedback", "proto", "yolo"}
 
 
 # Mirrors computeSkillFolderHash in the skills CLI, which is what writes
@@ -900,6 +901,13 @@ class HarnessTests(unittest.TestCase):
                 "No file writes",
             ),
             "spec": ("spec-template", "Ask once", "Do not create tickets"),
+            "design": (
+                "DESIGN.md",
+                "Import what exists, never overwrite it",
+                "Explore by rendering, not by describing",
+                "One gate",
+                "never open a pull request",
+            ),
             "create-ticket": (
                 "vertical-slice-rules",
                 "sub-issue",
@@ -1033,6 +1041,56 @@ class HarnessTests(unittest.TestCase):
             body = (COMMANDS / f"{name}.md").read_text()
             for bullet in design_bullets:
                 self.assertIn(bullet, body, f"{name}: {bullet}")
+
+        # DESIGN.md earns its keep by being read, and the only thing that makes
+        # the conformance passes read it is POLICY naming it a documented
+        # repository standard. Drop that sentence and /design still writes a
+        # file, but nothing downstream ever opens it.
+        self.assertIn(
+            "A project's `DESIGN.md` is a documented repository standard",
+            policy,
+        )
+        # Precedence, both halves. Without the first, a design body could read
+        # the file as permission to stop deciding; without the second, a
+        # marketing page off the product palette reads as drift rather than as
+        # the deliberate choice the landing-page body is allowed to make.
+        self.assertIn("It supplies the system; the deciding body still decides within it.", policy)
+        self.assertIn("may depart from the system on the landing-page surface it owns", policy)
+        # The handoff has two halves and only one of them lives in design.md.
+        # Without these, /yolo could stop resolving a design contract or stop
+        # reusing its branch, and every other assertion here would still pass
+        # while the workflow dead-ended exactly where it did before.
+        yolo = (COMMANDS / "yolo.md").read_text()
+        self.assertIn("Native plan mode produces one, and so does `/design`", yolo)
+        self.assertIn("For a `/proto` ledger or a `/design` artifact, reuse its existing branch", yolo)
+
+        # Assert the operative clause, not the bare filename: any stray
+        # mention would satisfy a substring check for "DESIGN.md".
+        self.assertIn(
+            "Read `DESIGN.md` at the project root when one exists",
+            (COMMANDS / "proto.md").read_text(),
+        )
+        self.assertIn(
+            "read `DESIGN.md` at the project root when one exists and build from its tokens",
+            (COMMANDS / "yolo.md").read_text(),
+        )
+
+        # The pin is a rung, not a preference: `lint` gates the gate, so an
+        # unpinned bump turns a green branch red on an upstream release.
+        design = (COMMANDS / "design.md").read_text()
+        # Count equality, not a blocklist: a third invocation added later
+        # without the pin fails here, which a "not @latest" check would miss.
+        self.assertEqual(
+            design.count("@google/design.md"),
+            design.count("@google/design.md@0.4.0"),
+        )
+        for invocation in ("lint DESIGN.md", "export DESIGN.md"):
+            self.assertIn(f"npx -y @google/design.md@0.4.0 {invocation}", design)
+
+        # A ticket-scoped mockup is /proto's loop. Routing it to /design would
+        # duplicate a workflow that already stops for the human every round.
+        self.assertIn('| "define the design system", "what are our colours and fonts", "pick the palette and type scale" | `/design` |', policy)
+        self.assertIn('| "mock up this ticket\'s frontend", a mockup for one ticket or spec | `/proto` |', policy)
 
         for name in COMMAND_NAMES:
             self.assertIn(f"`/{name}`", policy, name)

@@ -36,6 +36,10 @@ flowchart TD
         proto --> protoledger["requirements ledger"]
         proto -.->|premise refuted: kill it, record why| proto
 
+        design_in["a project with no<br>design system"] --> design["/design<br>render directions, converge,<br>lint, export the tokens,<br>one gate like plan mode"]
+        design --> designsystem["DESIGN.md plus generated tokens"]
+        design -.->|premise refuted: kill it, record why| design
+
         else_in["everything else"] --> plan["native plan mode"]
         brief --> plan
         brief --> spec
@@ -44,10 +48,12 @@ flowchart TD
         grill -.-> spec
         grill -.-> plan
         grill -.-> proto
+        grill -.-> design
 
         ticket --> approval(["approved contract"])
         plan --> approval
         protoledger --> approval
+        designsystem --> approval
     end
 
     subgraph BUILD["build"]
@@ -227,7 +233,9 @@ The trade is deliberate. `/ponytail lite|ultra` switching, the statusline, subag
 
 ## Roster
 
-Commands are `/ask`, `/research`, `/triage`, `/spec`, `/create-ticket`, `/proto`, `/yolo`, `/feedback`, `/address-review`, `/land`, and `/squash-land`.
+Commands are `/ask`, `/research`, `/triage`, `/spec`, `/create-ticket`, `/design`, `/proto`, `/yolo`, `/feedback`, `/address-review`, `/land`, and `/squash-land`.
+
+`/design` writes a project's `DESIGN.md` and exports its tokens, pinned to `@google/design.md@0.4.0`, whose format is published at https://github.com/google-labs-code/design.md under Apache-2.0. The pin matters because the tool is pre-1.0 and its format can churn: an unpinned bump changes what a session writes, mid-session, with no diff to review. It is not an oracle-ladder rung. `lint` runs once inside `/design` step 6 and gates that workflow's own approval, so an upstream release breaks a design session rather than reddening a branch. Two things about that linter are worth knowing before trusting it. It exits non-zero only on `broken-ref`, a token reference that resolves to nothing, which is verified against 0.4.0: a misordered section is a warning and a missing one is merely info, so both exit 0. A green lint therefore means no reference dangles, and says nothing about whether the document is complete or the design is good. And WCAG contrast is a warning rather than an error, verified against 0.4.0: a 1.13:1 pair reports `contrast-ratio` and still exits 0. `/design` therefore carries warnings to its approval gate rather than swallowing them, since the gate is where a human can accept a contrast decision deliberately.
 
 `/squash-land` is `/land` for the case where the human deciding to merge is the one typing the command: it squash merges and then lands. It is the only workflow in this harness that merges, and typing its name is the approval, so it never asks twice. What it does not do is append a merge step to `/land`: the merge is irreversible, so both the mergeability gate and the conformance check move ahead of it, and a blocking mismatch stops the merge instead of being reported after it, which is the best `/land` can manage. It also deliberately avoids `gh pr merge --delete-branch`, whose post-merge local checkout fails on a repository whose default branch is checked out in another worktree, reporting an error after the merge has already succeeded.
 
@@ -241,7 +249,7 @@ Locked `anthropics/skills` provides `frontend-design`, Apache-2.0, the general U
 
 Evaluated and declined, so the next pass does not re-derive them. `nextlevelbuilder/ui-ux-pro-max-skill` was locked and then removed, and it is the interesting one, because it looked like the obvious pick: MIT, and the only candidate carrying real application-UI data (192 palettes, 74 font pairings, twenty-two per-stack tables). What killed it was everything around the data. It is roughly 3.9 MB across seventy files, and `computedHash` covers the whole directory, so every update rehashes all of it. Its documented invocation path is `${CLAUDE_PLUGIN_ROOT}/.claude/skills/...`, which does not exist in this layout. Running its search script writes `__pycache__` inside the locked body, so the invocation needs `-B` or the first honest use breaks the acceptance suite. Its `--persist` flag writes a competing per-project design contract. It ships no licence file inside the skill directory, only MIT at the repository root. And its description claims every interface task while it cannot carry an invocation guard, so it has to be installed unlinked, which then breaks this installer for anyone who has that popular skill name in their own `~/.claude/skills`. Four `POLICY.md` corrections and a broken installer edge case, for a body with no caller until a design workflow exists to read its tables from a path. Reconsider it then, as something a workflow invokes, not as an installed skill.
 
-`Jakubantalik/transitions.dev` has no license file at all, so its motion recipes are all rights reserved; beui, ReUI, EasyUI, and Beautiful UI are component registries bound to React 19, Tailwind 4, and the shadcn registry, which makes them a project's dependency and never this repository's, and ReUI's free tier additionally needs an account and rate-limits requests, so it cannot back an unattended rung; Refero is a hosted beta MCP service with nothing to lock, usable per project at https://refero.design/mcp and never here; designmd.co sits behind bot protection and could not be read, and its DESIGN.md convention is available free and MIT-licensed at https://github.com/VoltAgent/awesome-design-md, to be read upstream rather than vendored.
+`Jakubantalik/transitions.dev` has no license file at all, so its motion recipes are all rights reserved; beui, ReUI, EasyUI, and Beautiful UI are component registries bound to React 19, Tailwind 4, and the shadcn registry, which makes them a project's dependency and never this repository's, and ReUI's free tier additionally needs an account and rate-limits requests, so it cannot back an unattended rung; Refero is a hosted beta MCP service with nothing to lock, usable per project at https://refero.design/mcp and never here; designmd.co sits behind bot protection and could not be read. Its community DESIGN.md corpus is available free and MIT-licensed at https://github.com/VoltAgent/awesome-design-md, useful as reference material and read upstream rather than vendored; the format `/design` actually writes is Google's, at https://github.com/google-labs-code/design.md, which is the one with a published schema and a linter.
 
 `improve-codebase-architecture` produces planning input, never a change contract: keep its report and grilling read-only, do not edit `CONTEXT.md` or ADRs inline, and route a selected candidate through native plan mode, `/spec`, or `/proto` before changing files.
 
@@ -297,7 +305,7 @@ flowchart TD
 
 A blocker counts as satisfied only when the issue is closed *and* a merged pull request closed it, which is why `blocker_satisfied` walks `closedByPullRequestsReferences` rather than trusting the closed state. Closing an issue by hand therefore does not open the frontier behind it.
 
-Three contract routes converge on `/yolo`: `/spec` plus `/create-ticket` for a published ticket contract that is tracker-bound only when a tracker exists, an approved native plan that retains an existing tracker binding or remains trackerless, or `/proto` for a requirements ledger discovered by building. Contract source and tracker binding are independent: the source controls conformance, while the binding controls branch names, closing references, and label transitions. A native-plan, `/proto`, or trackerless ticket contract is preserved in an inline `## Contract`; only a tracker-bound ticket-sourced contract can remain solely in the ticket.
+Three contract routes converge on `/yolo`: `/spec` plus `/create-ticket` for a published ticket contract that is tracker-bound only when a tracker exists, an approved in-conversation contract from native plan mode or from `/design`'s gate, or `/proto` for a requirements ledger discovered by building. Contract source and tracker binding are independent: the source controls conformance, while the binding controls branch names, closing references, and label transitions. An in-conversation, `/proto`, or trackerless ticket contract is preserved in an inline `## Contract`; only a tracker-bound ticket-sourced contract can remain solely in the ticket.
 
 `/land` is the local half of the same step: it resolves the pull request first, gates on the merge, prefers the inline contract for conformance, and falls back to the ticket when no inline contract exists. The ticket is optional, so trackerless work skips tracker transitions. A legacy trackerless pull request without either source reports that conformance cannot be reconstructed, verifies merge and default-branch health, and removes only a clean retained worktree.
 
