@@ -72,6 +72,7 @@ Return the pull request, checks, review result, and retained worktree path. Neve
 ## Skills this loads
 
 - `ponytail`
+- `design-taste-frontend` only on a landing-page, portfolio, or redesign brief
 - `tdd`
 - `grilling`, self-grill mode only, for an ambiguity that survives a repository search
 - `evidence` when a load-bearing runtime claim decides the approach

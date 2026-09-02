@@ -56,6 +56,7 @@ Never merge the pull request or remove its worktree. Never force-push or rebase 
 ## Skills this loads
 
 - `ponytail`
+- `design-taste-frontend` only on a landing-page, portfolio, or redesign brief
 - `tdd`
 - `diagnosing-bugs`
 - `adversarial-review`
