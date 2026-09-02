@@ -14,6 +14,8 @@ README.md                       # User-facing docs
 STRUCTURE.md                    # This file
 harness/                        # Canonical policy, skills, installer, tests
 skills-lock.json                # Reviewed third-party skill hashes/provenance
+docs/agents/                    # This repo's own lifecycle config, from setup-harness
+.github/                        # Agent-lifecycle workflow and its reconcile script
 .agents/skills                  # → harness/skills
 .claude/skills/                 # Claude bookkeeping links to .agents/skills
 nvim/                           # → ~/.config/nvim
@@ -60,7 +62,12 @@ harness/
 
 Global mutable client configs are reconciled during installation but are not
 tracked. Per-project lifecycle configuration lives under `docs/agents/` only
-after `setup-harness` is explicitly invoked in that project.
+after `setup-harness` is explicitly invoked in that project. This repository is
+one of those projects: `docs/agents/harness.json` and
+`docs/agents/issue-tracker.md` describe its own GitHub tracker binding, and
+`.github/` carries the lifecycle workflow that reconciles it. Those files are
+this repo's configuration, not templates. The templates that `setup-harness`
+copies into any project stay in `harness/skills/setup-harness/`.
 
 The rest of this document describes the `nvim/` subtree — the Neovim config.
 
