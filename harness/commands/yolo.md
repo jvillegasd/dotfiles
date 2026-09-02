@@ -73,6 +73,7 @@ Return the pull request, checks, review result, and retained worktree path. Neve
 
 - `ponytail`
 - `design-taste-frontend` only on a landing-page, portfolio, or redesign brief
+- `frontend-design` on any other UI brief
 - `tdd`
 - `grilling`, self-grill mode only, for an ambiguity that survives a repository search
 - `evidence` when a load-bearing runtime claim decides the approach
