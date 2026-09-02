@@ -49,22 +49,9 @@ broken because a fix landed at one call site only; dead code and leftovers;
 for a few lines, or config for a constant; anything whose correctness depends
 on information not visible in the diff.
 
-On a landing-page, portfolio, or redesign diff, add the `design-taste-frontend`
-lenses. Grep the mechanical tells before judging anything: em-dashes anywhere
-visible (9.G), `window.addEventListener('scroll')` (5.D), scroll cues and
-section-number eyebrows (9.F), and more `uppercase tracking` micro-labels than
-`ceil(sectionCount / 3)` (4.7). Everything else in that body, and the section
-14 pre-flight that restates those four as boxes, is a lens here and never a
-ladder rung, so report what it catches as findings rather than as a gate.
-
-On any other UI diff, add the `frontend-design` lens instead, since that is
-the body that governed it: a named concrete subject rather than a generic
-one, a palette of four to six values and at least two type roles actually
-derived from it, one signature element rather than boldness spread evenly,
-and none of the three defaults it calls out (cream ground with serif display
-and terracotta accent, near-black with a single acid accent, broadsheet
-hairline rules at zero radius) chosen on an axis the brief left free. Nothing
-here greps, so all of it is judgment reported as findings.
+On a UI diff, add one more lens: a palette, token system, or state set the
+contract never asked for is unrequested surface area, and `ponytail` decides
+scope on a UI surface the same as anywhere else.
 
 ## Reviewer output
 

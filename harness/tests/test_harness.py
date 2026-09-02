@@ -38,17 +38,8 @@ LOCAL_SKILLS = {
     # Adopted out of the lock to gain the invocation guards the policy already
     # claimed it had, plus a self-grill mode two workflows call.
     "grilling",
-    "seo",
     "setup-harness",
 }
-
-# A locked body cannot carry an invocation guard without drifting from
-# upstream, so one that must never fire on its own is not installed as a skill
-# at all. The `seo` orchestrator reads these from their paths instead.
-UNLINKED_SKILLS = sorted(
-    path.name for path in SKILLS.iterdir()
-    if path.is_dir() and path.name.startswith("seo-")
-)
 
 # Workflows are commands, never skills: a client cannot select one by matching
 # a description, so the invariant holds by construction rather than by prose.
@@ -59,7 +50,6 @@ INGESTING_COMMANDS = {
     "address-review",
     "ask",
     "create-ticket",
-    "design",
     "feedback",
     "land",
     "proto",
@@ -73,7 +63,7 @@ INGESTING_COMMANDS = {
 # Ponytail replaced a SessionStart hook that applied to every session with an
 # explicit load in each command that writes code. Nothing else enforces it, so
 # dropping the line would silently turn lazy mode off everywhere.
-PONYTAIL_COMMANDS = {"address-review", "design", "feedback", "proto", "yolo"}
+PONYTAIL_COMMANDS = {"address-review", "feedback", "proto", "yolo"}
 
 
 # Mirrors computeSkillFolderHash in the skills CLI, which is what writes
@@ -240,9 +230,6 @@ class HarnessTests(unittest.TestCase):
         # code-review exclusion had: excluded from a fresh HOME, live here.
         for name in names:
             link = ROOT / ".claude" / "skills" / name
-            if name in UNLINKED_SKILLS:
-                self.assertFalse(link.is_symlink() or link.exists(), name)
-                continue
             self.assertTrue(link.is_symlink(), name)
             self.assertEqual(os.readlink(link), f"../../.agents/skills/{name}")
 
@@ -262,35 +249,10 @@ class HarnessTests(unittest.TestCase):
                 name,
             )
 
-        # The unguardable ones are controlled by never linking them instead.
-        installer = (ROOT / "harness" / "install.sh").read_text()
-        predicate = 'is_unlinked_skill() {\n    [[ "$1" == seo-* ]]'
-        self.assertIn(predicate, installer)
-        # locked-skills.sh links on add and unlinks on remove, so it has to
-        # agree with the installer or a fresh HOME and this repository disagree.
-        self.assertIn(
-            predicate.replace("is_unlinked_skill", "is_unlinked"),
-            LOCKED_SKILLS.read_text(),
-        )
-        for name in UNLINKED_SKILLS:
-            self.assertTrue((SKILLS / name / "SKILL.md").is_file(), name)
-            self.assertNotIn(name, LOCAL_SKILLS)
-
         for name, entry in lock.items():
             body = SKILLS / name
             self.assertTrue(body.is_dir(), name)
             self.assertEqual(folder_hash(body), entry["computedHash"], name)
-
-        referenced_scripts = set()
-        for name in lock:
-            referenced_scripts.update(
-                re.findall(
-                    r"claude-seo run ([A-Za-z0-9_.-]+)",
-                    (SKILLS / name / "SKILL.md").read_text(),
-                )
-            )
-        for script in referenced_scripts:
-            self.assertTrue((SKILLS / "seo" / "scripts" / script).is_file(), script)
 
     def test_sources_exclude_generated_and_secret_state(self) -> None:
         forbidden = {
@@ -499,23 +461,18 @@ class HarnessTests(unittest.TestCase):
             self.assertIn("demo", locked())
             self.assertNotEqual(run("add", "owner/repo", "demo", check=False).returncode, 0)
 
-            run("add", "owner/repo", "seo-demo")
-            self.assertTrue((skills / "seo-demo" / "SKILL.md").is_file())
-            self.assertFalse((claude / "seo-demo").is_symlink())
-
-            stale_link = claude / "seo-stale"
-            stale_link.symlink_to("../../.agents/skills/seo-stale")
-            self.assertNotEqual(run("add", "owner/repo", "seo-stale", check=False).returncode, 0)
+            stale_link = claude / "stale"
+            stale_link.symlink_to("../../.agents/skills/stale")
+            self.assertNotEqual(run("add", "owner/repo", "stale", check=False).returncode, 0)
             self.assertTrue(stale_link.is_symlink())
-            self.assertFalse((skills / "seo-stale").exists())
-            self.assertNotIn("seo-stale", locked())
+            self.assertFalse((skills / "stale").exists())
+            self.assertNotIn("stale", locked())
 
             run("update")
             self.assertEqual(
                 calls.read_text().splitlines(),
                 [
                     "skills@1 add owner/repo --skill demo --agent universal -y",
-                    "skills@1 add owner/repo --skill seo-demo --agent universal -y",
                     "skills@1 update --project --yes",
                 ],
             )
@@ -556,7 +513,6 @@ class HarnessTests(unittest.TestCase):
             del lock["skills"]["unsafe-body"]
             (root / "skills-lock.json").write_text(json.dumps(lock, indent=2) + "\n")
 
-            run("remove", "seo-demo")
             self.assertNotEqual(run("remove", "../outside", check=False).returncode, 0)
 
     def test_installer_functions_parse_under_system_bash(self) -> None:
@@ -736,9 +692,6 @@ class HarnessTests(unittest.TestCase):
             self.assertIn('theme = "keep-me-too"', codex)
             self.assertIn('status_line = "not-ours"', codex)
             self.assertEqual(codex.count("[tui]"), 1)
-            for name in ["seo"] + UNLINKED_SKILLS:
-                self.assertFalse((home / ".agents" / "skills" / name).exists(), name)
-                self.assertFalse((home / ".claude" / "skills" / name).exists(), name)
             self.assertFalse((home / ".local" / "bin" / "claude-seo").exists())
             backups = list((home / ".dotfiles-backups" / "harness").iterdir())
             self.assertEqual(len(backups), 1)
@@ -756,28 +709,6 @@ class HarnessTests(unittest.TestCase):
                 1,
             )
             self.assertEqual(zshrc.read_text(), rc)
-
-            subprocess.run(
-                command + ["--with-seo"], env=environment, check=True, capture_output=True
-            )
-            self.assertTrue((home / ".claude" / "skills" / "seo").is_symlink())
-            # The locked role bodies stay unlinked in every group setting.
-            for name in UNLINKED_SKILLS:
-                self.assertFalse((home / ".claude" / "skills" / name).exists(), name)
-            self.assertEqual(
-                os.path.realpath(home / ".local" / "bin" / "claude-seo"),
-                str(SKILLS / "seo" / "bin" / "claude-seo"),
-            )
-
-            # The choice is remembered, so a later flagless run keeps the group.
-            subprocess.run(command, env=environment, check=True, capture_output=True)
-            self.assertTrue((home / ".claude" / "skills" / "seo").is_symlink())
-
-            subprocess.run(
-                command + ["--without-seo"], env=environment, check=True, capture_output=True
-            )
-            for name in ["seo"] + UNLINKED_SKILLS:
-                self.assertFalse((home / ".claude" / "skills" / name).exists(), name)
 
     def test_no_backup_deletes_instead_of_archiving(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_home:
@@ -926,13 +857,6 @@ class HarnessTests(unittest.TestCase):
                 "No file writes",
             ),
             "spec": ("spec-template", "Ask once", "Do not create tickets"),
-            "design": (
-                "DESIGN.md",
-                "Import what exists, never overwrite it",
-                "Explore by rendering, not by describing",
-                "One gate",
-                "never open a pull request",
-            ),
             "create-ticket": (
                 "vertical-slice-rules",
                 "sub-issue",
@@ -1023,8 +947,6 @@ class HarnessTests(unittest.TestCase):
                 "Reviewer A",
                 "Reviewer B",
                 "Never three",
-                "design-taste-frontend",
-                "frontend-design",
             ),
             "evidence": (
                 "Kill query first",
@@ -1034,7 +956,6 @@ class HarnessTests(unittest.TestCase):
                 "Version history",
             ),
             "grilling": ("Mode: interactive", "Mode: self-grill", "load-bearing"),
-            "seo": ("../seo-technical/", "roles/performance", "claude-seo setup"),
         }
         for name, terms in skills.items():
             body = (SKILLS / name / "SKILL.md").read_text()
@@ -1048,78 +969,16 @@ class HarnessTests(unittest.TestCase):
         for body in (policy, readme):
             self.assertIn(architecture_rule, body)
 
-        # A locked body carries no invocation guard, so the only thing keeping
-        # the design bodies off each other's surfaces is prose. Prose nothing
-        # asserts is prose that can be deleted without a test noticing. Each
-        # clause below is one body's jurisdiction, and dropping any one of them
-        # leaves two bodies deciding the same question.
-        design_boundary = (
-            "`ponytail` decides scope everywhere and is never overruled",
-            "`design-taste-frontend` decides visual direction on a landing-page, portfolio, or redesign brief.",
-            "`frontend-design` decides visual direction on every other UI surface, application UI included.",
-            "Exactly one body decides a given surface.",
-        )
-        for clause in design_boundary:
-            self.assertIn(clause, policy, clause)
-        self.assertIn("not an oracle-ladder rung", policy)
+        # No frontend design body is installed any more, so `ponytail` is the
+        # only thing holding scope on a UI surface. Prose nothing asserts is
+        # prose that can be deleted without a test noticing.
+        self.assertIn("`ponytail` also decides a UI surface.", policy)
+        self.assertIn("No frontend design body is installed", policy)
+        for name in ("design-taste-frontend", "frontend-design", "DESIGN.md", "/design"):
+            self.assertNotIn(name, policy, name)
+            for command in COMMAND_NAMES:
+                self.assertNotIn(name, (COMMANDS / f"{command}.md").read_text(), f"{command}: {name}")
 
-        design_bullets = (
-            "- `design-taste-frontend` only on a landing-page, portfolio, or redesign brief",
-            "- `frontend-design` on any other UI brief",
-        )
-        for name in PONYTAIL_COMMANDS:
-            body = (COMMANDS / f"{name}.md").read_text()
-            for bullet in design_bullets:
-                self.assertIn(bullet, body, f"{name}: {bullet}")
-
-        # DESIGN.md earns its keep by being read, and the only thing that makes
-        # the conformance passes read it is POLICY naming it a documented
-        # repository standard. Drop that sentence and /design still writes a
-        # file, but nothing downstream ever opens it.
-        self.assertIn(
-            "A project's `DESIGN.md` is a documented repository standard",
-            policy,
-        )
-        # Precedence, both halves. Without the first, a design body could read
-        # the file as permission to stop deciding; without the second, a
-        # marketing page off the product palette reads as drift rather than as
-        # the deliberate choice the landing-page body is allowed to make.
-        self.assertIn("It supplies the system; the deciding body still decides within it.", policy)
-        self.assertIn("may depart from the system on the landing-page surface it owns", policy)
-        # The handoff has two halves and only one of them lives in design.md.
-        # Without these, /yolo could stop resolving a design contract or stop
-        # reusing its branch, and every other assertion here would still pass
-        # while the workflow dead-ended exactly where it did before.
-        yolo = (COMMANDS / "yolo.md").read_text()
-        self.assertIn("Native plan mode produces one, and so does `/design`", yolo)
-        self.assertIn("For a `/proto` ledger or a `/design` artifact, reuse its existing branch", yolo)
-
-        # Assert the operative clause, not the bare filename: any stray
-        # mention would satisfy a substring check for "DESIGN.md".
-        self.assertIn(
-            "Read `DESIGN.md` at the project root when one exists",
-            (COMMANDS / "proto.md").read_text(),
-        )
-        self.assertIn(
-            "read `DESIGN.md` at the project root when one exists and build from its tokens",
-            (COMMANDS / "yolo.md").read_text(),
-        )
-
-        # The pin is a rung, not a preference: `lint` gates the gate, so an
-        # unpinned bump turns a green branch red on an upstream release.
-        design = (COMMANDS / "design.md").read_text()
-        # Count equality, not a blocklist: a third invocation added later
-        # without the pin fails here, which a "not @latest" check would miss.
-        self.assertEqual(
-            design.count("@google/design.md"),
-            design.count("@google/design.md@0.4.0"),
-        )
-        for invocation in ("lint DESIGN.md", "export DESIGN.md"):
-            self.assertIn(f"npx -y @google/design.md@0.4.0 {invocation}", design)
-
-        # A ticket-scoped mockup is /proto's loop. Routing it to /design would
-        # duplicate a workflow that already stops for the human every round.
-        self.assertIn('| "define the design system", "what are our colours and fonts", "pick the palette and type scale" | `/design` |', policy)
         self.assertIn('| "mock up this ticket\'s frontend", a mockup for one ticket or spec | `/proto` |', policy)
 
         for name in COMMAND_NAMES:

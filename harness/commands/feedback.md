@@ -51,8 +51,6 @@ Never merge the pull request or remove its worktree. Never ask for review consen
 ## Skills this loads
 
 - `ponytail`
-- `design-taste-frontend` only on a landing-page, portfolio, or redesign brief
-- `frontend-design` on any other UI brief
 - `adversarial-review`
 - `diagnosing-bugs` for a failure without an obvious local cause
 - `resolving-merge-conflicts` only when the worktree is conflicted

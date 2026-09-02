@@ -42,10 +42,6 @@ is_locked() {
     node -e 'const fs=require("fs");const [p,n]=process.argv.slice(1);const d=JSON.parse(fs.readFileSync(p,"utf8"));process.exit(Object.prototype.hasOwnProperty.call(d.skills,n)?0:1)' "$LOCK_FILE" "$1"
 }
 
-is_unlinked() {
-    [[ "$1" == seo-* ]]
-}
-
 review_paths() {
     if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         printf '\nLocked-skill changes:\n'
@@ -67,10 +63,8 @@ add_skill() {
     (cd "$ROOT" && npx skills@1 add "$source" --skill "$name" --agent universal -y)
     [[ -f "$SKILLS_DIR/$name/SKILL.md" ]] || die "skills.sh did not install $name."
     is_locked "$name" || die "skills.sh did not lock $name."
-    if ! is_unlinked "$name"; then
-        mkdir -p "$CLAUDE_DIR"
-        ln -s "../../.agents/skills/$name" "$link"
-    fi
+    mkdir -p "$CLAUDE_DIR"
+    ln -s "../../.agents/skills/$name" "$link"
     review_paths
 }
 
