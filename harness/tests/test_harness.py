@@ -969,15 +969,30 @@ class HarnessTests(unittest.TestCase):
         for body in (policy, readme):
             self.assertIn(architecture_rule, body)
 
-        # No frontend design body is installed any more, so `ponytail` is the
-        # only thing holding scope on a UI surface. Prose nothing asserts is
-        # prose that can be deleted without a test noticing.
-        self.assertIn("`ponytail` also decides a UI surface.", policy)
-        self.assertIn("No frontend design body is installed", policy)
+        # `ponytail` holds scope on a UI surface by default, and the one
+        # installed frontend design body is the named exception to it. Prose
+        # nothing asserts is prose that can be deleted without a test noticing.
+        self.assertIn("`ponytail` decides a UI surface by default:", policy)
+        # Every clause that bounds it is asserted, because the body is
+        # description-matchable like any locked body and scope is the only
+        # thing holding it. Prose nothing asserts can be deleted silently.
+        for clause in (
+            "One frontend design body is installed, `design-taste-frontend`, and it is the exception rather than the default.",
+            "It covers landing pages, portfolios, and redesigns, and it decides nothing else: dashboards, data tables, and multi-step product UI stay with `ponytail`.",
+            "`/proto` and `/yolo` build from that layer whether or not this body is loaded.",
+        ):
+            self.assertIn(clause, policy)
+
+        # Nothing loads it implicitly. A command or a local skill that named it
+        # would pull it into every run of that workflow, which is the one
+        # entry path scope alone cannot close.
+        bodies = {f"commands/{name}.md": (COMMANDS / f"{name}.md") for name in COMMAND_NAMES}
+        bodies.update({f"skills/{name}": (SKILLS / name / "SKILL.md") for name in LOCAL_SKILLS})
         for name in ("design-taste-frontend", "frontend-design", "DESIGN.md", "/design"):
+            for label, path in bodies.items():
+                self.assertNotIn(name, path.read_text(), f"{label}: {name}")
+        for name in ("frontend-design", "DESIGN.md", "/design"):
             self.assertNotIn(name, policy, name)
-            for command in COMMAND_NAMES:
-                self.assertNotIn(name, (COMMANDS / f"{command}.md").read_text(), f"{command}: {name}")
 
         self.assertIn('| "mock up this ticket\'s frontend", a mockup for one ticket or spec | `/proto` |', policy)
 
