@@ -121,6 +121,22 @@ process.stdout.write(digest.digest("hex"));
 """
 
 
+def codex_status_items() -> list[str]:
+    """The Codex status line item ids, read from the file that declares them.
+
+    Both the installer check and the reconciled-config check compare against
+    this rather than against a literal copy. A literal is what went stale when
+    the combined `model-with-reasoning` split into `model` and `reasoning`:
+    one assertion started failing and its sibling kept passing on the comment
+    that explains the id's absence.
+    """
+    block = re.search(
+        r"(?m)^ITEMS=\(\n(.*?)^\)", (STATUSLINE / "codex.sh").read_text(), re.S
+    )
+    assert block is not None, "codex.sh no longer declares an ITEMS array"
+    return block.group(1).split()
+
+
 def folder_hash(path: Path) -> str:
     try:
         result = subprocess.run(
@@ -284,10 +300,18 @@ class HarnessTests(unittest.TestCase):
             "browsers",
             "screenshots",
         }
-        for path in ROOT.rglob("*"):
-            if ".git" in path.parts:
-                continue
-            self.assertFalse(forbidden & set(path.relative_to(ROOT).parts), path)
+        # What is committed, not what the working tree happens to hold. Walking
+        # the tree also saw ignored state, including the __pycache__ that
+        # importing this very module creates, so it failed on every second run.
+        # The .gitignore assertions below are what keep that state out.
+        tracked = subprocess.run(
+            ["git", "-C", str(ROOT), "ls-files", "-z"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.split("\0")
+        for name in filter(None, tracked):
+            self.assertFalse(forbidden & set(Path(name).parts), name)
 
         ignored = (ROOT / ".gitignore").read_text()
         for pattern in (
@@ -341,10 +365,14 @@ class HarnessTests(unittest.TestCase):
         for path in STATUSLINE.glob("*.sh"):
             self.assertTrue(os.access(path, os.X_OK), path)
 
-        # The item ids belong to the provider's own file, not to the installer.
+        # The item ids belong to the provider's own file, not to the installer,
+        # which only calls it. Assert that against the ids codex.sh actually
+        # declares, so renaming one cannot leave this passing on a stale name.
         installer = (ROOT / "harness" / "install.sh").read_text()
-        self.assertNotIn("model-with-reasoning", installer)
-        self.assertIn("model-with-reasoning", (STATUSLINE / "codex.sh").read_text())
+        items = codex_status_items()
+        self.assertTrue(items)
+        for item in items:
+            self.assertNotIn(item, installer, item)
         self.assertIn('"$HARNESS_DIR/statusline/codex.sh"', installer)
 
     def test_codex_statusline_reconciler_is_idempotent(self) -> None:
@@ -698,11 +726,8 @@ class HarnessTests(unittest.TestCase):
                 {"type": "command", "command": 'bash "$HOME/.claude/statusline.sh"'},
             )
             codex = codex_config.read_text()
-            self.assertIn(
-                'status_line = ["model-with-reasoning", "context-used", '
-                '"current-dir", "git-branch", "five-hour-limit", "weekly-limit"]',
-                codex,
-            )
+            items = ", ".join(f'"{item}"' for item in codex_status_items())
+            self.assertIn(f"status_line = [{items}]", codex)
             self.assertIn("status_line_use_colors = true\n", codex)
             self.assertNotIn('"stale"', codex)
             self.assertNotIn("status_line_use_colors = false", codex)
