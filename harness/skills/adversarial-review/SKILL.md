@@ -57,6 +57,15 @@ section-number eyebrows (9.F), and more `uppercase tracking` micro-labels than
 14 pre-flight that restates those four as boxes, is a lens here and never a
 ladder rung, so report what it catches as findings rather than as a gate.
 
+On any other UI diff, add the `frontend-design` lens instead, since that is
+the body that governed it: a named concrete subject rather than a generic
+one, a palette of four to six values and at least two type roles actually
+derived from it, one signature element rather than boldness spread evenly,
+and none of the three defaults it calls out (cream ground with serif display
+and terracotta accent, near-black with a single acid accent, broadsheet
+hairline rules at zero radius) chosen on an axis the brief left free. Nothing
+here greps, so all of it is judgment reported as findings.
+
 ## Reviewer output
 
 One line per finding:

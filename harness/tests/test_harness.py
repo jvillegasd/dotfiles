@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import json
 import os
@@ -76,13 +75,68 @@ INGESTING_COMMANDS = {
 PONYTAIL_COMMANDS = {"address-review", "feedback", "proto", "yolo"}
 
 
+# Mirrors computeSkillFolderHash in the skills CLI, which is what writes
+# computedHash into skills-lock.json. The algorithm is sha256 over each file's
+# relative path then its bytes, and the only subtle part is the ordering: the
+# CLI sorts with JavaScript's localeCompare, and ICU collation is not Python's
+# casefold order. The two agree until a skill ships sibling filenames that
+# differ only by punctuation, as test_core.py does against
+# test_core_data_quality.py: ICU treats the "." and the "_" as equivalent at
+# the primary level and orders that pair the other way round, after which
+# every later byte lands in a different place. No locked body ships such a
+# pair today, which is exactly why this was wrong for so long without
+# failing. Reimplementing ICU here would be the same bug with more
+# steps, so the ordering comes from the same engine the CLI used, including
+# its bare localeCompare: pinning a collator would agree with the lock only on
+# machines whose default locale happened to match the one that wrote it, which
+# trades a rare mismatch for a systematic one. node is already required to
+# install a locked skill at all. The .git and node_modules pruning and the
+# separator normalization are the CLI's, not ours; dropping either makes this
+# disagree with the lock on exactly the bodies that need it most.
+_FOLDER_HASH_JS = """
+const fs = require("fs"), path = require("path"), { createHash } = require("crypto");
+// A node built --without-intl degrades localeCompare to code-unit order, which
+// disagrees with the lock. Fail with that sentence instead of a hash mismatch.
+if (!process.versions.icu) throw new Error("node without ICU cannot reproduce the lock's collation");
+const root = process.argv[1], files = [];
+(function walk(dir) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === ".git" || entry.name === "node_modules") continue;
+      walk(full);
+    } else if (entry.isFile()) {
+      files.push(path.relative(root, full).split("\\\\").join("/"));
+    }
+  }
+})(root);
+files.sort((a, b) => a.localeCompare(b));
+const digest = createHash("sha256");
+for (const file of files) {
+  digest.update(file);
+  digest.update(fs.readFileSync(path.join(root, ...file.split("/"))));
+}
+process.stdout.write(digest.digest("hex"));
+"""
+
+
 def folder_hash(path: Path) -> str:
-    digest = hashlib.sha256()
-    files = (item for item in path.rglob("*") if item.is_file())
-    for file in sorted(files, key=lambda item: item.relative_to(path).as_posix().casefold()):
-        digest.update(file.relative_to(path).as_posix().encode())
-        digest.update(file.read_bytes())
-    return digest.hexdigest()
+    try:
+        result = subprocess.run(
+            ["node", "-e", _FOLDER_HASH_JS, str(path)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except FileNotFoundError as error:  # pragma: no cover - environment guard
+        raise AssertionError(
+            "node is required to verify locked-skill hashes, because the lock's "
+            "computedHash is written by the skills CLI under JavaScript collation."
+        ) from error
+    except subprocess.CalledProcessError as error:
+        # Without this the drift test reports a node crash as a hash mismatch.
+        raise AssertionError(f"hashing {path} failed: {error.stderr.strip()}") from error
+    return result.stdout.strip()
 
 
 def load_module(name: str, path: Path):
@@ -193,7 +247,14 @@ class HarnessTests(unittest.TestCase):
 
         # The unguardable ones are controlled by never linking them instead.
         installer = (ROOT / "harness" / "install.sh").read_text()
-        self.assertIn('is_unlinked_skill() {\n    [[ "$1" == seo-* ]]', installer)
+        predicate = 'is_unlinked_skill() {\n    [[ "$1" == seo-* ]]'
+        self.assertIn(predicate, installer)
+        # locked-skills.sh links on add and unlinks on remove, so it has to
+        # agree with the installer or a fresh HOME and this repository disagree.
+        self.assertIn(
+            predicate.replace("is_unlinked_skill", "is_unlinked"),
+            LOCKED_SKILLS.read_text(),
+        )
         for name in UNLINKED_SKILLS:
             self.assertTrue((SKILLS / name / "SKILL.md").is_file(), name)
             self.assertNotIn(name, LOCAL_SKILLS)
@@ -925,6 +986,7 @@ class HarnessTests(unittest.TestCase):
                 "Reviewer B",
                 "Never three",
                 "design-taste-frontend",
+                "frontend-design",
             ),
             "evidence": (
                 "Kill query first",
@@ -948,18 +1010,29 @@ class HarnessTests(unittest.TestCase):
         for body in (policy, readme):
             self.assertIn(architecture_rule, body)
 
-        # A locked body carries no invocation guard, so the boundary that keeps
-        # taste off ponytail's surface is prose. Prose nothing asserts is prose
-        # that can be deleted without a test noticing.
-        taste_boundary = "`ponytail` keeps everything else, including dashboards, data tables, multi-step forms, and every non-UI change"
-        self.assertIn(taste_boundary, policy)
+        # A locked body carries no invocation guard, so the only thing keeping
+        # the design bodies off each other's surfaces is prose. Prose nothing
+        # asserts is prose that can be deleted without a test noticing. Each
+        # clause below is one body's jurisdiction, and dropping any one of them
+        # leaves two bodies deciding the same question.
+        design_boundary = (
+            "`ponytail` decides scope everywhere and is never overruled",
+            "`design-taste-frontend` decides visual direction on a landing-page, portfolio, or redesign brief.",
+            "`frontend-design` decides visual direction on every other UI surface, application UI included.",
+            "Exactly one body decides a given surface.",
+        )
+        for clause in design_boundary:
+            self.assertIn(clause, policy, clause)
         self.assertIn("not an oracle-ladder rung", policy)
+
+        design_bullets = (
+            "- `design-taste-frontend` only on a landing-page, portfolio, or redesign brief",
+            "- `frontend-design` on any other UI brief",
+        )
         for name in PONYTAIL_COMMANDS:
-            self.assertIn(
-                "- `design-taste-frontend` only on a landing-page, portfolio, or redesign brief",
-                (COMMANDS / f"{name}.md").read_text(),
-                name,
-            )
+            body = (COMMANDS / f"{name}.md").read_text()
+            for bullet in design_bullets:
+                self.assertIn(bullet, body, f"{name}: {bullet}")
 
         for name in COMMAND_NAMES:
             self.assertIn(f"`/{name}`", policy, name)

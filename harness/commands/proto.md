@@ -46,4 +46,5 @@ Never push, never open a pull request, never merge from here. If the human asks 
 
 - `ponytail`
 - `design-taste-frontend` only on a landing-page, portfolio, or redesign brief
+- `frontend-design` on any other UI brief
 - `adversarial-review`, Reviewer B only, and only for a slice touching data, auth, concurrency, migration, or a public contract
