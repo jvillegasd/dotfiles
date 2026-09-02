@@ -225,7 +225,7 @@ Local skills are `adversarial-review`, `evidence`, `grilling`, and `setup-harnes
 
 `/research` and `/proto` replace two locked bodies that were workflows wearing a skill's clothes: they could fire on description matching, and neither produced the artifacts `POLICY.md` now distinguishes. A `/research` finding ledger remains planning input until a planning route produces a complete contract. Publication confirmation alone does not make a research ticket implementation-ready; agreed behavior, acceptance criteria, and verification or test seams are also required. A finalized `/proto` requirements ledger is an implementation contract. As commands they are typed or they do not run, and each now emits the artifact the policy promised.
 
-Locked Matt Pocock skills provide domain/module vocabulary, architecture surveys through `improve-codebase-architecture`, TDD, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode. Locked `Leonxlnx/taste-skill` provides `design-taste-frontend`, the one frontend design body, scoped to landing pages, portfolios, and redesigns. No command loads it, so it reaches a session only when a human names it, and the acceptance suite asserts that absence.
+Locked Matt Pocock skills provide domain/module vocabulary, architecture surveys through `improve-codebase-architecture`, TDD, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode. Locked `Leonxlnx/taste-skill` provides `design-taste-frontend`, the one frontend design body, scoped to landing pages, portfolios, and redesigns. Like every locked body it is description-matchable, which is why the control on it is scope rather than a guard: no command or local skill loads it, so it never enters a workflow implicitly, and `POLICY.md` keeps the project's existing styling layer winning inside `/proto` and `/yolo` regardless. The acceptance suite asserts that no command and no local skill names it.
 
 `improve-codebase-architecture` produces planning input, never a change contract: keep its report and grilling read-only, do not edit `CONTEXT.md` or ADRs inline, and route a selected candidate through native plan mode, `/spec`, or `/proto` before changing files.
 
@@ -233,7 +233,7 @@ Deliberately removed: `to-spec` and `to-tickets`, whose templates now live inlin
 
 ## Invocation guards
 
-`POLICY.md` opens with the commands-and-skills split. Structure carries it for the workflows. For the five local skills, the three per-client guards carry it, and the acceptance suite asserts the full matrix. For a locked body, prose is the only control, which is why a body that must never fire on its own is not installed at all.
+`POLICY.md` opens with the commands-and-skills split. Structure carries it for the workflows. For the four local skills, the three per-client guards carry it, and the acceptance suite asserts the full matrix. For a locked body, prose is the only control, which is why a body that must never fire on its own is not installed at all.
 
 ## GitHub lifecycle
 

@@ -973,16 +973,24 @@ class HarnessTests(unittest.TestCase):
         # installed frontend design body is the named exception to it. Prose
         # nothing asserts is prose that can be deleted without a test noticing.
         self.assertIn("`ponytail` decides a UI surface by default:", policy)
-        self.assertIn(
+        # Every clause that bounds it is asserted, because the body is
+        # description-matchable like any locked body and scope is the only
+        # thing holding it. Prose nothing asserts can be deleted silently.
+        for clause in (
             "One frontend design body is installed, `design-taste-frontend`, and it is the exception rather than the default.",
-            policy,
-        )
-        # It is loaded by name from a conversation, never by a workflow: a
-        # command that names it would load it on every run of that workflow,
-        # which is the automatic firing the policy denies it.
+            "It covers landing pages, portfolios, and redesigns, and it decides nothing else: dashboards, data tables, and multi-step product UI stay with `ponytail`.",
+            "`/proto` and `/yolo` build from that layer whether or not this body is loaded.",
+        ):
+            self.assertIn(clause, policy)
+
+        # Nothing loads it implicitly. A command or a local skill that named it
+        # would pull it into every run of that workflow, which is the one
+        # entry path scope alone cannot close.
+        bodies = {f"commands/{name}.md": (COMMANDS / f"{name}.md") for name in COMMAND_NAMES}
+        bodies.update({f"skills/{name}": (SKILLS / name / "SKILL.md") for name in LOCAL_SKILLS})
         for name in ("design-taste-frontend", "frontend-design", "DESIGN.md", "/design"):
-            for command in COMMAND_NAMES:
-                self.assertNotIn(name, (COMMANDS / f"{command}.md").read_text(), f"{command}: {name}")
+            for label, path in bodies.items():
+                self.assertNotIn(name, path.read_text(), f"{label}: {name}")
         for name in ("frontend-design", "DESIGN.md", "/design"):
             self.assertNotIn(name, policy, name)
 
