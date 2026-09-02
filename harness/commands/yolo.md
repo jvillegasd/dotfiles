@@ -16,14 +16,14 @@ Load and follow the `ponytail` skill for every coding decision: the laziest solu
 Require clean credentials and resolve exactly one implementation contract:
 
 - An implementation-ready ticket published through `/spec` plus `/create-ticket`, with complete contract fields for `What to build`, `Acceptance criteria`, and `Test seams and checks`. A ticket from a confirmed `/research` batch also qualifies, but only after `/create-ticket`'s confirmation gate, publication, and completion of those fields; an underspecified research ticket returns to native planning or `/spec`.
-- An approved native plan from the conversation, for work too small to justify a published ticket. Retain an existing tracker binding when the plan began from a tracker item; otherwise it is trackerless.
+- An approved in-conversation contract, for work too small to justify a published ticket. Native plan mode produces one, and so does `/design`, whose approved `DESIGN.md` and generated token file are already committed on its own branch; deliver what that gate approved, since a design system is not a licence to restyle surfaces the session never showed. Retain an existing tracker binding when the work began from a tracker item; otherwise it is trackerless.
 - A finalized `/proto` requirements ledger. It retains the ticket binding when the prototype began from a ticket and is trackerless otherwise.
 
 If no contract resolves, enter native plan mode and let its approval re-enter `/yolo`; never implement a plain sentence directly.
 
 A `/research` finding ledger and a `/triage` plan brief are planning inputs, never implementation contracts. Carry their grounded evidence and verification concerns into native planning or `/spec` without re-investigating them, but do not implement until a plan is approved or a ticket is published.
 
-Contract source and tracker binding are independent. The source determines the durable conformance record; the binding determines only branch naming, closing references, and label transitions. A tracker-bound ticket-sourced contract can remain in the ticket. An approved native plan, finalized `/proto` ledger, or ticket-sourced but trackerless contract must be preserved in the pull request's inline `## Contract` whether tracker-bound or trackerless.
+Contract source and tracker binding are independent. The source determines the durable conformance record; the binding determines only branch naming, closing references, and label transitions. A tracker-bound ticket-sourced contract can remain in the ticket. An approved in-conversation contract, whether from native plan mode or `/design`, a finalized `/proto` ledger, or a ticket-sourced but trackerless contract must be preserved in the pull request's inline `## Contract` whether tracker-bound or trackerless.
 
 For an approved native plan, derive the branch slug from the plan. Keep ticket metadata and label transitions when it retained a tracker binding, and skip them only when trackerless. Escalate to `/spec` only if implementation reveals that the approved plan omitted a surface whose change requires a durable published contract.
 
@@ -35,7 +35,7 @@ With a ticket, escalate before changing code if any blocker is not closed by a m
 
 ## Worktree and claim
 
-1. Fetch the remote default branch. For a `/proto` ledger, reuse its existing branch and retained worktree rather than creating another. Inside Orca, use the runtime-provided Orca CLI guide; otherwise locate and switch to the existing Worktrunk branch.
+1. Fetch the remote default branch. For a `/proto` ledger or a `/design` artifact, reuse its existing branch and retained worktree rather than creating another; both committed their work there, and a fresh worktree from the default branch would not contain it. Inside Orca, use the runtime-provided Orca CLI guide; otherwise locate and switch to the existing Worktrunk branch.
 2. For any other contract, derive `<type>/<tracker-id>-<short-slug>` when tracker-bound, or `<type>/<short-slug>` otherwise.
 3. For any other contract inside Orca, use the runtime-provided Orca CLI guide and create an Orca worktree from the updated remote default branch. Never guess Orca commands.
 4. For any other contract outside Orca, run Worktrunk non-interactively: `wt switch --create <branch> --base origin/<default> --no-cd --format=json --yes`, then work only in the returned path.
@@ -43,7 +43,7 @@ With a ticket, escalate before changing code if any blocker is not closed by a m
 
 ## Delivery loop
 
-1. Treat the contract's test seams as pre-agreed. Use `tdd` one red/green vertical slice at a time and drive the oracle ladder in the policy to green, preferring the narrowest variant of each rung.
+1. Treat the contract's test seams as pre-agreed. Use `tdd` one red/green vertical slice at a time and drive the oracle ladder in the policy to green, preferring the narrowest variant of each rung. On a UI change, read `DESIGN.md` at the project root when one exists and build from its tokens; it is a documented repository standard, so the conformance pass in step 3 already checks the diff against it.
 
 2. Make the fewest coherent Conventional Commits; every commit stays green.
 
@@ -54,7 +54,7 @@ With a ticket, escalate before changing code if any blocker is not closed by a m
 
    Repair every finding and repeat both passes until each is clean.
 
-4. Push, then create or update a draft pull request with a Conventional Commit title. When tracker-bound, include the ticket's closing reference. When the contract came from an approved native plan or finalized `/proto` ledger, or when a ticket-sourced contract is trackerless, also include an inline `## Contract` section with the agreed behavior, acceptance criteria, and verification, whether tracker-bound or trackerless, so `/land` can reconstruct conformance later. Only a tracker-bound ticket-sourced contract may rely on the ticket alone. Every body also states what changed, why, and the checks run, plus three sections:
+4. Push, then create or update a draft pull request with a Conventional Commit title. When tracker-bound, include the ticket's closing reference. When the contract came from an approved in-conversation contract, native plan mode or `/design` alike, or a finalized `/proto` ledger, or when a ticket-sourced contract is trackerless, also include an inline `## Contract` section with the agreed behavior, acceptance criteria, and verification, whether tracker-bound or trackerless, so `/land` can reconstruct conformance later. Only a tracker-bound ticket-sourced contract may rely on the ticket alone. Every body also states what changed, why, and the checks run, plus three sections:
    - `Assumptions`: each decision made without asking, its rejected alternative, and the one fact that would flip it.
    - `Refuted evidence`: any claim the evidence contradicted and what changed as a result. Omit when no evidence was gathered.
    - `Rejected review findings`: each review finding not fixed, with its reason. Omit when there are none.
