@@ -979,6 +979,11 @@ class HarnessTests(unittest.TestCase):
                 "Verify conformance before merging, not after",
                 "Invoking it is the merge approval",
                 "only a clean worktree",
+                # A squash puts one new commit on the default branch rather
+                # than this branch's commits, so anything stacked on it is
+                # repaired before the branch it is based on is deleted.
+                "stacked on this branch",
+                "--force-with-lease",
             ),
         }
         self.assertEqual(set(commands), set(COMMAND_NAMES))
