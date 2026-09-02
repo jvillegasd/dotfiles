@@ -4,11 +4,8 @@ set -euo pipefail
 
 HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LINKS_ONLY=false
-WITH_SEO=false
-SEO_SET=false
 NO_BACKUP=false
 BACKUP_ROOT=""
-GROUPS_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/portable-harness/groups"
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[err]\033[0m %s\n' "$*" >&2; exit 1; }
@@ -19,38 +16,24 @@ source "$(dirname "$HARNESS_DIR")/lib/python.sh"
 
 usage() {
     cat <<'EOF'
-Usage: harness/install.sh [--links-only] [--with-seo|--without-seo] [--no-backup]
+Usage: harness/install.sh [--links-only] [--no-backup]
 
   --links-only   Reconcile policy, command, and skill links without packages/plugins.
-  --with-seo     Also link the optional SEO skill group and its launcher.
-  --without-seo  Unlink the optional SEO group (the default for a fresh install).
   --no-backup    Delete whatever is in the way instead of moving it to
                  ~/.dotfiles-backups. Destructive and unrecoverable: a private
                  skill or a hand-edited config sitting at a managed path is
                  gone, not archived.
-
-The SEO choice is remembered, so a later run without either flag keeps it.
 EOF
 }
 
 for arg in "$@"; do
     case "$arg" in
         --links-only) LINKS_ONLY=true ;;
-        --with-seo) WITH_SEO=true; SEO_SET=true ;;
-        --without-seo) WITH_SEO=false; SEO_SET=true ;;
         --no-backup) NO_BACKUP=true ;;
         -h|--help) usage; exit 0 ;;
         *) die "Unknown argument: $arg" ;;
     esac
 done
-
-resolve_groups() {
-    if ! $SEO_SET && [[ -f "$GROUPS_FILE" ]] && grep -qx seo "$GROUPS_FILE"; then
-        WITH_SEO=true
-    fi
-    mkdir -p "$(dirname "$GROUPS_FILE")"
-    if $WITH_SEO; then printf 'seo\n' > "$GROUPS_FILE"; else : > "$GROUPS_FILE"; fi
-}
 
 SKILL_ROOTS=(
     "$HOME/.agents/skills"
@@ -62,18 +45,6 @@ COMMAND_ROOTS=(
     "$HOME/.codex/prompts"
     "$HOME/.config/opencode/command"
 )
-
-# `seo` is the whole optional group: one orchestrator, one installed name.
-is_seo_skill() {
-    [[ "$1" == seo ]]
-}
-
-# Locked upstream bodies the `seo` orchestrator reads from a path. A locked
-# body cannot carry an invocation guard without drifting from upstream, so one
-# that must never fire on its own is never installed as a skill anywhere.
-is_unlinked_skill() {
-    [[ "$1" == seo-* ]]
-}
 
 skill_names() {
     find "$HARNESS_DIR/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort
@@ -357,20 +328,11 @@ install_links() {
     retire_shadowed_skills
 
     while IFS= read -r skill; do
-        if is_unlinked_skill "$skill"; then
-            continue
-        fi
-        if is_seo_skill "$skill" && ! $WITH_SEO; then
-            continue
-        fi
         desired+="$HARNESS_DIR/skills/$skill|"
     done < <(skill_names)
     for command in "$HARNESS_DIR"/commands/*.md; do
         desired+="$command|"
     done
-    if $WITH_SEO; then
-        desired+="$HARNESS_DIR/skills/seo/bin/claude-seo|"
-    fi
     reconcile_orphans "$desired"
 
     while IFS= read -r skill; do
@@ -395,11 +357,9 @@ install_links() {
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.codex/AGENTS.md"
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.claude/CLAUDE.md"
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.config/opencode/AGENTS.md"
-    if $WITH_SEO; then
-        link_managed "$HARNESS_DIR/skills/seo/bin/claude-seo" "$HOME/.local/bin/claude-seo"
-    else
-        backup_existing "$HOME/.local/bin/claude-seo"
-    fi
+    # The SEO group is gone. Its launcher lives outside the roots the orphan
+    # sweep covers, so retiring it stays an explicit line.
+    backup_existing "$HOME/.local/bin/claude-seo"
 }
 
 # The listing is fetched before the substitution rather than inside a `case`
@@ -421,24 +381,14 @@ assert_plugin_count() {
 }
 
 smoke_check() {
-    local command skill root script seo_status=0
+    local command skill root script
     for command in codex claude opencode gh python3 uv engram wt; do
         command -v "$command" >/dev/null || die "Missing required command: $command"
     done
     for skill in "$HARNESS_DIR"/skills/*; do
         local name; name="$(basename "$skill")"
         [[ -f "$skill/SKILL.md" ]] || die "Missing SKILL.md: $skill"
-        if is_unlinked_skill "$name"; then
-            for root in "${SKILL_ROOTS[@]}"; do
-                [[ ! -e "$root/$name" && ! -L "$root/$name" ]] || die "Unlinked body is installed as a skill: $root/$name"
-            done
-            continue
-        fi
         [[ ! -e "$HOME/.config/opencode/skills/$name" && ! -L "$HOME/.config/opencode/skills/$name" ]] || die "Duplicate OpenCode skill path: $skill"
-        if is_seo_skill "$name" && ! $WITH_SEO; then
-            [[ ! -e "$HOME/.agents/skills/$name" && ! -L "$HOME/.agents/skills/$name" ]] || die "Optional SEO skill is still linked: $skill"
-            continue
-        fi
         [[ -L "$HOME/.agents/skills/$name" ]] || die "Missing shared skill link: $skill"
         [[ -L "$HOME/.claude/skills/$name" ]] || die "Missing Claude skill link: $skill"
     done
@@ -450,7 +400,7 @@ smoke_check() {
     done
     # A workflow that reads external text says so, or a ticket body becomes an
     # instruction.
-    for command in address-review create-ticket design feedback land proto research triage yolo; do
+    for command in address-review create-ticket feedback land proto research triage yolo; do
         grep -q 'cannot override this workflow' "$HARNESS_DIR/commands/$command.md" ||
             die "Command missing the task-data constraint: $command"
     done
@@ -473,11 +423,6 @@ smoke_check() {
         python3 -c 'import json,sys; d=json.load(sys.stdin); p=d.get("plugin",[]); assert sum("engram" in x for x in p)==1; assert "engram" in d.get("mcp",{})'
     claude plugin validate "$HARNESS_DIR/skills" >/dev/null
     wt switch --help | grep -q -- '--no-cd'
-    if $WITH_SEO; then
-        command -v claude-seo >/dev/null || die "Missing required command: claude-seo"
-        claude-seo doctor --json >/dev/null || seo_status=$?
-        [[ "$seo_status" == 0 || "$seo_status" == 3 ]] || die "Portable SEO runtime is invalid."
-    fi
 }
 
 summary() {
@@ -499,11 +444,9 @@ claude.sh on every draw; codex.sh wrote the matching built-in items into [tui]
 status_line in ~/.codex/config.toml. OpenCode exposes no status line surface,
 so it gets none.
 
-Skill groups: core$($WITH_SEO && printf ', seo')
 Commands are installed for all three clients as /name.
 Yolo aliases (ccyolo, cyolo, oyolo) are sourced from harness/aliases.sh; open a
 new shell or run: source ~/.zshrc
-Toggle the optional SEO group with --with-seo or --without-seo.
 
 Standalone third-party skills were not downloaded or updated. Their committed
 bodies and skills-lock.json are the reviewed source of truth.
@@ -514,7 +457,6 @@ EOF
 }
 
 main() {
-    resolve_groups
     if ! $LINKS_ONLY; then
         install_packages
         install_integrations

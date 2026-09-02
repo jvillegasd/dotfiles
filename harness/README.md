@@ -36,10 +36,6 @@ flowchart TD
         proto --> protoledger["requirements ledger"]
         proto -.->|premise refuted: kill it, record why| proto
 
-        design_in["a project with no<br>design system"] --> design["/design<br>render directions, converge,<br>lint, export the tokens,<br>one gate like plan mode"]
-        design --> designsystem["DESIGN.md plus generated tokens"]
-        design -.->|premise refuted: kill it, record why| design
-
         else_in["everything else"] --> plan["native plan mode"]
         brief --> plan
         brief --> spec
@@ -48,12 +44,10 @@ flowchart TD
         grill -.-> spec
         grill -.-> plan
         grill -.-> proto
-        grill -.-> design
 
         ticket --> approval(["approved contract"])
         plan --> approval
         protoledger --> approval
-        designsystem --> approval
     end
 
     subgraph BUILD["build"]
@@ -88,9 +82,7 @@ Every command that ingests text written elsewhere, a ticket body, a review comme
 
 A locally authored skill still carries all three invocation guards: `policy.allow_implicit_invocation: false` in its `agents/openai.yaml` for Codex, plus `disable-model-invocation: true` and `metadata."opencode/autoinvoke": "false"` in its frontmatter for Claude Code and OpenCode. Only four skills are local now, so the guard matrix covers a much smaller surface than it did when it also had to hold the workflows.
 
-A locked body gets no guard. `agents/openai.yaml` is upstream content, not a harness sidecar, and `computedHash` covers the whole directory, so anything written inside a locked skill is clobbered by the next `skills update` without a drift warning and with the lockfile rewritten to record the loss as correct. The control that survives an update is not installing the skill: a locked body whose upstream description advertises trigger phrases it must not act on is kept out of every client's skill directory, and the code that needs it reads it from its path. The twelve `seo-*` bodies are the only ones, and `seo` reads them as `../seo-<role>/SKILL.md`.
-
-That exclusion now also applies inside this repository. A committed `.claude/skills/<name>` link is an installed skill wherever the repository is open, so an unlinked body does not get one, and the suite asserts its absence.
+A locked body gets no guard. `agents/openai.yaml` is upstream content, not a harness sidecar, and `computedHash` covers the whole directory, so anything written inside a locked skill is clobbered by the next `skills update` without a drift warning and with the lockfile rewritten to record the loss as correct. The control that survives an update is not installing the skill: a locked body whose upstream description advertises trigger phrases it must not act on is kept out of every client's skill directory. Every locked body carried today is installed under its own name, so nothing is currently excluded that way.
 
 ## Install
 
@@ -109,12 +101,6 @@ Anything in the way of a managed path is moved to a timestamped directory under 
 ```
 
 It is destructive and unrecoverable: a private skill or a hand-edited config sitting at a managed path is gone, not archived. Each removal is still logged, so the run says what it took. Reach for it when the archives are noise, for example a repeated development install, not on a machine whose `~/.claude` or `~/.agents` you have not already reconciled.
-
-The SEO group is optional and is not linked by default. Add or remove it with `--with-seo` / `--without-seo`; the choice is remembered, so a later flagless run keeps it.
-
-```sh
-./harness/install.sh --with-seo
-```
 
 Engram is core, not optional: the policy assumes memory survives a session. `install_engram` runs one `engram setup <agent>` per client, exactly as https://github.com/Gentleman-Programming/engram documents in `docs/AGENT-SETUP.md`, so both run modes reach it. Setup is idempotent, verified against engram 1.20.0 by running each agent's setup repeatedly in a throwaway `HOME` and checksumming the tree: every run exits 0, `[mcp_servers.engram]` stays single, and the tree is byte-identical from the second run on, the only delta being key and section reordering as the config is re-serialized.
 
@@ -144,15 +130,13 @@ uv python install 3.14 3.11
 
 Sourcing it is the one thing this installer reads from outside `harness/`. That is deliberate: the alternative was a second copy of the version list, which is exactly the drift the split exists to prevent.
 
-uv resolves a managed version through its own registry rather than through `PATH`, so `uv venv --managed-python --python 3.11` and `uv run --python 3.14` find these whatever pyenv or Homebrew have done to `python3`. That is also why `assert_pythons` asks `uv python find --managed-python` instead of testing `PATH`: a shadowing Homebrew `python3.11` would pass a `PATH` check while uv still had nothing to resolve. 3.11 is there because it is the version the SEO runtime pins, so its first run no longer stops to download an interpreter. `python-tk` is gone too, since uv's standalone builds already bundle tkinter.
+uv resolves a managed version through its own registry rather than through `PATH`, so `uv run --python 3.14` finds it whatever pyenv or Homebrew have done to `python3`. That is also why `assert_pythons` asks `uv python find --managed-python` instead of testing `PATH`: a shadowing Homebrew `python3.14` would pass a `PATH` check while uv still had nothing to resolve. 3.11 was provisioned alongside it only for the SEO runtime's pin and went with it. `python-tk` is gone too, since uv's standalone builds already bundle tkinter.
 
 `uv` therefore has to arrive before the interpreters do. On macOS it comes from `Brewfile`, on Linux from `linux.sh`'s own formula list, in both cases during the package step that runs before `install_pythons`.
 
 What this deliberately does not do is claim the name `python3`. Each version also lands as `~/.local/bin/python3.14` and `~/.local/bin/python3.11`, but that directory usually sits behind the pyenv shims on `PATH`, so bare `python3` keeps resolving wherever it already did. `uv python install --default` would take `python3` as well; it is experimental in uv 0.12, and taking over the interpreter every other project on the machine resolves is a bigger change than provisioning the harness needs. Run `uv python update-shell` by hand if you want uv's bin directory in front.
 
 Homebrew still installs a `python@` of its own as a dependency of other formulae. That copy is nobody's declared interpreter, and nothing here reads it on purpose.
-
-With the SEO group enabled it also links the portable `claude-seo` launcher. SEO Python dependencies and Chromium remain lazy and live only in the ignored per-user harness cache.
 
 ## Shell aliases
 
@@ -211,7 +195,7 @@ OpenCode has no file in `statusline/` at all. Its configuration schema at https:
 ./harness/locked-skills.sh check
 ```
 
-`add` refuses invalid GitHub sources and existing lock, body, command, or bookkeeping paths before it delegates to skills.sh. The existing `seo-*` role rule still wins, so those bodies never get a Claude bookkeeping link. `update` deliberately updates every locked body. `remove` accepts only a current lock entry and refuses unexpected body or Claude-link types. Every mutation prints the affected paths, while `check` runs Bash syntax, diff hygiene, and the harness acceptance suite.
+`add` refuses invalid GitHub sources and existing lock, body, command, or bookkeeping paths before it delegates to skills.sh. `update` deliberately updates every locked body. `remove` accepts only a current lock entry and refuses unexpected body or Claude-link types. Every mutation prints the affected paths, while `check` runs Bash syntax, diff hygiene, and the harness acceptance suite.
 
 The helper's `--help` is side-effect free. Do not probe the upstream update subcommand with `--help`: skills.sh currently treats that invocation as a full update.
 
@@ -233,27 +217,19 @@ The trade is deliberate. `/ponytail lite|ultra` switching, the statusline, subag
 
 ## Roster
 
-Commands are `/ask`, `/research`, `/triage`, `/spec`, `/create-ticket`, `/design`, `/proto`, `/yolo`, `/feedback`, `/address-review`, `/land`, and `/squash-land`.
-
-`/design` writes a project's `DESIGN.md` and exports its tokens, pinned to `@google/design.md@0.4.0`, whose format is published at https://github.com/google-labs-code/design.md under Apache-2.0. The pin matters because the tool is pre-1.0 and its format can churn: an unpinned bump changes what a session writes, mid-session, with no diff to review. It is not an oracle-ladder rung. `lint` runs once inside `/design` step 6 and gates that workflow's own approval, so an upstream release breaks a design session rather than reddening a branch. Two things about that linter are worth knowing before trusting it. It exits non-zero only on `broken-ref`, a token reference that resolves to nothing, which is verified against 0.4.0: a misordered section is a warning and a missing one is merely info, so both exit 0. A green lint therefore means no reference dangles, and says nothing about whether the document is complete or the design is good. And WCAG contrast is a warning rather than an error, verified against 0.4.0: a 1.13:1 pair reports `contrast-ratio` and still exits 0. `/design` therefore carries warnings to its approval gate rather than swallowing them, since the gate is where a human can accept a contrast decision deliberately.
+Commands are `/ask`, `/research`, `/triage`, `/spec`, `/create-ticket`, `/proto`, `/yolo`, `/feedback`, `/address-review`, `/land`, and `/squash-land`.
 
 `/squash-land` is `/land` for the case where the human deciding to merge is the one typing the command: it squash merges and then lands. It is the only workflow in this harness that merges, and typing its name is the approval, so it never asks twice. What it does not do is append a merge step to `/land`: the merge is irreversible, so both the mergeability gate and the conformance check move ahead of it, and a blocking mismatch stops the merge instead of being reported after it, which is the best `/land` can manage. It also deliberately avoids `gh pr merge --delete-branch`, whose post-merge local checkout fails on a repository whose default branch is checked out in another worktree, reporting an error after the merge has already succeeded.
 
-Local skills are `adversarial-review`, `evidence`, `grilling`, `seo`, and `setup-harness`. `setup-harness` stays a skill because it installs bundled lifecycle assets that only a skill directory can carry; its guards keep it from firing on its own. `grilling` is maintained locally, under the name the routing table already used, and carries the three guards plus a self-grill mode. It replaced the locked Matt Pocock body, whose design-tree rounds ask a whole frontier at once: that is the batching this protocol exists to prevent, and it carried no self-grill mode for `/yolo` and `/triage` to call. The trade is that this body has no lock entry, so it is reviewed the way any other file here is rather than diffed against an upstream.
+Local skills are `adversarial-review`, `evidence`, `grilling`, and `setup-harness`. `setup-harness` stays a skill because it installs bundled lifecycle assets that only a skill directory can carry; its guards keep it from firing on its own. `grilling` is maintained locally, under the name the routing table already used, and carries the three guards plus a self-grill mode. It replaced the locked Matt Pocock body, whose design-tree rounds ask a whole frontier at once: that is the batching this protocol exists to prevent, and it carried no self-grill mode for `/yolo` and `/triage` to call. The trade is that this body has no lock entry, so it is reviewed the way any other file here is rather than diffed against an upstream.
 
 `/research` and `/proto` replace two locked bodies that were workflows wearing a skill's clothes: they could fire on description matching, and neither produced the artifacts `POLICY.md` now distinguishes. A `/research` finding ledger remains planning input until a planning route produces a complete contract. Publication confirmation alone does not make a research ticket implementation-ready; agreed behavior, acceptance criteria, and verification or test seams are also required. A finalized `/proto` requirements ledger is an implementation contract. As commands they are typed or they do not run, and each now emits the artifact the policy promised.
 
-Locked Matt Pocock skills provide domain/module vocabulary, architecture surveys through `improve-codebase-architecture`, TDD, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode. Locked `AgriciDaniel/claude-seo` bodies provide the SEO roles, none of them installed. Locked `Leonxlnx/taste-skill` provides frontend design taste as `design-taste-frontend`, whose folder is `taste-skill` upstream but whose frontmatter name is what skills.sh keys the directory and the lock entry on. Two limitations belong here rather than there: its section 12 block library hardcodes a path that does not exist in this layout, so blocks are never authored, and nothing pins a version, because the lock entry carries no ref or tag and `computedHash` is the only drift signal an update surfaces. The other bodies in that repository are deliberately not installed.
-
-Locked `anthropics/skills` provides `frontend-design`, Apache-2.0, the general UI counterpart to a taste body whose own section 13 refuses dashboards, dense product UI, admin panels, data tables, and multi-step forms. It is 8 KB of prose with no scripts, no data, and no hardcoded paths, which is why it costs nothing to carry. `POLICY.md` carries the boundary among the three design bodies, which is what keeps exactly one of them deciding any given surface.
-
-Evaluated and declined, so the next pass does not re-derive them. `nextlevelbuilder/ui-ux-pro-max-skill` was locked and then removed, and it is the interesting one, because it looked like the obvious pick: MIT, and the only candidate carrying real application-UI data (192 palettes, 74 font pairings, twenty-two per-stack tables). What killed it was everything around the data. It is roughly 3.9 MB across seventy files, and `computedHash` covers the whole directory, so every update rehashes all of it. Its documented invocation path is `${CLAUDE_PLUGIN_ROOT}/.claude/skills/...`, which does not exist in this layout. Running its search script writes `__pycache__` inside the locked body, so the invocation needs `-B` or the first honest use breaks the acceptance suite. Its `--persist` flag writes a competing per-project design contract. It ships no licence file inside the skill directory, only MIT at the repository root. And its description claims every interface task while it cannot carry an invocation guard, so it has to be installed unlinked, which then breaks this installer for anyone who has that popular skill name in their own `~/.claude/skills`. Four `POLICY.md` corrections and a broken installer edge case, for a body with no caller until a design workflow exists to read its tables from a path. Reconsider it then, as something a workflow invokes, not as an installed skill.
-
-`Jakubantalik/transitions.dev` has no license file at all, so its motion recipes are all rights reserved; beui, ReUI, EasyUI, and Beautiful UI are component registries bound to React 19, Tailwind 4, and the shadcn registry, which makes them a project's dependency and never this repository's, and ReUI's free tier additionally needs an account and rate-limits requests, so it cannot back an unattended rung; Refero is a hosted beta MCP service with nothing to lock, usable per project at https://refero.design/mcp and never here; designmd.co sits behind bot protection and could not be read. Its community DESIGN.md corpus is available free and MIT-licensed at https://github.com/VoltAgent/awesome-design-md, useful as reference material and read upstream rather than vendored; the format `/design` actually writes is Google's, at https://github.com/google-labs-code/design.md, which is the one with a published schema and a linter.
+Locked Matt Pocock skills provide domain/module vocabulary, architecture surveys through `improve-codebase-architecture`, TDD, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode.
 
 `improve-codebase-architecture` produces planning input, never a change contract: keep its report and grilling read-only, do not edit `CONTEXT.md` or ADRs inline, and route a selected candidate through native plan mode, `/spec`, or `/proto` before changing files.
 
-Deliberately removed: `to-spec` and `to-tickets`, whose templates now live inline in `/spec` and `/create-ticket` rather than behind a wrapper that overrode most of what it loaded; `code-review`, whose second axis is now a spec-conformance pass `/yolo` runs itself while holding the contract; the `grill-me` and `review` command wrappers, retired earlier, which is a separate thing from the `grill-me` skill body `grilling` now carries; and twelve globally invocable SEO names.
+Deliberately removed: `to-spec` and `to-tickets`, whose templates now live inline in `/spec` and `/create-ticket` rather than behind a wrapper that overrode most of what it loaded; `code-review`, whose second axis is now a spec-conformance pass `/yolo` runs itself while holding the contract; the `grill-me` and `review` command wrappers, retired earlier, which is a separate thing from the `grill-me` skill body `grilling` now carries; the whole SEO group, twelve globally invocable names first and then the orchestrator and its locked roles, along with the `claude-seo` launcher and the 3.11 interpreter it pinned; and both frontend design bodies with the `/design` workflow and the `DESIGN.md` conformance rules that existed to serve them, leaving `ponytail` as the only body deciding a UI surface.
 
 ## Invocation guards
 
@@ -305,7 +281,7 @@ flowchart TD
 
 A blocker counts as satisfied only when the issue is closed *and* a merged pull request closed it, which is why `blocker_satisfied` walks `closedByPullRequestsReferences` rather than trusting the closed state. Closing an issue by hand therefore does not open the frontier behind it.
 
-Three contract routes converge on `/yolo`: `/spec` plus `/create-ticket` for a published ticket contract that is tracker-bound only when a tracker exists, an approved in-conversation contract from native plan mode or from `/design`'s gate, or `/proto` for a requirements ledger discovered by building. Contract source and tracker binding are independent: the source controls conformance, while the binding controls branch names, closing references, and label transitions. An in-conversation, `/proto`, or trackerless ticket contract is preserved in an inline `## Contract`; only a tracker-bound ticket-sourced contract can remain solely in the ticket.
+Three contract routes converge on `/yolo`: `/spec` plus `/create-ticket` for a published ticket contract that is tracker-bound only when a tracker exists, an approved in-conversation contract from native plan mode, or `/proto` for a requirements ledger discovered by building. Contract source and tracker binding are independent: the source controls conformance, while the binding controls branch names, closing references, and label transitions. An in-conversation, `/proto`, or trackerless ticket contract is preserved in an inline `## Contract`; only a tracker-bound ticket-sourced contract can remain solely in the ticket.
 
 `/land` is the local half of the same step: it resolves the pull request first, gates on the merge, prefers the inline contract for conformance, and falls back to the ticket when no inline contract exists. The ticket is optional, so trackerless work skips tracker transitions. A legacy trackerless pull request without either source reports that conformance cannot be reconstructed, verifies merge and default-branch health, and removes only a clean retained worktree.
 

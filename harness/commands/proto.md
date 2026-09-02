@@ -21,7 +21,7 @@ Load and follow the `ponytail` skill. Prototype code is still the laziest code t
 
 1. Establish a safe branch before editing, the same rule as `/yolo`: never the default branch, even for throwaway code. Derive `<type>/<tracker-id>-<short-slug>` when the input is bound to a ticket and `<type>/<short-slug>` for a plain description. Never fabricate a tracker ID. Create the worktree with Worktrunk (`wt switch --create <branch> --base origin/<default> --no-cd --format=json --yes`), or the runtime-provided Orca CLI guide inside Orca.
 2. Resolve the local rungs of the oracle ladder only: type check, lint, and the tests for the touched surface. Record them per the policy. The remote rungs do not exist in this workflow.
-3. Read `DESIGN.md` at the project root when one exists, and build every UI slice from its tokens rather than a fresh palette. That file is the project's design system; `/design` is what creates one when it is missing, and a prototype is not the place to invent a second.
+3. Build every UI slice from the project's existing styling layer rather than a fresh palette. A prototype is not the place to invent a second design system.
 4. Open the requirements ledger in the conversation: the initial requirements as understood, each marked assumed or confirmed.
 
 ## The loop
@@ -46,6 +46,4 @@ Never push, never open a pull request, never merge from here. If the human asks 
 ## Skills this loads
 
 - `ponytail`
-- `design-taste-frontend` only on a landing-page, portfolio, or redesign brief
-- `frontend-design` on any other UI brief
 - `adversarial-review`, Reviewer B only, and only for a slice touching data, auth, concurrency, migration, or a public contract

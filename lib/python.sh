@@ -13,12 +13,10 @@
 # consumes them and so is where a missing one has to fail loudly.
 
 # Newest first. Homebrew supplies none of these: uv resolves a managed version
-# through its own registry rather than through PATH, so
-# `uv venv --managed-python --python 3.11` and `uv run --python 3.14` find them
-# whatever pyenv or Homebrew have done to `python3`. 3.11 is the version the SEO
-# runtime pins, so provisioning it here means its first run does not stop to
-# download an interpreter.
-PYTHON_VERSIONS=(3.14 3.11)
+# through its own registry rather than through PATH, so `uv run --python 3.14`
+# finds them whatever pyenv or Homebrew have done to `python3`. 3.11 was here
+# only for the SEO runtime's pin and went with it.
+PYTHON_VERSIONS=(3.14)
 
 # Idempotent: an already-installed version is a no-op. Each version also lands
 # as ~/.local/bin/python3.<minor>, but nothing here claims the bare name
