@@ -55,11 +55,11 @@ harness/
 │   ├── setup-harness/          # config + GitHub lifecycle templates
 │   ├── grilling/               # the one interview protocol, interactive and self-grill
 │   └── adversarial-review|evidence/  # protocols the delivery commands load
-├── bench/measure.py            # session-population comparison for harness changes
-└── tests/test_harness.py       # supply-chain, lifecycle, and installer checks
+├── bench/                      # session-population comparison for harness changes, with its own README
+└── tests/                      # one file per subject, shared paths and readers in fixtures.py
 ```
 
-A locked directory is named after the upstream body's own frontmatter `name`, not after its repository or its path there, because `tests/test_harness.py` asserts the two match. `design-taste-frontend` comes from `Leonxlnx/taste-skill`, which is why the two names differ. That body also references a `skills/taste-skill/blocks/` library that upstream does not ship in the install, so those references resolve to nothing and cannot be fixed here: an edit inside a locked directory is clobbered by the next `skills update`.
+A locked directory is named after the upstream body's own frontmatter `name`, not after its repository or its path there, because `tests/test_locked_skills.py` asserts the two match. `design-taste-frontend` comes from `Leonxlnx/taste-skill`, which is why the two names differ. That body also references a `skills/taste-skill/blocks/` library that upstream does not ship in the install, so those references resolve to nothing and cannot be fixed here: an edit inside a locked directory is clobbered by the next `skills update`.
 
 Global mutable client configs are reconciled during installation but are not
 tracked. Per-project lifecycle configuration lives under `docs/agents/` only
