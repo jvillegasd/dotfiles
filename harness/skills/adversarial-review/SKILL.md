@@ -22,7 +22,8 @@ Scale to blast radius:
 
 - One reviewer when the diff is under roughly 50 changed lines, in a single
   file, and touches no data, auth, concurrency, migration, or public-contract
-  surface. Use Reviewer B and hand it the requirements too.
+  surface. Use Reviewer B and hand it the requirements too: on a small diff a
+  missed requirement is usually visible in the diff itself, while a bug is not.
 - Two reviewers otherwise.
 - Never three. A third mostly re-finds what the first two found.
 
@@ -43,11 +44,11 @@ Give it only the diff. No requirements, no context, no ticket.
 
 > Assume this diff is wrong. Find the bug.
 
-Lenses: callers of every touched symbol left unupdated; sibling code paths left
-broken because a fix landed at one call site only; dead code and leftovers;
-`ponytail` violations, meaning a new abstraction with one user, a dependency
-for a few lines, or config for a constant; anything whose correctness depends
-on information not visible in the diff.
+Lenses: callers of every touched symbol left unupdated, so grep them; sibling
+code paths left broken because a fix landed at one call site only; dead code
+and leftovers; `ponytail` violations, meaning a new abstraction with one user,
+a dependency for a few lines, or config for a constant; anything whose
+correctness depends on information not visible in the diff.
 
 On a UI diff, add one more lens: a palette, token system, or state set the
 contract never asked for is unrequested surface area, and `ponytail` decides
@@ -67,7 +68,8 @@ Severity is one of:
 - `risk:` works but fragile, meaning a race, a missing guard, or a swallowed
   error
 - `nit:` naming, style, or micro-optimization; the implementer may ignore it
-- `q:` a genuine question rather than a suggestion
+- `q:` a genuine question rather than a suggestion, and where an unsure
+  reviewer belongs
 
 Name the symbol in backticks and give the fix, not "consider refactoring". Drop
 the throat-clearing: no hedging, no restating what the line does. A security
@@ -94,4 +96,5 @@ Fix a `nit:` only when the fix is smaller than the argument.
 ## Loop cap
 
 At most two rounds; round two re-reviews only the delta from your fixes. A new
-blocking finding in round two is a rabbit-hole trip: stop and escalate.
+blocking finding in round two, in code that round one's fixes touched, is a
+rabbit-hole trip: stop and escalate rather than starting round three.

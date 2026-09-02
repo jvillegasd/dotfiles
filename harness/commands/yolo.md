@@ -33,6 +33,8 @@ Self-grill a load-bearing ambiguity only when it survives a repository search: r
 
 With a ticket, escalate before changing code if any blocker is not closed by a merged pull request.
 
+Inspect `git status --short` before creating anything. A worktree holding pre-existing changes that are not part of this contract stops the run: never absorb unrelated changes into this diff, because the review passes and the conformance check both read the diff as if every line were yours. Report what is there and ask how to proceed.
+
 ## Worktree and claim
 
 1. Fetch the remote default branch. For a `/proto` ledger, reuse its existing branch and retained worktree rather than creating another; it committed its work there, and a fresh worktree from the default branch would not contain it. Inside Orca, use the runtime-provided Orca CLI guide; otherwise locate and switch to the existing Worktrunk branch.
@@ -59,7 +61,7 @@ With a ticket, escalate before changing code if any blocker is not closed by a m
    - `Refuted evidence`: any claim the evidence contradicted and what changed as a result. Omit when no evidence was gathered.
    - `Rejected review findings`: each review finding not fixed, with its reason. Omit when there are none.
 
-5. Watch required remote checks. Repair owned failures, rerun local rungs, commit, push, and review again. Apply the escalation contract's do-not-escalate list before counting an attempt, and stop on any rabbit-hole trip.
+5. Watch required remote checks. Repair owned failures, rerun local rungs, commit, push, and review again. Apply the escalation contract's do-not-escalate list before counting an attempt, and stop on any rabbit-hole trip. Where a repair changed what the pull request does, bring its title and body back in line with the diff before moving on.
 
    Watch the merge state alongside them: `gh pr view --json mergeable,mergeStateStatus`. A conflicting pull request is a failure to fix on the same footing as a red check, not a result to report. Rebase onto the base, resolve, and `git push --force-with-lease`; the task branch this run created is not shared. Resolve a mechanical conflict autonomously (adjacent-line collisions, a regenerated lockfile, import order). Escalate a semantic conflict, where both sides changed the same logic: resolving one silently would redesign someone else's concurrent change.
 
