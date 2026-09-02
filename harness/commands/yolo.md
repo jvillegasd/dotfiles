@@ -25,7 +25,7 @@ A `/research` finding ledger and a `/triage` plan brief are planning inputs, nev
 
 Contract source and tracker binding are independent. The source determines the durable conformance record; the binding determines only branch naming, closing references, and label transitions. A tracker-bound ticket-sourced contract can remain in the ticket. An approved in-conversation contract, a finalized `/proto` ledger, or a ticket-sourced but trackerless contract must be preserved in the pull request's inline `## Contract` whether tracker-bound or trackerless.
 
-For an approved native plan, derive the branch slug from the plan. Keep ticket metadata and label transitions when it retained a tracker binding, and skip them only when trackerless. Escalate to `/spec` only if implementation reveals that the approved plan omitted a surface whose change requires a durable published contract.
+For an approved in-conversation contract, derive the branch slug from it. Keep ticket metadata and label transitions when it retained a tracker binding, and skip them only when trackerless. Escalate to `/spec` only if implementation reveals that the approved contract omitted a surface whose change requires a durable published contract.
 
 For a `/proto` ledger, continue on the prototype's branch, squash its WIP checkpoints at commit time, and harden whatever the ledger marks prototype-quality. Do not re-derive what the iterations already settled.
 

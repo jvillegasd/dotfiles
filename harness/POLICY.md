@@ -86,7 +86,7 @@ Where a project declares something, follow it. Where it declares nothing and you
 
 Approving a contract is the go-ahead to run to completion. This applies to every surface that produces one: native plan mode, `ExitPlanMode`, a published spec, a finalized `/proto` ledger, or an implementation-ready ticket.
 
-On approval, continue without being asked. An approved spec goes directly through `/create-ticket`, then each ready ticket enters `/yolo`; an approved native plan or finalized `/proto` ledger enters `/yolo` directly. Work autonomously and do not stop until `/yolo` reaches its terminal state: a pull request open with every resolved rung green. Do not ask for confirmation to begin, between steps, before committing, or before pushing. Do not re-present the contract or ask which part to start.
+On approval, continue without being asked. An approved spec goes directly through `/create-ticket`, then each ready ticket enters `/yolo`; an approved in-conversation contract or finalized `/proto` ledger enters `/yolo` directly. Work autonomously and do not stop until `/yolo` reaches its terminal state: a pull request open with every resolved rung green. Do not ask for confirmation to begin, between steps, before committing, or before pushing. Do not re-present the contract or ask which part to start.
 
 Stop early only when implementation reveals the contract is invalid against repository evidence, a load-bearing decision is genuinely unresolvable, or pre-existing unrelated changes cannot be safely separated. Otherwise pick the minimal option, record it in the pull request body, and continue.
 
