@@ -94,6 +94,20 @@ class ConsistencyTests(unittest.TestCase):
         )
         self.assertIn("written per `caveman-commit`", command("yolo"))
 
+    def test_the_default_branch_fast_forward_names_its_worktree(self) -> None:
+        # Both retirement paths fast-forward the default branch, and the way to
+        # get it wrong is dropping `-C`: the command then advances whatever
+        # branch the current worktree holds, silently when it has not diverged.
+        # The failure modes are asserted too, not just the instruction, or they
+        # could be deleted from both files with this test still green.
+        for name in ("land", "squash-land"):
+            text = command(name)
+            self.assertIn("in the worktree that has it checked out", text, name)
+            self.assertIn("`git -C <that path> merge --ff-only origin/<default>`", text, name)
+            self.assertIn("Always pass `-C`", text, name)
+            self.assertIn("silently fast-forwards that branch", text, name)
+            self.assertIn("exits 128", text, name)
+
     def test_three_contract_routes_converge_on_yolo(self) -> None:
         # All three contract routes must converge on the only delivery workflow.
         policy = POLICY.read_text()
