@@ -81,6 +81,18 @@ class ConsistencyTests(unittest.TestCase):
         name = named.group(1)  # type: ignore[union-attr]
         self.assertIn(name, lock)
         self.assertTrue((SKILLS / name / "SKILL.md").is_file(), name)
+    def test_the_commit_rule_delegates_to_the_locked_body(self) -> None:
+        # The policy states the rule and names the body carrying its worked
+        # examples; the workflow that commits names it at the commit step. A
+        # pointer to a body nobody installed is the failure mode here, so the
+        # lockfile is checked rather than the prose alone.
+        lock = json.loads((ROOT / "skills-lock.json").read_text())["skills"]
+        self.assertIn("caveman-commit", lock)
+        self.assertIn(
+            "When writing any git commit message, follow the `caveman-commit` skill",
+            POLICY.read_text(),
+        )
+        self.assertIn("written per `caveman-commit`", command("yolo"))
 
     def test_three_contract_routes_converge_on_yolo(self) -> None:
         # All three contract routes must converge on the only delivery workflow.
