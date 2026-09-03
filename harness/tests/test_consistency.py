@@ -11,6 +11,8 @@ each prove a file contains a string and neither that the two agree.
 
 from __future__ import annotations
 
+import json
+import re
 import unittest
 
 from fixtures import (
@@ -49,12 +51,36 @@ class ConsistencyTests(unittest.TestCase):
         # entry path scope alone cannot close.
         bodies = {f"commands/{name}.md": (COMMANDS / f"{name}.md") for name in COMMAND_NAMES}
         bodies.update({f"skills/{name}": (SKILLS / name / "SKILL.md") for name in LOCAL_SKILLS})
-        for name in ("design-taste-frontend", "frontend-design", "DESIGN.md", "/design"):
+        for name in ("impeccable", "frontend-design", "DESIGN.md", "/design"):
             for label, path in bodies.items():
                 self.assertNotIn(name, path.read_text(), f"{label}: {name}")
         policy = POLICY.read_text()
         for name in ("frontend-design", "DESIGN.md", "/design"):
             self.assertNotIn(name, policy, name)
+
+    def test_no_surface_grants_a_skill_scope_over_a_ui_surface(self) -> None:
+        # `ponytail` claims no UI authority upstream, so nothing here grants
+        # it any. One file is not enough to hold that: the clause outlived its
+        # removal from `POLICY.md` once already, in `adversarial-review`, where
+        # it ran on every review round while the policy said it did not exist.
+        surfaces = {"harness/POLICY.md": POLICY, "harness/README.md": README}
+        surfaces.update({f"commands/{name}.md": COMMANDS / f"{name}.md" for name in COMMAND_NAMES})
+        surfaces.update({f"skills/{name}": SKILLS / name / "SKILL.md" for name in LOCAL_SKILLS})
+        for phrasing in ("decides a UI surface", "governs a UI surface", "scope on a UI surface"):
+            for label, path in surfaces.items():
+                self.assertNotIn(phrasing, path.read_text(), f"{label}: {phrasing}")
+
+    def test_the_frontend_design_body_policy_names_is_installed(self) -> None:
+        # Without this, `POLICY.md` can name a body nobody installed and every
+        # other test still passes: the lock and the policy are checked apart.
+        lock = json.loads((ROOT / "skills-lock.json").read_text())["skills"]
+        named = re.search(
+            r"One frontend design body is installed, `([^`]+)`", POLICY.read_text()
+        )
+        self.assertIsNotNone(named)
+        name = named.group(1)  # type: ignore[union-attr]
+        self.assertIn(name, lock)
+        self.assertTrue((SKILLS / name / "SKILL.md").is_file(), name)
 
     def test_three_contract_routes_converge_on_yolo(self) -> None:
         # All three contract routes must converge on the only delivery workflow.
