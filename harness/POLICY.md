@@ -76,17 +76,21 @@ Never combine routes. An approved spec continues through `/create-ticket` withou
 
 Whichever route, pressure-test with `grilling` before committing to it: interactively when the user is driving, in self-grill mode when a workflow needs its own approach broken without blocking on a human.
 
-A `/triage` plan brief or `/research` finding ledger is planning input, not an implementation contract. Do not re-investigate what either already grounded with a `path:line` or a linked number. Carry its verification concerns forward verbatim and its open questions in as decisions with defaults. Re-run only evidence it marked refuted or unchecked. A finalized `/proto` requirements ledger is itself a contract, so do not re-derive what its iterations settled.
+A `/triage` plan brief or `/research` finding ledger is planning input, not an implementation contract. Do not re-investigate what either already grounded with a `path:line` or a linked number. Carry its verification concerns forward verbatim and its open questions in as decisions with defaults. Re-run only evidence it marked refuted or unchecked, or that predates the most recent deploy: a deploy is what turns a checked claim back into an unchecked one. A finalized `/proto` requirements ledger is itself a contract, so do not re-derive what its iterations settled.
 
 ## Record what you inferred
 
 Where a project declares something, follow it. Where it declares nothing and you infer it, record the inference where the next pass will see it, so a wrong guess is visible and correctable rather than silent. This applies to the resolved oracle ladder, the tracker and label mapping, an assumed domain term, a chosen test seam, and any decision the escalation contract says to make rather than ask about. An unrecorded inference is indistinguishable from a fact, which is what makes it expensive.
 
+## Reading a ticket
+
+A ticket is its description plus its comments. Read the thread every time, in order, and treat what it says as part of the request: comments routinely add requirements, narrow scope, or overturn the description outright, and the newest word wins. Fold them into the contract as work items, and when a comment contradicts the description, say which one you followed.
+
 ## Approval means autonomous execution
 
 Approving a contract is the go-ahead to run to completion. This applies to every surface that produces one: native plan mode, `ExitPlanMode`, a published spec, a finalized `/proto` ledger, or an implementation-ready ticket.
 
-On approval, continue without being asked. An approved spec goes directly through `/create-ticket`, then each ready ticket enters `/yolo`; an approved native plan or finalized `/proto` ledger enters `/yolo` directly. Work autonomously and do not stop until `/yolo` reaches its terminal state: a pull request open with every resolved rung green. Do not ask for confirmation to begin, between steps, before committing, or before pushing. Do not re-present the contract or ask which part to start.
+On approval, continue without being asked. An approved spec goes directly through `/create-ticket`, then each ready ticket enters `/yolo`; an approved in-conversation contract or finalized `/proto` ledger enters `/yolo` directly. Work autonomously and do not stop until `/yolo` reaches its terminal state: a pull request open with every resolved rung green. Do not ask for confirmation to begin, between steps, before committing, or before pushing. Do not re-present the contract or ask which part to start.
 
 Stop early only when implementation reveals the contract is invalid against repository evidence, a load-bearing decision is genuinely unresolvable, or pre-existing unrelated changes cannot be safely separated. Otherwise pick the minimal option, record it in the pull request body, and continue.
 
@@ -104,7 +108,7 @@ Cheapest first, each green before ascending:
 4. build
 5. push, open the pull request, remote required checks green
 
-Resolve the concrete commands in this order: the project's own instruction file when it declares them; else its declared task runner, meaning a `justfile`, `Makefile`, or package-manifest target named `ci`, `check`, or similar; else infer them from the toolchain. Prefer a variant that narrows the run to what changed.
+Resolve the concrete commands in this order: the project's own instruction file when it declares them; else its declared task runner, meaning a `justfile`, `Makefile`, or package-manifest target named `ci`, `check`, or similar; else infer them from the toolchain. Prefer a variant that narrows the run to what changed: grouping failures by package or crate is what lets a fix loop terminate on its own rather than re-running everything.
 
 Re-derive the failure list on every pass; never work from a stale one. A missing rung is skipped, never faked: no remote CI means the ladder ends at the local rungs plus an open pull request, and no test suite means a shorter ladder.
 
@@ -116,18 +120,18 @@ Resolving review threads is not a rung. Threads appear only after a human review
 
 ### Ask or decide
 
-Ask only when both hold:
+Asking is not caution, it is a cost transfer. Ask only when both hold:
 
 1. The answer is not derivable from repository evidence, telemetry, or an existing convention in this codebase. If three or fewer read-only actions would settle it, take them instead of asking.
 2. Choosing wrong is expensive to reverse, or the choice is not yours. Expensive to reverse means a schema or data migration, any write visible outside this machine, a public-contract or auth-boundary change, money, or deleting something you cannot reconstruct. Not yours to make means product intent, priority, and scope-versus-ship tradeoffs.
 
-Otherwise decide, then declare: the decision, the alternative you rejected, and the one fact that would flip it.
+Otherwise decide, then declare: the decision, the alternative you rejected, and the one fact that would flip it. A recorded decision with a stated flip condition is cheaper to audit than a question is to answer.
 
 Never ask permission to begin, for confirmation between steps, to proceed after reporting progress, or to re-confirm something already answered.
 
 ### Question format
 
-Every question states, in this order: the decision being made, in one line; what was already checked, with a `path:line` for code or a linked number for telemetry, and what each finding ruled out; the options, with the consequence of each; your default if there is no answer; and what it costs if the default is wrong.
+Every question carries its context, because a question without evidence is a request for the human to do the investigation. State, in this order: the decision being made, in one line; what was already checked, with a `path:line` for code or a linked number for telemetry, and what each finding ruled out; the options, with the consequence of each; your default if there is no answer; and what it costs if the default is wrong.
 
 Batch every open question into one stop. Never ask serially.
 
@@ -140,7 +144,7 @@ Stop and escalate the moment any of these trips, whatever step you are on:
 - two consecutive attempts produced no new information
 - the diff has grown past roughly three times the size the contract implied
 - evidence contradicts the premise of the work
-- a second review round raises a new blocking finding
+- a second review round raises a new blocking finding in code the first round's fixes touched
 - the fix requires touching a surface outside the stated intent
 
 On a trip, do not try a fourth thing. Report what was attempted, what each attempt disproved, the smallest next hypothesis, and what you need. A trip is information, not failure.
@@ -149,12 +153,12 @@ These counters must survive a restart or a context compaction, or the detector s
 
 ### Surfaces that escalate on first touch
 
-Touching one of these is an escalation however small the change looks, unless the request or the approved contract explicitly names that surface:
+Touching one of these is an escalation however small the change looks, unless the request or the approved contract explicitly names that surface. Changing CI configuration is the job when the task is to change CI configuration; it is an escalation when it is incidental to something else. A project's own instruction file may map these classes to concrete paths; otherwise match them by convention for the detected toolchain.
 
 - schema and data migrations
 - CI/CD configuration
 - dependency lockfiles
-- shared or public contract surfaces
+- shared or public contract surfaces: type libraries, public API definitions, protobuf or GraphQL schemas
 - infrastructure as code
 - auth and secrets configuration
 
@@ -184,6 +188,8 @@ These instructions load in three clients, so anything client-specific written he
 - Use branches named `<type>/<tracker-id>-<short-slug>` when tracker-bound and `<type>/<short-slug>` otherwise.
 - Make the fewest independently coherent Conventional Commits and keep each commit green.
 - Never merge a pull request as part of `/yolo`, `/feedback`, or `/address-review`. `/squash-land` is the single exception, and only because a human invoked it by name. Only `/land` and `/squash-land` remove a worktree, and only after the pull request merged.
+- One line of work is one branch and one pull request. Once a task branch exists, everything that follows in the session, feedback and review rounds included, is more commits on that branch. Do not open a second pull request for the same work, and never branch away from an open one without being asked: a second pull request fragments the review, leaves the first describing a diff nobody will ship, and costs the human the thread they were reading. Splitting is a human decision, so propose it, name what would go where, and wait. This holds even when the feedback changes the shape of the work; a branch is not scoped to the contract it started from.
+- After pushing to a branch whose pull request is already open, bring its title and body back in line with the diff as it now stands. A description that stopped matching the code is how a reviewer ends up approving something else.
 
 ## Validating harness changes
 

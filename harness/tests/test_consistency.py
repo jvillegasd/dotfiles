@@ -60,7 +60,7 @@ class ConsistencyTests(unittest.TestCase):
         # All three contract routes must converge on the only delivery workflow.
         policy = POLICY.read_text()
         yolo = command("yolo")
-        for route in ("`/spec` plus `/create-ticket`", "approved native plan", "`/proto`"):
+        for route in ("`/spec` plus `/create-ticket`", "approved in-conversation contract", "`/proto`"):
             self.assertIn(route, policy)
             self.assertIn(route, yolo)
 

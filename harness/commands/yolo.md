@@ -25,13 +25,15 @@ A `/research` finding ledger and a `/triage` plan brief are planning inputs, nev
 
 Contract source and tracker binding are independent. The source determines the durable conformance record; the binding determines only branch naming, closing references, and label transitions. A tracker-bound ticket-sourced contract can remain in the ticket. An approved in-conversation contract, a finalized `/proto` ledger, or a ticket-sourced but trackerless contract must be preserved in the pull request's inline `## Contract` whether tracker-bound or trackerless.
 
-For an approved native plan, derive the branch slug from the plan. Keep ticket metadata and label transitions when it retained a tracker binding, and skip them only when trackerless. Escalate to `/spec` only if implementation reveals that the approved plan omitted a surface whose change requires a durable published contract.
+For an approved in-conversation contract, derive the branch slug from it. Keep ticket metadata and label transitions when it retained a tracker binding, and skip them only when trackerless. Escalate to `/spec` only if implementation reveals that the approved contract omitted a surface whose change requires a durable published contract.
 
 For a `/proto` ledger, continue on the prototype's branch, squash its WIP checkpoints at commit time, and harden whatever the ledger marks prototype-quality. Do not re-derive what the iterations already settled.
 
 Self-grill a load-bearing ambiguity only when it survives a repository search: run `grilling` in self-grill mode, which resolves what precedent, history, and `evidence` can settle and leaves only the survivors. Ask only what survives that, per the escalation contract.
 
 With a ticket, escalate before changing code if any blocker is not closed by a merged pull request.
+
+Inspect `git status --short` before creating anything. A worktree holding pre-existing changes that are not part of this contract stops the run: never absorb unrelated changes into this diff, because the review passes and the conformance check both read the diff as if every line were yours. Report what is there and ask how to proceed.
 
 ## Worktree and claim
 
@@ -59,7 +61,7 @@ With a ticket, escalate before changing code if any blocker is not closed by a m
    - `Refuted evidence`: any claim the evidence contradicted and what changed as a result. Omit when no evidence was gathered.
    - `Rejected review findings`: each review finding not fixed, with its reason. Omit when there are none.
 
-5. Watch required remote checks. Repair owned failures, rerun local rungs, commit, push, and review again. Apply the escalation contract's do-not-escalate list before counting an attempt, and stop on any rabbit-hole trip.
+5. Watch required remote checks. Repair owned failures, rerun local rungs, commit, push, and review again. Apply the escalation contract's do-not-escalate list before counting an attempt, and stop on any rabbit-hole trip. Where a repair changed what the pull request does, bring its title and body back in line with the diff before moving on.
 
    Watch the merge state alongside them: `gh pr view --json mergeable,mergeStateStatus`. A conflicting pull request is a failure to fix on the same footing as a red check, not a result to report. Rebase onto the base, resolve, and `git push --force-with-lease`; the task branch this run created is not shared. Resolve a mechanical conflict autonomously (adjacent-line collisions, a regenerated lockfile, import order). Escalate a semantic conflict, where both sides changed the same logic: resolving one silently would redesign someone else's concurrent change.
 
