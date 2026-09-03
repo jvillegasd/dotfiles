@@ -51,8 +51,7 @@ a dependency for a few lines, or config for a constant; anything whose
 correctness depends on information not visible in the diff.
 
 On a UI diff, add one more lens: a palette, token system, or state set the
-contract never asked for is unrequested surface area, and `ponytail` decides
-scope on a UI surface the same as anywhere else.
+contract never asked for is unrequested surface area.
 
 ## Reviewer output
 

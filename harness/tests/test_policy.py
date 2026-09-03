@@ -28,19 +28,20 @@ class PolicyTests(unittest.TestCase):
             self.assertNotIn(name, policy, name)
         self.assertIn('| "mock up this ticket\'s frontend", a mockup for one ticket or spec | `/proto` |', policy)
 
-    def test_ponytail_holds_scope_on_a_ui_surface(self) -> None:
-        # `ponytail` holds scope on a UI surface by default, and the one
-        # installed frontend design body is the named exception to it, with a
-        # rule that decides a contested surface rather than one that only
-        # excludes work neither body ever claimed. Prose nothing asserts is
-        # prose that can be deleted without a test noticing.
+    def test_the_frontend_design_body_is_bounded_by_scope(self) -> None:
+        # The policy hands no skill authority over a UI surface. `ponytail` is
+        # the coding standard and claims none upstream, so the policy assigns
+        # it none, and a UI surface with this body unloaded is built from the
+        # contract like any other work. The repository-wide form of that
+        # invariant is in test_consistency.py, which is where a clause that
+        # has to hold on more than one surface belongs.
         policy = POLICY.read_text()
-        self.assertIn("`ponytail` decides a UI surface by default:", policy)
-        # Every clause that bounds it is asserted, because the body is
+        # Every clause that bounds the body is asserted, because it is
         # description-matchable like any locked body and scope is the only
         # thing holding it. Prose nothing asserts can be deleted silently.
         for clause in (
-            "One frontend design body is installed, `impeccable`, and it is the exception rather than the default: `ponytail` governs a UI surface everywhere `impeccable` is not named or matched, and `impeccable` decides nothing that is not a UI surface.",
+            "One frontend design body is installed, `impeccable`.",
+            "It decides nothing that is not a UI surface.",
             "its scope is frontend design broadly: landing pages, portfolios, and redesigns along with dashboards, data tables, and multi-step product UI.",
             "`/proto` and `/yolo` build from that layer whether or not this body is loaded.",
             # The body offers its own installer, updater, hook wiring, and

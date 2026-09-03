@@ -58,6 +58,18 @@ class ConsistencyTests(unittest.TestCase):
         for name in ("frontend-design", "DESIGN.md", "/design"):
             self.assertNotIn(name, policy, name)
 
+    def test_no_surface_grants_a_skill_scope_over_a_ui_surface(self) -> None:
+        # `ponytail` claims no UI authority upstream, so nothing here grants
+        # it any. One file is not enough to hold that: the clause outlived its
+        # removal from `POLICY.md` once already, in `adversarial-review`, where
+        # it ran on every review round while the policy said it did not exist.
+        surfaces = {"harness/POLICY.md": POLICY, "harness/README.md": README}
+        surfaces.update({f"commands/{name}.md": COMMANDS / f"{name}.md" for name in COMMAND_NAMES})
+        surfaces.update({f"skills/{name}": SKILLS / name / "SKILL.md" for name in LOCAL_SKILLS})
+        for phrasing in ("decides a UI surface", "governs a UI surface", "scope on a UI surface"):
+            for label, path in surfaces.items():
+                self.assertNotIn(phrasing, path.read_text(), f"{label}: {phrasing}")
+
     def test_the_frontend_design_body_policy_names_is_installed(self) -> None:
         # Without this, `POLICY.md` can name a body nobody installed and every
         # other test still passes: the lock and the policy are checked apart.
