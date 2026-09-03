@@ -49,7 +49,7 @@ Inspect `git status --short` before creating anything. A worktree holding pre-ex
 
 1. Treat the contract's test seams as pre-agreed. Use `tdd` one red/green vertical slice at a time and drive the oracle ladder in the policy to green, preferring the narrowest variant of each rung. On a UI change, build from the project's existing styling layer rather than a fresh palette.
 
-2. Make the fewest coherent Conventional Commits; every commit stays green.
+2. Make the fewest coherent Conventional Commits, written per `caveman-commit`; every commit stays green.
 
 3. Review the diff before pushing, in two passes over the same diff.
 
@@ -76,6 +76,7 @@ Return the pull request, checks, review result, and retained worktree path. Neve
 ## Skills this loads
 
 - `ponytail`
+- `caveman-commit` at commit time
 - `tdd`
 - `grilling`, self-grill mode only, for an ambiguity that survives a repository search
 - `evidence` when a load-bearing runtime claim decides the approach

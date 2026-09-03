@@ -53,6 +53,7 @@ class CommandTests(unittest.TestCase):
                 "mergeStateStatus",
                 "self-grill",
                 "use subagents only if the task genuinely benefits from large reconnaissance or parallel work. Otherwise do it directly.",
+                "written per `caveman-commit`",
                 "Never merge",
             ),
             "address-review": (
