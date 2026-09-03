@@ -19,6 +19,8 @@ Resolve the effective input:
 
 Load and follow the `ponytail` skill. Keep every change minimal and address the underlying requirement, not only the literal wording.
 
+Beyond the review pass a full round requires, use subagents only when the work genuinely benefits from broader reconnaissance or parallel investigation. Both round types read this; a deferred round never reaches the step that would otherwise carry it.
+
 Evaluate every item against the contract and the current implementation. Preserve settled decisions unless the feedback changes them explicitly or repository evidence invalidates them. Address the underlying requirement, not only the literal wording, and keep each change minimal.
 
 ## Round types

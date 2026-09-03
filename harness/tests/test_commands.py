@@ -52,6 +52,7 @@ class CommandTests(unittest.TestCase):
                 "Assumptions",
                 "mergeStateStatus",
                 "self-grill",
+                "use subagents only if the task genuinely benefits from large reconnaissance or parallel work. Otherwise do it directly.",
                 "Never merge",
             ),
             "address-review": (
@@ -69,7 +70,12 @@ class CommandTests(unittest.TestCase):
                 "self-grill",
                 "Never implement",
             ),
-            "feedback": ("Deferred", "accumulated delta", "Never merge the pull request"),
+            "feedback": (
+                "Deferred",
+                "accumulated delta",
+                "use subagents only when the work genuinely benefits from broader reconnaissance or parallel investigation.",
+                "Never merge the pull request",
+            ),
             "land": ("MERGED", "worktree", "Never merge a pull request"),
             "squash-land": (
                 "gh pr merge <n> --squash",
