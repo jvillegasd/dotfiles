@@ -28,7 +28,7 @@ source "$(dirname "$HARNESS_DIR")/lib/python.sh"
 usage() {
     cat <<'EOF'
 Usage: harness/install.sh [--links-only] [--no-backup]
-       harness/install.sh --uninstall [--no-backup]
+       harness/install.sh --uninstall
 
   --links-only   Reconcile policy, command, and skill links without installing
                  packages. Engram is still reconciled, so it has to be
@@ -43,7 +43,10 @@ Usage: harness/install.sh [--links-only] [--no-backup]
                  uninstall your tools. Packages, the Engram plugin and MCP
                  registration, ~/.dotfiles-backups, this checkout, and every
                  untracked key in either client config are left alone.
-                 Archives what it removes unless --no-backup says otherwise.
+                 Destructive and unrecoverable: what it removes is deleted,
+                 not archived, so --no-backup adds nothing to it. Reinstall
+                 to get the harness back; anything of your own that was
+                 sitting at a managed path is gone.
 EOF
 }
 
@@ -62,6 +65,17 @@ done
 # win would make the flag that lost look like it did something.
 if $UNINSTALL && $LINKS_ONLY; then
     die "--uninstall and --links-only are contradictory; --uninstall removes every link."
+fi
+# An uninstall deletes rather than archives, so --no-backup is redundant beside
+# it rather than contradictory, and passing it is not an error. Archiving is
+# what an install does because it displaces things it did not put there and has
+# to hand them back; an uninstall removes only what this installer wrote, and a
+# backup of that is a copy of the checkout it can be reinstalled from.
+# An `if` rather than `$UNINSTALL && NO_BACKUP=true`, which exits the script
+# under `set -e` on every install run, because a false test is a failed
+# command at the top level.
+if $UNINSTALL; then
+    NO_BACKUP=true
 fi
 
 SKILL_ROOTS=(
@@ -804,12 +818,12 @@ tools: the packages (codex, claude, opencode, engram, worktrunk, gh, uv, node),
 the Engram plugin, marketplace, and MCP registration, every untracked key in
 both client configs, ~/.dotfiles-backups, and this checkout.
 
+Nothing was archived: an uninstall deletes what it removes. Everything above
+comes back from this checkout.
+
 Open a new shell to drop the aliases from the one you are in.
 Reinstall with: $HARNESS_DIR/install.sh
 EOF
-    if [[ -n "$BACKUP_ROOT" ]]; then
-        printf '\nBackups: %s\n' "$BACKUP_ROOT"
-    fi
 }
 
 main() {

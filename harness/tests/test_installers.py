@@ -486,6 +486,10 @@ class UninstallTests(unittest.TestCase):
             text=True,
         )
 
+    def backups(self, home: Path) -> list[str]:
+        root = home / ".dotfiles-backups"
+        return sorted(str(path.relative_to(home)) for path in root.rglob("*")) if root.exists() else []
+
     def seed(self, home: Path) -> None:
         """A HOME carrying state from every source the uninstall must respect:
         a private skill, somebody else's command, a hand-written alias, the
@@ -571,15 +575,16 @@ class UninstallTests(unittest.TestCase):
             installed = json.loads((home / ".claude" / "settings.json").read_text())
             self.assertIn("deny", installed["permissions"])
 
+            # The install archives what it displaced, so the claim below is
+            # that the uninstall added nothing to that, not that the machine
+            # has no backups at all.
+            before = self.backups(home)
             self.run_installer(home, "--uninstall")
+            after = self.backups(home)
 
             self.assert_nothing_managed_survives(home)
             self.assert_foreign_state_survives(home)
-            # Removed, not deleted: the default is an archive, and the tracked
-            # keys are archived as the file they were in.
-            backups = home / ".dotfiles-backups"
-            self.assertTrue(backups.is_dir())
-            self.assertTrue(any(backups.rglob("settings.json*")))
+            self.assertEqual(after, before, "the uninstall archived something")
 
     def test_uninstall_leaves_no_tracked_key_in_either_client(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_home:
@@ -664,23 +669,30 @@ class UninstallTests(unittest.TestCase):
                 owned(installed["config"]),
             )
 
-    def test_uninstall_no_backup_deletes_instead_of_archiving(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_home:
-            home = Path(temporary_home)
-            self.seed(home)
-            self.run_installer(home, "--links-only")
-            # The install archived what it displaced, so the claim is that the
-            # uninstall minted no backup root of its own, not that the machine
-            # has none.
-            backups = home / ".dotfiles-backups"
-            before = sorted(path.name for path in backups.rglob("*")) if backups.exists() else []
+    def test_uninstall_ignores_the_redundant_no_backup(self) -> None:
+        # --uninstall already deletes, so --no-backup beside it is redundant
+        # rather than contradictory: accepted, and changing nothing. Asserted
+        # by running both and comparing, because "it is implied" is exactly
+        # the kind of claim that stops being true when the flag parsing moves.
+        results = []
+        for arguments in (("--uninstall",), ("--uninstall", "--no-backup")):
+            with tempfile.TemporaryDirectory() as temporary_home:
+                home = Path(temporary_home)
+                self.seed(home)
+                self.run_installer(home, "--links-only")
+                before = self.backups(home)
+                self.run_installer(home, *arguments)
 
-            self.run_installer(home, "--uninstall", "--no-backup")
-
-            after = sorted(path.name for path in backups.rglob("*")) if backups.exists() else []
-            self.assertEqual(after, before)
-            self.assert_nothing_managed_survives(home)
-            self.assert_foreign_state_survives(home)
+                self.assertEqual(self.backups(home), before, arguments)
+                self.assert_nothing_managed_survives(home)
+                self.assert_foreign_state_survives(home)
+                results.append(
+                    (
+                        (home / ".claude" / "settings.json").read_text(),
+                        (home / ".zshrc").read_text(),
+                    )
+                )
+        self.assertEqual(*results)
 
     def test_uninstall_refuses_the_contradictory_flag(self) -> None:
         # --links-only names a subset of the install to write and --uninstall
@@ -719,6 +731,10 @@ class UninstallTests(unittest.TestCase):
         # that this reverses the installer rather than uninstalling their
         # tools.
         self.assertIn("it does not\n                 uninstall your tools", installer)
+        # Deleting rather than archiving is the surprising half, so the usage
+        # has to warn about it in the same words --no-backup does.
+        uninstall = installer.split("  --uninstall")[1].split("EOF")[0]
+        self.assertIn("Destructive and unrecoverable", uninstall)
 
 
 if __name__ == "__main__":
