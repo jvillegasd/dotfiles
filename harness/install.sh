@@ -781,6 +781,10 @@ uninstall_engram() {
     rm -f "$HOME/.claude/mcp/engram.json"
     rm -f "$HOME/.codex/engram-instructions.md" "$HOME/.codex/engram-compact-prompt.md"
     rm -f "$CONFIG_HOME/opencode/plugins/engram.ts"
+    # engram's own docs/AGENT-SETUP.md lists three things `engram setup
+    # opencode` writes, and this is the third: an OpenCode built-in enabled in
+    # tui.json. It is the one entry engram writes that is not named after
+    # engram, so it survives a search for the word and has to be named.
     # Last, and only what Homebrew actually has: a machine that installed
     # engram some other way keeps whatever it installed, and `brew uninstall`
     # on a formula that is not there exits non-zero for no reason worth
@@ -802,10 +806,14 @@ uninstall_engram() {
 # container is dropped rather than left behind as `{}`. A file that does not
 # exist is a file with nothing to remove.
 remove_engram_config() {
-    python3 - "$HOME/.claude/settings.json" "$CONFIG_HOME/opencode/opencode.json" "$HOME/.codex/config.toml" <<'PY'
+    python3 - "$HOME/.claude/settings.json" "$CONFIG_HOME/opencode/opencode.json" "$HOME/.codex/config.toml" "$CONFIG_HOME/opencode" <<'PY'
 import json, pathlib, re, sys
 
 settings, opencode, codex = (pathlib.Path(argument) for argument in sys.argv[1:4])
+opencode_dir = pathlib.Path(sys.argv[4])
+# Named rather than matched: this is the one thing `engram setup` writes that
+# is not called engram, so nothing that searches for the word would find it.
+SUBAGENT_STATUSLINE = "opencode-subagent-statusline"
 
 
 def rewrite(path, edit):
@@ -908,9 +916,36 @@ def codex_config(text):
     return "\n".join(kept).strip("\n") + "\n" if any(l.strip() for l in kept) else ""
 
 
+def tui(text):
+    """Drop the OpenCode built-in `engram setup opencode` enables.
+
+    Tolerant of a file it cannot parse: tui.jsonc may carry comments, and an
+    uninstall is the wrong moment to fail over somebody else's editor
+    settings. Leaving the entry is recoverable, refusing to finish is worse.
+    """
+    try:
+        document = json.loads(text)
+    except ValueError:
+        print(f"Could not parse it, so its {SUBAGENT_STATUSLINE} entry was left", file=sys.stderr)
+        return None
+    if not isinstance(document, dict):
+        return None
+    plugins = document.get("plugin")
+    if not isinstance(plugins, list) or SUBAGENT_STATUSLINE not in plugins:
+        return None
+    kept = [entry for entry in plugins if entry != SUBAGENT_STATUSLINE]
+    if kept:
+        document["plugin"] = kept
+    else:
+        document.pop("plugin")
+    return json.dumps(document, indent=2) + "\n"
+
+
 rewrite(settings, claude)
 rewrite(opencode, opencode_config)
 rewrite(codex, codex_config)
+for name in ("tui.json", "tui.jsonc"):
+    rewrite(opencode_dir / name, tui)
 PY
 }
 
@@ -1005,6 +1040,11 @@ check_engram_removed() {
         "$HOME/.codex/config.toml"; do
         [[ -f "$path" ]] || continue
         ! grep -qi engram "$path" || die "Engram entries survived the uninstall in $path"
+    done
+    for path in "$CONFIG_HOME/opencode/tui.json" "$CONFIG_HOME/opencode/tui.jsonc"; do
+        [[ -f "$path" ]] || continue
+        ! grep -q 'opencode-subagent-statusline' "$path" ||
+            die "The engram-enabled OpenCode statusline survived the uninstall in $path"
     done
 }
 

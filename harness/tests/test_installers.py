@@ -820,6 +820,12 @@ class UninstallTests(unittest.TestCase):
                 home / ".config" / "opencode" / "plugins" / "engram.ts",
             ):
                 self.assertFalse(path.exists(), path)
+            # The third thing `engram setup opencode` writes, per engram's own
+            # docs/AGENT-SETUP.md. It is not named after engram, so a search
+            # for the word would have left it behind.
+            tui = home / ".config" / "opencode" / "tui.json"
+            if tui.exists():
+                self.assertNotIn("opencode-subagent-statusline", tui.read_text())
 
             # It asked each client to remove what that client owns, and asked
             # Homebrew for the formula, rather than hand-deleting registries.
@@ -834,6 +840,24 @@ class UninstallTests(unittest.TestCase):
             formula, _ = harness_packages()
             engram = next(name for name in formula if name.endswith("/engram"))
             self.assertIn(f"brew uninstall {engram}", calls)
+
+    def test_uninstall_keeps_a_foreign_opencode_statusline_plugin(self) -> None:
+        # The tui.json entry is removed by name, so a neighbour in the same
+        # array has to survive it, and a file that is not ours to parse has to
+        # survive being unparseable.
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            self.seed(home)
+            tui = home / ".config" / "opencode" / "tui.json"
+            tui.parent.mkdir(parents=True, exist_ok=True)
+            tui.write_text(json.dumps({"plugin": ["theirs"], "theme": "dark"}))
+
+            self.run_installer(home, "--links-only")
+            self.run_installer(home, "--uninstall")
+
+            kept = json.loads(tui.read_text())
+            self.assertEqual(kept["plugin"], ["theirs"])
+            self.assertEqual(kept["theme"], "dark")
 
     def test_uninstall_keeps_the_engram_database(self) -> None:
         # ~/.engram is the user's memories, not something this installer wrote,
