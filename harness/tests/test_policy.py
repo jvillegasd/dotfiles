@@ -38,9 +38,15 @@ class PolicyTests(unittest.TestCase):
         self.assertIn("Read the result back after any scripted or mechanical file edit", policy)
         # Matched by shape, not by the phrase that was deleted: pinning the old
         # wording would pass again the moment the ban came back as "do not use
-        # `sed`", which is the check surviving deletion of what it guards.
-        ban = re.compile(r"(?i)(never|don't|do not|avoid|forbid)[^.]*\b(sed|heredoc)\b")
+        # `sed`", which is the check surviving deletion of what it guards. The
+        # rule itself is exempt, or "do not skip the read-back" would fail the
+        # test whose whole purpose is to keep that sentence alive.
+        ban = re.compile(
+            r"(?i)\b(never|don['\u2019]t|do not|avoid|forbid|no)\b[^.]*\b(sed|heredoc)\b"
+        )
         for line in policy.splitlines():
+            if "Read the result back" in line:
+                continue
             self.assertIsNone(ban.search(line), line)
 
     def test_the_frontend_design_body_is_bounded_by_scope(self) -> None:

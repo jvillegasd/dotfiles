@@ -17,7 +17,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fixtures import CLIENTS
+from fixtures import CLIENTS, ROOT
 
 
 def reconcile(config: Path) -> subprocess.CompletedProcess:
@@ -120,20 +120,66 @@ class TrackedSettingsTests(unittest.TestCase):
             self.assertEqual(unreadable.returncode, 2, unreadable.stdout)
             self.assertIn(str(config), unreadable.stderr)
 
+            # A defect in the tracked file is 4, not 2: it is a repository
+            # bug, and dying with the user's config path sends them to the
+            # wrong file to fix it.
             missing = subprocess.run(
                 [str(CLIENTS / "codex.sh"), str(config), str(config.parent / "gone")],
                 capture_output=True,
                 text=True,
             )
-            self.assertEqual(missing.returncode, 2, missing.stdout)
+            self.assertEqual(missing.returncode, 4, missing.stdout)
             self.assertIn("gone", missing.stderr)
 
-    def test_every_reconciler_is_executable(self) -> None:
+    def test_every_reconciler_is_executable_and_checked(self) -> None:
         # install.sh executes these directly, so a lost mode bit is exit 126.
         scripts = sorted(CLIENTS.glob("*.sh"))
         self.assertTrue(scripts)
         for script in scripts:
             self.assertTrue(os.access(script, os.X_OK), script)
+        # Asserting the mode bit here only describes the checkout. What has to
+        # hold is that the installer checks it, and checks it before the loop
+        # that executes them, where 126 would otherwise read as a
+        # reconciliation failure.
+        installer = (ROOT / "harness" / "install.sh").read_text()
+        guard = installer.index('for script in "$HARNESS_DIR"/statusline/*.sh "$HARNESS_DIR"/clients/*.sh')
+        rerun = installer.index('for script in "$HARNESS_DIR/clients/codex.sh"')
+        self.assertLess(guard, rerun)
+
+    def test_the_installer_dies_on_an_unreadable_codex_config(self) -> None:
+        # The Claude half has test_installers.py's unusable-settings test. This
+        # is its Codex twin: exit 2 has to stop the run and name the file,
+        # rather than being read as a config that needed nothing.
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            config = home / ".codex" / "config.toml"
+            config.parent.mkdir(parents=True)
+            config.write_bytes(b'model = "\xff"\n')
+            # No `permissions` key either: check_links used to raise KeyError
+            # on that instead of failing with its own message.
+            settings = home / ".claude" / "settings.json"
+            settings.parent.mkdir(parents=True)
+            settings.write_text('{"hooks": {}}')
+
+            result = subprocess.run(
+                ["bash", str(ROOT / "harness" / "install.sh"), "--links-only"],
+                env=os.environ
+                | {
+                    "HOME": str(home),
+                    "XDG_CONFIG_HOME": str(home / ".config"),
+                    "XDG_CACHE_HOME": str(home / ".cache"),
+                },
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(str(config), result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            # Still undecodable: the reconciler refused it rather than
+            # rewriting it. `engram setup` appends its own keys before this
+            # runs, so the file is not byte-identical, only still broken.
+            self.assertIn(b'model = "\xff"', config.read_bytes())
 
     def test_codex_reconcile_writes_a_config_that_does_not_exist_yet(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

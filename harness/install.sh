@@ -398,18 +398,24 @@ PY
     fi
 }
 
-# The other half of ~/.codex/config.toml, beside the status line below. Both
-# print their reconciled file and exit 3 when the config already says this, so
-# the write and the backup stay here.
+# Both writers of ~/.codex/config.toml, the tracked settings and the status
+# line. Each provider's status line lives in statusline/, one file per
+# provider: claude.sh is the renderer Claude Code runs on every draw, while
+# codex.sh is a reconciler, because Codex draws its own line and takes a list
+# of built-in item ids instead of a command. Either way the write stays here,
+# so the backup is taken only on a real change.
 #
-# Anything but 0 or 3 is fatal rather than "nothing to do": a bare `if` read an
-# unreadable config, and a missing python3, as already reconciled, and the run
-# went on to report success having written nothing.
+# Both print their reconciled file and exit 3 when the config already says
+# this. Anything but 0 or 3 is fatal rather than "nothing to do": a bare `if`
+# read an unreadable config, and a missing python3, as already reconciled, and
+# the run went on to report success having written nothing. Exit 4 is a defect
+# in the tracked file, which is a repository bug rather than the user's.
 write_reconciled_codex() {
     local reconciler="$1" what="$2" config="$HOME/.codex/config.toml"
     local reconciled status
     mkdir -p "$(dirname "$config")"
     reconciled="$("$reconciler" "$config")" && status=0 || status=$?
+    [[ "$status" != 4 ]] || die "$HARNESS_DIR/clients/codex.toml is unreadable."
     [[ "$status" == 0 || "$status" == 3 ]] ||
         die "Reconciling $what in $config failed with status $status."
     if [[ "$status" == 0 ]]; then
@@ -418,14 +424,6 @@ write_reconciled_codex() {
         log "Reconciled $what in $config"
     fi
 }
-
-# Each provider's status line lives in statusline/, one file per provider.
-# claude.sh is the renderer Claude Code runs on every draw; codex.sh is a
-# reconciler, because Codex draws its own and takes a list of built-in item ids
-# instead of a command. The write stays here so the backup is taken only on a
-# real change: codex.sh prints the reconciled file and exits 1 when the config
-# already says this.
-
 
 install_links() {
     local skill source command root desired="|"
@@ -550,18 +548,18 @@ PY
     then
         die "Tracked Claude settings are not reconciled in $HOME/.claude/settings.json."
     fi
+    # Ahead of the re-run below, which executes these directly: a lost mode bit
+    # is exit 126 there, and "reports 126, expected 3" reads as a
+    # reconciliation failure rather than the permission problem it is.
+    for script in "$HARNESS_DIR"/statusline/*.sh "$HARNESS_DIR"/clients/*.sh; do
+        [[ -x "$script" ]] || die "Reconciler is not executable: $script"
+    done
     for script in "$HARNESS_DIR/clients/codex.sh" "$HARNESS_DIR/statusline/codex.sh"; do
         "$script" "$HOME/.codex/config.toml" >/dev/null && status=0 || status=$?
         [[ "$status" == 3 ]] ||
             die "$script reports $status against $HOME/.codex/config.toml; expected 3, already reconciled."
     done
     [[ "$(readlink "$HOME/.claude/statusline.sh")" == "$HARNESS_DIR/statusline/claude.sh" ]] || die "Missing the Claude statusline link."
-    # Both reconcilers are executed directly, so a lost mode bit is exit 126,
-    # which is neither 0 nor 3 and now fails loudly rather than reading as a
-    # config that needed nothing.
-    for script in "$HARNESS_DIR"/statusline/*.sh "$HARNESS_DIR"/clients/*.sh; do
-        [[ -x "$script" ]] || die "Reconciler is not executable: $script"
-    done
     grep -q '^status_line = \[' "$HOME/.codex/config.toml" || die "Missing the Codex status line."
 }
 

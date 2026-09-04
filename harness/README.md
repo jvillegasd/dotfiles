@@ -175,7 +175,7 @@ The two files are different kinds of thing, which is the whole point of the fold
 
 `claude.sh` renders the model, context-window percentage, directory and branch with a dirty marker, session duration, and reasoning effort on one line, then the five-hour and weekly rate-limit bars underneath, fetched from the OAuth usage endpoint and cached for sixty seconds in `/tmp/claude`.
 
-`codex.sh` owns the item ids, so the installer never names them. It prints the reconciled `config.toml` on stdout and exits 1 when the file already says this, which is what lets `install.sh` take its backup only on a real change rather than mint a fresh backup root every run. Run it by hand to see the diff it would make:
+`codex.sh` owns the item ids, so the installer never names them. It prints the reconciled `config.toml` on stdout and exits 3 when the file already says this, which is what lets `install.sh` take its backup only on a real change rather than mint a fresh backup root every run. Run it by hand to see the diff it would make:
 
 ```sh
 ./harness/statusline/codex.sh ~/.codex/config.toml
