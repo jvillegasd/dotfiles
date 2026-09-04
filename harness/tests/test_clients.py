@@ -11,6 +11,7 @@ cheap enough to keep out of that file's temporary-HOME runs.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -90,9 +91,49 @@ class TrackedSettingsTests(unittest.TestCase):
             # rather than reconciled into two winners.
             self.assertEqual(reconciled.count('model = "gpt'), 1)
 
-            # Exit 1 is "the config already says this", which is what keeps
+            # Exit 3 is "the config already says this", which is what keeps
             # install.sh from minting a backup on an unchanged run.
-            self.assertEqual(reconcile(config).returncode, 1)
+            self.assertEqual(reconcile(config).returncode, 3)
+
+    def test_codex_reconcile_is_a_fixed_point_on_odd_separators(self) -> None:
+        # A blank line and a whitespace-only line are different text. Putting
+        # them back in the order they were popped off swapped the two on every
+        # run, so the reconciler never settled: every install rewrote the
+        # config, and check_links then died on a file it had just written.
+        with tempfile.TemporaryDirectory() as temporary:
+            config = Path(temporary) / "config.toml"
+            config.write_text('unrelated = "x"\n   \n\n[tui]\nfoo = 1\n')
+            first = reconcile(config)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            config.write_text(first.stdout)
+            self.assertEqual(reconcile(config).returncode, 3, config.read_text())
+
+    def test_codex_reconcile_separates_a_crash_from_no_change(self) -> None:
+        # Exit 1 meant both, so install.sh read an unreadable config as
+        # "already reconciled", wrote nothing, and reported success. The
+        # check_links assertion re-runs this same script, so it would have
+        # confirmed that silence.
+        with tempfile.TemporaryDirectory() as temporary:
+            config = Path(temporary) / "config.toml"
+            config.write_bytes(b'model = "\xff"\n')
+            unreadable = reconcile(config)
+            self.assertEqual(unreadable.returncode, 2, unreadable.stdout)
+            self.assertIn(str(config), unreadable.stderr)
+
+            missing = subprocess.run(
+                [str(CLIENTS / "codex.sh"), str(config), str(config.parent / "gone")],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(missing.returncode, 2, missing.stdout)
+            self.assertIn("gone", missing.stderr)
+
+    def test_every_reconciler_is_executable(self) -> None:
+        # install.sh executes these directly, so a lost mode bit is exit 126.
+        scripts = sorted(CLIENTS.glob("*.sh"))
+        self.assertTrue(scripts)
+        for script in scripts:
+            self.assertTrue(os.access(script, os.X_OK), script)
 
     def test_codex_reconcile_writes_a_config_that_does_not_exist_yet(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

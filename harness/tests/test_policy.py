@@ -10,6 +10,7 @@ body lives in test_consistency.py.
 
 from __future__ import annotations
 
+import re
 import unittest
 
 from fixtures import COMMAND_NAMES, ROOT
@@ -35,7 +36,12 @@ class PolicyTests(unittest.TestCase):
         # says whether the edit landed.
         policy = POLICY.read_text()
         self.assertIn("Read the result back after any scripted or mechanical file edit", policy)
-        self.assertNotIn("never `sed`", policy)
+        # Matched by shape, not by the phrase that was deleted: pinning the old
+        # wording would pass again the moment the ban came back as "do not use
+        # `sed`", which is the check surviving deletion of what it guards.
+        ban = re.compile(r"(?i)(never|don't|do not|avoid|forbid)[^.]*\b(sed|heredoc)\b")
+        for line in policy.splitlines():
+            self.assertIsNone(ban.search(line), line)
 
     def test_the_frontend_design_body_is_bounded_by_scope(self) -> None:
         # The policy hands no skill authority over a UI surface. `ponytail` is

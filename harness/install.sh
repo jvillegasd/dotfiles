@@ -361,11 +361,19 @@ try:
         settings = json.load(handle)
     if not isinstance(settings, dict):
         raise TypeError(f"expected a JSON object, found {type(settings).__name__}")
-    with open(tracked_path) as handle:
-        tracked = json.load(handle)
 except (OSError, ValueError, TypeError) as error:
     print(error, file=sys.stderr)
     raise SystemExit(2)
+# Its own status, because a defect in the tracked file is a repository bug and
+# telling the user to fix their settings.json names the wrong file.
+try:
+    with open(tracked_path) as handle:
+        tracked = json.load(handle)
+    if not isinstance(tracked, dict):
+        raise TypeError(f"expected a JSON object, found {type(tracked).__name__}")
+except (OSError, ValueError, TypeError) as error:
+    print(error, file=sys.stderr)
+    raise SystemExit(4)
 before = json.dumps(settings, sort_keys=True)
 for key, value in tracked.items():
     live = settings.get(key)
@@ -380,6 +388,7 @@ sys.stdout.write("\n")
 PY
     )" && status=0 || status=$?
     [[ "$status" != 2 ]] || die "$settings is not a JSON object; fix it and re-run."
+    [[ "$status" != 4 ]] || die "$HARNESS_DIR/clients/claude.json is unreadable or not a JSON object."
     [[ "$status" == 0 || "$status" == 3 ]] ||
         die "Reconciling $settings failed with status $status."
     if [[ "$status" == 0 ]]; then
@@ -390,15 +399,23 @@ PY
 }
 
 # The other half of ~/.codex/config.toml, beside the status line below. Both
-# print their reconciled file and exit 1 when the config already says this, so
+# print their reconciled file and exit 3 when the config already says this, so
 # the write and the backup stay here.
-reconcile_codex_config() {
-    local config="$HOME/.codex/config.toml" reconciled
+#
+# Anything but 0 or 3 is fatal rather than "nothing to do": a bare `if` read an
+# unreadable config, and a missing python3, as already reconciled, and the run
+# went on to report success having written nothing.
+write_reconciled_codex() {
+    local reconciler="$1" what="$2" config="$HOME/.codex/config.toml"
+    local reconciled status
     mkdir -p "$(dirname "$config")"
-    if reconciled="$("$HARNESS_DIR/clients/codex.sh" "$config")"; then
+    reconciled="$("$reconciler" "$config")" && status=0 || status=$?
+    [[ "$status" == 0 || "$status" == 3 ]] ||
+        die "Reconciling $what in $config failed with status $status."
+    if [[ "$status" == 0 ]]; then
         backup_copy "$config"
         printf '%s\n' "$reconciled" > "$config"
-        log "Reconciled the tracked Codex settings in $config"
+        log "Reconciled $what in $config"
     fi
 }
 
@@ -408,15 +425,7 @@ reconcile_codex_config() {
 # instead of a command. The write stays here so the backup is taken only on a
 # real change: codex.sh prints the reconciled file and exits 1 when the config
 # already says this.
-point_codex_statusline() {
-    local config="$HOME/.codex/config.toml" reconciled
-    mkdir -p "$(dirname "$config")"
-    if reconciled="$("$HARNESS_DIR/statusline/codex.sh" "$config")"; then
-        backup_copy "$config"
-        printf '%s\n' "$reconciled" > "$config"
-        log "Reconciled the Codex status line in $config"
-    fi
-}
+
 
 install_links() {
     local skill source command root desired="|"
@@ -472,8 +481,8 @@ install_links() {
 # values the ones a client actually reads.
 reconcile_clients() {
     reconcile_claude_settings
-    reconcile_codex_config
-    point_codex_statusline
+    write_reconciled_codex "$HARNESS_DIR/clients/codex.sh" "the tracked Codex settings"
+    write_reconciled_codex "$HARNESS_DIR/statusline/codex.sh" "the Codex status line"
 }
 
 # The listing is fetched before the substitution rather than inside a `case`
@@ -499,7 +508,7 @@ assert_plugin_count() {
 # it, which left the mode that exists for reconciling links as the one mode
 # that never confirmed a link landed.
 check_links() {
-    local command skill root script
+    local command skill root script status
     for skill in "$HARNESS_DIR"/skills/*; do
         local name; name="$(basename "$skill")"
         [[ -f "$skill/SKILL.md" ]] || die "Missing SKILL.md: $skill"
@@ -523,28 +532,35 @@ check_links() {
     [[ "$(readlink "$HOME/.claude/CLAUDE.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing Claude policy link."
     [[ "$(readlink "$CONFIG_HOME/opencode/AGENTS.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing OpenCode policy link."
     [[ -f "$HARNESS_DIR/skills/ponytail/SKILL.md" ]] || die "Missing the ponytail skill body."
-    # Every tracked key reached the live config. The Codex half asserts by
-    # re-running its own reconciler: exit 1 is "the config already says this",
-    # so a success here means a key would still change.
+    # Every tracked key reached the live config. Each TOML half asserts by
+    # re-running its own reconciler, where only exit 3 means "the config
+    # already says this": exit 0 is a key that would still change, and
+    # anything else is the reconciler failing to answer the question.
     if ! python3 - "$HOME/.claude/settings.json" "$HARNESS_DIR/clients/claude.json" <<'PY'
 import json, sys
 
 live, tracked = (json.load(open(path)) for path in sys.argv[1:3])
 for key, value in tracked.items():
     if key == "permissions":
-        assert all(live[key].get(name) == entry for name, entry in value.items()), key
+        owned = live.get(key) or {}
+        assert all(owned.get(name) == entry for name, entry in value.items()), key
     else:
         assert live.get(key) == value, key
 PY
     then
         die "Tracked Claude settings are not reconciled in $HOME/.claude/settings.json."
     fi
-    if "$HARNESS_DIR/clients/codex.sh" "$HOME/.codex/config.toml" >/dev/null; then
-        die "Tracked Codex settings are not reconciled in $HOME/.codex/config.toml."
-    fi
+    for script in "$HARNESS_DIR/clients/codex.sh" "$HARNESS_DIR/statusline/codex.sh"; do
+        "$script" "$HOME/.codex/config.toml" >/dev/null && status=0 || status=$?
+        [[ "$status" == 3 ]] ||
+            die "$script reports $status against $HOME/.codex/config.toml; expected 3, already reconciled."
+    done
     [[ "$(readlink "$HOME/.claude/statusline.sh")" == "$HARNESS_DIR/statusline/claude.sh" ]] || die "Missing the Claude statusline link."
-    for script in "$HARNESS_DIR"/statusline/*.sh; do
-        [[ -x "$script" ]] || die "Status line script is not executable: $script"
+    # Both reconcilers are executed directly, so a lost mode bit is exit 126,
+    # which is neither 0 nor 3 and now fails loudly rather than reading as a
+    # config that needed nothing.
+    for script in "$HARNESS_DIR"/statusline/*.sh "$HARNESS_DIR"/clients/*.sh; do
+        [[ -x "$script" ]] || die "Reconciler is not executable: $script"
     done
     grep -q '^status_line = \[' "$HOME/.codex/config.toml" || die "Missing the Codex status line."
 }

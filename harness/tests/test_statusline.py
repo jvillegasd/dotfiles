@@ -36,8 +36,10 @@ class StatuslineTests(unittest.TestCase):
         self.assertIn('"$HARNESS_DIR/statusline/codex.sh"', installer)
 
     def test_codex_statusline_reconciler_is_idempotent(self) -> None:
-        # Exit 1 with no output is how it says "already correct", which is what
-        # keeps a re-run from minting a backup root and rewriting the file.
+        # Exit 3 with no output is how it says "already correct", which is what
+        # keeps a re-run from minting a backup root and rewriting the file. It
+        # is not 1, because a crash exits 1 and the caller would write nothing
+        # while reporting success.
         reconciler = STATUSLINE / "codex.sh"
         with tempfile.TemporaryDirectory() as temporary:
             config = Path(temporary) / "config.toml"
@@ -62,7 +64,7 @@ class StatuslineTests(unittest.TestCase):
             second = subprocess.run(
                 [reconciler, config], capture_output=True, text=True
             )
-            self.assertEqual(second.returncode, 1, second.stdout)
+            self.assertEqual(second.returncode, 3, second.stdout)
             self.assertEqual(second.stdout, "")
 
 
