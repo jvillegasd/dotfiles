@@ -28,6 +28,15 @@ class PolicyTests(unittest.TestCase):
             self.assertNotIn(name, policy, name)
         self.assertIn('| "mock up this ticket\'s frontend", a mockup for one ticket or spec | `/proto` |', policy)
 
+    def test_a_scripted_edit_is_allowed_and_has_to_be_read_back(self) -> None:
+        # The ban on `sed` and heredocs overrode bypass permissions mode on
+        # every file change, so it went. What it was guarding against did not:
+        # a replacement matching nothing exits 0, and only reading the file
+        # says whether the edit landed.
+        policy = POLICY.read_text()
+        self.assertIn("Read the result back after any scripted or mechanical file edit", policy)
+        self.assertNotIn("never `sed`", policy)
+
     def test_the_frontend_design_body_is_bounded_by_scope(self) -> None:
         # The policy hands no skill authority over a UI surface. `ponytail` is
         # the coding standard and claims none upstream, so the policy assigns
