@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fixtures import INSTALLERS, LOCKED_SKILLS, ROOT, STATUSLINE
+from fixtures import CLIENTS, INSTALLERS, LOCKED_SKILLS, ROOT, STATUSLINE
 
 
 TESTS = ROOT / "harness" / "tests"
@@ -51,8 +51,8 @@ class SourceTests(unittest.TestCase):
             self.assertIn(pattern, ignored)
 
     def test_shell_and_python_syntax(self) -> None:
-        statusline = sorted(STATUSLINE.glob("*.sh"))
-        for script in (*INSTALLERS, ROOT / "harness" / "aliases.sh", LOCKED_SKILLS, *statusline):
+        shell = sorted(STATUSLINE.glob("*.sh")) + sorted(CLIENTS.glob("*.sh"))
+        for script in (*INSTALLERS, ROOT / "harness" / "aliases.sh", LOCKED_SKILLS, *shell):
             subprocess.run(["bash", "-n", script], check=True)
         scripts = list((ROOT / "harness").rglob("*.py"))
         with tempfile.TemporaryDirectory() as cache:

@@ -9,6 +9,7 @@ One committed source for Codex, Claude Code, and OpenCode:
 - `locked-skills.sh` adds, updates, removes, and validates reviewed third-party skill locks.
 - `bench/measure.py` compares the real session population before and after a harness change, reading all three clients' own session stores. Its manual is `bench/README.md`.
 - `statusline/` holds one file per provider: `claude.sh` renders Claude Code's line, `codex.sh` reconciles Codex's built-in one to match.
+- `clients/` holds the client settings this harness owns: `claude.json` and `codex.toml` declare them, and `codex.sh` reconciles the TOML half. Nothing here is symlinked, because both live files are mostly machine state written by other tools, hook manifests and per-project trust decisions and generated absolute paths. A tracked key replaces the live value on every install, so removing one here removes it from the machine; every key not named there is left alone. `permissions` is the one exception, merged a level down so `deny` stays owned while the Engram allowlist survives. The install runs these after `engram setup`, which rewrites both files from its own template.
 - `tests/` checks supply-chain, installer, and contract invariants, one file per subject.
 
 ## Development lifecycle
