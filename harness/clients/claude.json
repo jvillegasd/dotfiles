@@ -26,8 +26,7 @@
       "Bash(git worktree remove:*)",
       "Bash(git worktree prune:*)",
       "Bash(git push --force:*)",
-      "Bash(git push -f:*)",
-      "Bash(wt merge:*)"
+      "Bash(git push -f:*)"
     ]
   },
   "model": "opus",
