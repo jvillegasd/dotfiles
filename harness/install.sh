@@ -260,7 +260,9 @@ install_packages() {
 # plugin, marketplace entry and all, so nothing here drives a client's plugin
 # CLI by hand.
 #
-# The claude-code command asks whether to add engram's tools to the settings allowlist, and it is answered yes rather than left to default, because declining means Claude Code prompts on every memory call and the policy assumes memory is always available. The `y` goes only to that command: the other two are not known to ask anything, and piping a blind yes into whatever a future version decides to ask is not the same as answering this question. Both still take a closed stdin, so the installer never blocks on a prompt.
+# The claude-code command asks whether to add engram's tools to the settings allowlist, and it is answered yes rather than left to default, because declining means Claude Code prompts on every memory call and the policy assumes memory is always available. The `y` goes only to that command: the other two are not known to ask anything, and answering a blind yes to whatever a future version decides to ask is not the same as answering this question. Both still take a closed stdin, so the installer never blocks on a prompt.
+#
+# A here-string rather than a pipe: under `set -o pipefail` a version that exits without reading stdin gives the writer SIGPIPE, the pipeline reports 141, and `set -e` kills an install that actually succeeded.
 #
 # The allowlist itself is deliberately not tracked in clients/claude.json. Engram is what knows its own tool set, and a tracked copy is a second declaration that goes stale silently: the copy this repository briefly carried listed 15 tools per prefix while engram 1.20.0 writes 18, so tracking it would have removed three real tools on the next install.
 #
@@ -275,7 +277,7 @@ install_packages() {
 install_engram() {
     log "Reconciling Engram"
     command -v engram >/dev/null || die "Engram is missing; run without --links-only to install it."
-    printf 'y\n' | engram setup claude-code
+    engram setup claude-code <<< y
     engram setup codex < /dev/null
     engram setup opencode < /dev/null
 }
@@ -335,6 +337,11 @@ reconcile_orphans() {
             [[ -L "$entry" ]] || continue
             target="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$entry")"
             if [[ ! -e "$target" ]]; then
+                # Left alone during an uninstall. An install archives what it
+                # cannot prove is its own, and the owner can fetch it back; an
+                # uninstall deletes, so the same guess becomes unrecoverable.
+                # A link to an unmounted volume is the ordinary case.
+                $UNINSTALL && continue
                 backup_existing "$entry"
             elif [[ "$target" == "$HARNESS_DIR"/* ]]; then
                 # A managed link is always named after its target, so a name
@@ -373,14 +380,22 @@ remove = sys.argv[3] == "remove"
 marker = "# portable-harness aliases"
 managed = {"ccyolo", "cyolo", "oyolo"}
 current = rc.read_text()
-kept = []
+kept, dropped = [], False
 for line in current.splitlines():
     alias = re.match(r"\s*alias\s+([A-Za-z0-9_-]+)=", line)
     if alias and alias.group(1) in managed:
+        dropped = True
         continue
     if marker in line or source in line:
+        dropped = True
         continue
     kept.append(line)
+# A removal that found nothing changes nothing. Falling through would still
+# normalize trailing blank lines and the final newline, so a ~/.zshrc that
+# never had the block was rewritten and the run reported removing aliases it
+# had not removed.
+if remove and not dropped:
+    raise SystemExit(3)
 while kept and not kept[-1].strip():
     kept.pop()
 if not remove:
@@ -814,19 +829,33 @@ opencode_dir = pathlib.Path(sys.argv[4])
 # Named rather than matched: this is the one thing `engram setup` writes that
 # is not called engram, so nothing that searches for the word would find it.
 SUBAGENT_STATUSLINE = "opencode-subagent-statusline"
+# The two MCP server ids engram registers, per its docs/AGENT-SETUP.md: the
+# durable user-level one and the plugin-scoped one older installs use. A
+# permission entry is engram's when it names one of these, never when it merely
+# contains the word: `Bash(cd ~/src/engram && cargo test)` is the user's.
+TOOL_PREFIXES = ("mcp__engram__", "mcp__plugin_engram_engram__")
+# The exact TOML tables `engram setup codex` writes. A substring test here
+# deleted `[projects."/Users/me/code/engram-fork"]` and the trust decision
+# inside it, which is somebody's config rather than engram's.
+TABLES = ("mcp_servers.engram", "marketplaces.engram", "plugins.engram@engram")
 
 
 def rewrite(path, edit):
-    """Apply `edit` to a file's text, writing only when it changed."""
+    """Apply `edit` to a file's text, writing only when it removed something.
+
+    `edit` returns None for "nothing of engram's was here". That is the whole
+    contract: comparing the rendered text instead would count a reformat as a
+    change, rewriting a file that had no engram entries and logging that its
+    engram entries were removed.
+    """
     if not path.exists():
         return
     try:
-        current = path.read_text()
-        updated = edit(current)
+        updated = edit(path.read_text())
     except (OSError, ValueError) as error:
         print(f"{path}: {error}", file=sys.stderr)
         raise SystemExit(2)
-    if updated is not None and updated != current:
+    if updated is not None:
         path.write_text(updated)
         print(f"Removed the engram entries from {path}")
 
@@ -835,84 +864,113 @@ def prune_json(text, prune):
     document = json.loads(text)
     if not isinstance(document, dict):
         raise ValueError("expected a JSON object")
-    prune(document)
+    if not prune(document):
+        return None
     return json.dumps(document, indent=2) + "\n"
+
+
+def drop_named(section, matches):
+    """Remove matching names from a dict or list, reporting whether it did."""
+    if isinstance(section, dict):
+        names = [name for name in section if matches(name)]
+        for name in names:
+            section.pop(name)
+        return bool(names), not section
+    if isinstance(section, list):
+        kept = [item for item in section if not matches(str(item))]
+        removed = len(kept) != len(section)
+        section[:] = kept
+        return removed, not section
+    return False, False
 
 
 def claude(text):
     def prune(document):
+        removed = False
         permissions = document.get("permissions")
         if isinstance(permissions, dict):
             allow = permissions.get("allow")
             if isinstance(allow, list):
-                # Engram is reachable under two server names, its own and the
-                # plugin-scoped one, so the test is the tool rather than
-                # either prefix.
-                kept = [entry for entry in allow if "engram" not in entry]
-                if kept:
-                    permissions["allow"] = kept
-                else:
-                    permissions.pop("allow")
+                kept = [
+                    entry for entry in allow
+                    if not entry.startswith(TOOL_PREFIXES)
+                ]
+                if len(kept) != len(allow):
+                    removed = True
+                    if kept:
+                        permissions["allow"] = kept
+                    else:
+                        permissions.pop("allow")
             if not permissions:
                 document.pop("permissions")
         for key in ("enabledPlugins", "extraKnownMarketplaces"):
             section = document.get(key)
-            if isinstance(section, dict):
-                for name in [n for n in section if "engram" in n]:
-                    section.pop(name)
-                if not section:
-                    document.pop(key)
+            # A plugin id is `engram@engram` and a marketplace is `engram`, so
+            # the name is matched on its own rather than as a substring of
+            # somebody else's plugin.
+            dropped, empty = drop_named(
+                section, lambda name: name == "engram" or name.startswith("engram@")
+            )
+            removed = removed or dropped
+            if empty and key in document:
+                document.pop(key)
+        return removed
 
     return prune_json(text, prune)
 
 
 def opencode_config(text):
     def prune(document):
+        removed = False
         for key in ("mcp", "plugin"):
-            section = document.get(key)
-            if isinstance(section, dict):
-                for name in [n for n in section if "engram" in n]:
-                    section.pop(name)
-                if not section:
-                    document.pop(key)
-            elif isinstance(section, list):
-                kept = [item for item in section if "engram" not in str(item)]
-                if kept:
-                    document[key] = kept
-                else:
-                    document.pop(key)
+            dropped, empty = drop_named(
+                document.get(key),
+                lambda name: name == "engram" or name.endswith("/engram.ts") or name == "engram.ts",
+            )
+            removed = removed or dropped
+            if empty and key in document:
+                document.pop(key)
+        return removed
 
     return prune_json(text, prune)
 
 
 def codex_config(text):
-    """Drop engram's top-level pointers and every table named after it.
+    """Drop engram's own tables and its two instruction-file pointers.
 
     Textual, for the reason clients/codex.sh gives: tomllib needs Python 3.11
     and the system python3 macOS ships is older. A table runs to the next
     header, so dropping one is dropping that span.
     """
-    lines, kept, index = text.splitlines(), [], 0
+    lines, kept, index, removed = text.splitlines(), [], 0, False
     header = re.compile(r'\s*\[([^]]*)]')
     pointer = re.compile(r"\s*(model_instructions_file|experimental_compact_prompt_file)\s*=\s*(.*)$")
     while index < len(lines):
         line = lines[index]
         table = header.match(line)
-        if table and "engram" in table.group(1):
-            index += 1
-            # Up to the next header, which takes the blank line that
-            # separated this table from the one after it. The blank line
-            # before the removed table stays and becomes that separator, so
-            # the neighbours keep the spacing they had.
-            while index < len(lines) and not header.match(lines[index]):
+        if table:
+            name = table.group(1).replace('"', "").replace("'", "").strip()
+            if name in TABLES or any(name.startswith(f"{t}.") for t in TABLES):
+                removed = True
+                # Up to the next header, which takes the blank line that
+                # separated this table from the one after it. The blank line
+                # before the removed table stays and becomes that separator,
+                # so the neighbours keep the spacing they had.
                 index += 1
-            continue
+                while index < len(lines) and not header.match(lines[index]):
+                    index += 1
+                continue
         key = pointer.match(line)
-        if key and "engram" in key.group(2):
+        # The value has to name a file engram wrote; the keys themselves are
+        # Codex's own and a user may point them anywhere.
+        if key and re.search(r"engram-(instructions|compact-prompt)\.md", key.group(2)):
+            removed = True
             index += 1
             continue
         kept.append(line)
         index += 1
+    if not removed:
+        return None
     return "\n".join(kept).strip("\n") + "\n" if any(l.strip() for l in kept) else ""
 
 
@@ -1036,11 +1094,41 @@ check_engram_removed() {
         "$HOME/.codex/engram-compact-prompt.md" "$CONFIG_HOME/opencode/plugins/engram.ts"; do
         [[ ! -e "$path" ]] || die "Engram file survived the uninstall: $path"
     done
-    for path in "$HOME/.claude/settings.json" "$CONFIG_HOME/opencode/opencode.json" \
-        "$HOME/.codex/config.toml"; do
-        [[ -f "$path" ]] || continue
-        ! grep -qi engram "$path" || die "Engram entries survived the uninstall in $path"
-    done
+    # The containers remove_engram_config prunes, not the whole file. A grep
+    # for the word died on any unrelated mention, and it died after the
+    # formula and every link were already gone, so the run had no summary and
+    # re-running repeated the failure.
+    if ! python3 - "$HOME/.claude/settings.json" "$CONFIG_HOME/opencode/opencode.json" \
+        "$HOME/.codex/config.toml" <<'PY'
+import json, pathlib, re, sys
+
+settings, opencode, codex = (pathlib.Path(argument) for argument in sys.argv[1:4])
+PREFIXES = ("mcp__engram__", "mcp__plugin_engram_engram__")
+
+
+def names(section):
+    return list(section) if isinstance(section, dict) else [str(i) for i in section or []]
+
+
+if settings.exists():
+    document = json.loads(settings.read_text())
+    allow = (document.get("permissions") or {}).get("allow") or []
+    assert not [e for e in allow if e.startswith(PREFIXES)], "permissions.allow"
+    for key in ("enabledPlugins", "extraKnownMarketplaces"):
+        assert not [n for n in names(document.get(key)) if n == "engram" or n.startswith("engram@")], key
+if opencode.exists():
+    document = json.loads(opencode.read_text())
+    for key in ("mcp", "plugin"):
+        assert "engram" not in names(document.get(key)), key
+if codex.exists():
+    text = codex.read_text()
+    for table in ("mcp_servers.engram", "marketplaces.engram", 'plugins."engram@engram"'):
+        assert f"[{table}]" not in text, table
+    assert not re.search(r"engram-(instructions|compact-prompt)\.md", text), "instruction pointers"
+PY
+    then
+        die "Engram entries survived the uninstall in one of the client configs."
+    fi
     for path in "$CONFIG_HOME/opencode/tui.json" "$CONFIG_HOME/opencode/tui.jsonc"; do
         [[ -f "$path" ]] || continue
         ! grep -q 'opencode-subagent-statusline' "$path" ||
@@ -1106,7 +1194,10 @@ clear_backups() {
         return
     fi
     # `tr -d` because the du every macOS ships right-pads its size column.
-    size="$(du -sh "$root" 2>/dev/null | cut -f1 | tr -d ' ')"
+    # `|| true` because `set -o pipefail` makes an unreadable subdirectory
+    # under the backup root abort the command before it deletes anything, and
+    # a size for the log is never worth that.
+    size="$(du -sh "$root" 2>/dev/null | cut -f1 | tr -d ' ' || true)"
     for entry in "$root"/*; do
         rm -rf "$entry"
         log "Deleted $entry"

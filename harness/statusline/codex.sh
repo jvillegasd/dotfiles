@@ -62,6 +62,12 @@ remove = sys.argv[2] == "true"
 items = ", ".join(f'"{item}"' for item in sys.argv[3:])
 managed = [f"status_line = [{items}]", "status_line_use_colors = true"]
 current = path.read_text() if path.exists() else ""
+# Nothing to remove from a config that is not there. Without this the
+# reconciled text is a bare newline against an empty `current`, so removal
+# reports a change and the caller creates ~/.codex/config.toml on a machine
+# that had none.
+if remove and not current.strip():
+    raise SystemExit(3)
 lines = current.splitlines()
 
 kept, index, in_tui = [], 0, False

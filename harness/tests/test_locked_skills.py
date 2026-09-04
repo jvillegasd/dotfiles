@@ -143,7 +143,10 @@ class LockedSkillsTests(unittest.TestCase):
         # tools may run without a permission prompt on every call; the other
         # two get a closed stdin, since a blind yes would be answering
         # questions this repository has not read.
-        self.assertRegex(text, r"(?m)^\s*printf 'y\\n' \| engram setup claude-code$")
+        # A here-string rather than a pipe: `set -o pipefail` turns a SIGPIPE
+        # into a failed install when engram exits without reading stdin.
+        self.assertRegex(text, r"(?m)^\s*engram setup claude-code <<< y$")
+        self.assertNotIn("| engram setup", text)
         for command in ("codex", "opencode"):
             self.assertRegex(
                 text, rf"(?m)^\s*engram setup {command} < /dev/null", command

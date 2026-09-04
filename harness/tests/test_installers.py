@@ -454,6 +454,112 @@ class InstallerTests(unittest.TestCase):
             self.assertIn("Destructive and unrecoverable", text, group)
 
 
+class EngramRemovalTests(unittest.TestCase):
+    """The engram config surgery, exercised directly.
+
+    Every case here is a defect that shipped in review: the remover matched
+    the word "engram" wherever it appeared, so it took a user's Codex trust
+    decision, a user's permission rule, and a user's plugin with it. These
+    drive remove_engram_config on its own rather than through a full install,
+    because the input that breaks it is somebody else's config, not ours.
+    """
+
+    def remove(self, home: Path) -> subprocess.CompletedProcess:
+        installer = (ROOT / "harness" / "install.sh").read_text()
+        body = re.search(r"(?ms)^remove_engram_config\(\) \{.*?^\}", installer)
+        assert body is not None, "install.sh no longer defines remove_engram_config"
+        script = f'set -euo pipefail\nHOME="{home}"\nCONFIG_HOME="{home}/.config"\n{body.group(0)}\nremove_engram_config\n'
+        return subprocess.run(
+            ["bash", "-c", script], capture_output=True, text=True, check=True
+        )
+
+    def test_a_codex_table_merely_named_after_engram_is_kept(self) -> None:
+        # The one that mattered: a substring test on the table header deleted
+        # `[projects."…/engram-fork"]` and the trust decision inside it.
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            (home / ".codex").mkdir(parents=True)
+            config = home / ".codex" / "config.toml"
+            config.write_text(
+                '[projects."/Users/me/code/engram-fork"]\n'
+                'trust_level = "trusted"\n'
+                "\n"
+                "[mcp_servers.engram]\n"
+                'command = "/opt/homebrew/bin/engram"\n'
+                "\n"
+                '[projects."/Users/me/code/other"]\n'
+                'trust_level = "trusted"\n'
+            )
+
+            self.remove(home)
+
+            kept = config.read_text()
+            self.assertIn('[projects."/Users/me/code/engram-fork"]', kept)
+            self.assertIn('[projects."/Users/me/code/other"]', kept)
+            self.assertEqual(kept.count("trust_level"), 2)
+            self.assertNotIn("[mcp_servers.engram]", kept)
+
+    def test_a_user_permission_rule_naming_engram_is_kept(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            (home / ".claude").mkdir(parents=True)
+            settings = home / ".claude" / "settings.json"
+            settings.write_text(
+                json.dumps(
+                    {
+                        "permissions": {
+                            "allow": [
+                                "Bash(cd ~/src/engram && cargo test)",
+                                "mcp__engram__mem_save",
+                                "mcp__plugin_engram_engram__mem_search",
+                            ]
+                        },
+                        "enabledPlugins": {"engram@engram": True, "engram-helper@x": True},
+                    }
+                )
+            )
+
+            self.remove(home)
+
+            kept = json.loads(settings.read_text())
+            self.assertEqual(
+                kept["permissions"]["allow"], ["Bash(cd ~/src/engram && cargo test)"]
+            )
+            # A plugin whose name merely starts with the word is not engram's.
+            self.assertEqual(kept["enabledPlugins"], {"engram-helper@x": True})
+
+    def test_a_file_without_engram_entries_is_left_byte_for_byte(self) -> None:
+        # The remover round-tripped JSON through its own formatter, so a
+        # hand-formatted file was reindented and the run reported removing
+        # entries that were never there.
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            (home / ".config" / "opencode").mkdir(parents=True)
+            (home / ".claude").mkdir(parents=True)
+            opencode = home / ".config" / "opencode" / "opencode.json"
+            original = '{\n    "mcp": {\n        "other": {"command": ["y"]}\n    }\n}\n'
+            opencode.write_text(original)
+            settings = home / ".claude" / "settings.json"
+            settings.write_text('{\n\t"model": "opus"\n}\n')
+
+            result = self.remove(home)
+
+            self.assertEqual(opencode.read_text(), original)
+            self.assertEqual(settings.read_text(), '{\n\t"model": "opus"\n}\n')
+            self.assertNotIn("Removed the engram entries", result.stdout)
+
+    def test_an_unparseable_tui_file_does_not_stop_the_uninstall(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            (home / ".config" / "opencode").mkdir(parents=True)
+            tui = home / ".config" / "opencode" / "tui.jsonc"
+            tui.write_text('// a comment\n{"plugin": ["opencode-subagent-statusline"]}\n')
+
+            self.remove(home)
+
+            self.assertIn("comment", tui.read_text())
+
+
 class UninstallTests(unittest.TestCase):
     """`--uninstall`: what it takes back, what it must not touch, and the
     argument handling around it.
@@ -859,6 +965,48 @@ class UninstallTests(unittest.TestCase):
             self.assertEqual(kept["plugin"], ["theirs"])
             self.assertEqual(kept["theme"], "dark")
 
+    def test_uninstall_keeps_a_dangling_symlink_it_cannot_claim(self) -> None:
+        # An install archives a dangling link it cannot prove is its own, and
+        # the owner can fetch it back. An uninstall deletes, so the same guess
+        # is unrecoverable: a link into an unmounted volume is the ordinary
+        # case, and it has to survive.
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            self.seed(home)
+            self.run_installer(home, "--links-only")
+            dangling = home / ".claude" / "skills" / "mine"
+            dangling.symlink_to("/Volumes/not-mounted/mine")
+
+            self.run_installer(home, "--uninstall")
+
+            self.assertTrue(dangling.is_symlink())
+            self.assertEqual(os.readlink(dangling), "/Volumes/not-mounted/mine")
+
+    def test_uninstall_creates_no_config_it_did_not_find(self) -> None:
+        # Both Codex reconcilers rendered a bare newline against an empty
+        # config, so removal reported a change and the caller created
+        # ~/.codex/config.toml on a machine that had none.
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            self.run_installer(home, "--uninstall")
+
+            self.assertFalse((home / ".codex" / "config.toml").exists())
+            self.assertFalse((home / ".zshrc").exists())
+
+    def test_uninstall_leaves_an_unrelated_zshrc_alone(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            # No trailing newline, and a trailing blank line: the two shapes
+            # the reconciler normalizes, which made "nothing to remove" look
+            # like a change.
+            zshrc = home / ".zshrc"
+            original = "export PATH=/usr/bin\n\nalias sail='sh sail'"
+            zshrc.write_text(original)
+
+            self.run_installer(home, "--uninstall")
+
+            self.assertEqual(zshrc.read_text(), original)
+
     def test_uninstall_keeps_the_engram_database(self) -> None:
         # ~/.engram is the user's memories, not something this installer wrote,
         # and an uninstall that no longer archives is the last thing that
@@ -922,7 +1070,7 @@ class UninstallTests(unittest.TestCase):
         # command known to ask; piping a blind yes into the other two would be
         # answering questions this repository has not read.
         installer = (ROOT / "harness" / "install.sh").read_text()
-        self.assertIn("printf 'y\\n' | engram setup claude-code", installer)
+        self.assertIn("engram setup claude-code <<< y", installer)
         for agent in ("codex", "opencode"):
             self.assertIn(f"engram setup {agent} < /dev/null", installer)
         # And the allowlist is engram's to declare, not this repository's.

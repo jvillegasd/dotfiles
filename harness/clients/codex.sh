@@ -90,6 +90,12 @@ while index < len(tracked_lines):
     index += 1
 
 current = read(config, 2, missing_is_empty=True)
+# Nothing to remove from a config that is not there. Without this the
+# reconciled text is a bare newline against an empty `current`, so removal
+# reports a change and the caller creates ~/.codex/config.toml on a machine
+# that had none.
+if remove and not current.strip():
+    raise SystemExit(3)
 lines = current.splitlines()
 head, tail, written = [], [], set()
 index = 0
