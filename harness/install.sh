@@ -14,6 +14,7 @@ HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 LINKS_ONLY=false
 NO_BACKUP=false
+UNINSTALL=false
 BACKUP_ROOT=""
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
@@ -27,6 +28,7 @@ source "$(dirname "$HARNESS_DIR")/lib/python.sh"
 usage() {
     cat <<'EOF'
 Usage: harness/install.sh [--links-only] [--no-backup]
+       harness/install.sh --uninstall [--no-backup]
 
   --links-only   Reconcile policy, command, and skill links without installing
                  packages. Engram is still reconciled, so it has to be
@@ -35,6 +37,13 @@ Usage: harness/install.sh [--links-only] [--no-backup]
                  ~/.dotfiles-backups. Destructive and unrecoverable: a private
                  skill or a hand-edited config sitting at a managed path is
                  gone, not archived.
+  --uninstall    Remove what this installer writes: every managed link, the
+                 ~/.zshrc alias block, and the tracked keys in the Claude and
+                 Codex configs. It reverses the installer, it does not
+                 uninstall your tools. Packages, the Engram plugin and MCP
+                 registration, ~/.dotfiles-backups, this checkout, and every
+                 untracked key in either client config are left alone.
+                 Archives what it removes unless --no-backup says otherwise.
 EOF
 }
 
@@ -42,10 +51,18 @@ for arg in "$@"; do
     case "$arg" in
         --links-only) LINKS_ONLY=true ;;
         --no-backup) NO_BACKUP=true ;;
+        --uninstall) UNINSTALL=true ;;
         -h|--help) usage; exit 0 ;;
         *) die "Unknown argument: $arg" ;;
     esac
 done
+
+# Contradictory rather than merely redundant: --links-only names a subset of
+# the install to write, and --uninstall writes none of it. Silently letting one
+# win would make the flag that lost look like it did something.
+if $UNINSTALL && $LINKS_ONLY; then
+    die "--uninstall and --links-only are contradictory; --uninstall removes every link."
+fi
 
 SKILL_ROOTS=(
     "$HOME/.agents/skills"
@@ -116,6 +133,17 @@ link_managed() {
     mkdir -p "$(dirname "$destination")"
     ln -s "$source" "$destination"
     log "Linked $destination -> $source"
+}
+
+# The inverse of link_managed, and it tests exactly what link_managed writes: a
+# symlink whose text is this source. A path that is anything else, a real file
+# the user put there or a link to somebody else's copy, is left alone rather
+# than removed, because the uninstall has no claim on it. backup_existing does
+# the removal, so --no-backup means the same thing here as everywhere else.
+unlink_managed() {
+    local source="$1" destination="$2"
+    [[ -L "$destination" && "$(readlink "$destination")" == "$source" ]] || return 0
+    backup_existing "$destination"
 }
 
 # The harness owns a real directory at every root it links into or sweeps, so
@@ -193,13 +221,7 @@ install_packages() {
 # plugin, marketplace entry and all, so nothing here drives a client's plugin
 # CLI by hand.
 #
-# The claude-code command asks whether to add engram's tools to the settings
-# allowlist, so all three read from /dev/null: this installer never blocks on a
-# prompt, and declining leaves the tools working with Claude Code's own
-# permission handling. That command also writes ~/.claude/mcp/engram.json
-# pinned to the absolute path of the current engram binary, which is why
-# install_packages upgrades engram before this runs: the pin is rewritten after
-# the upgrade rather than left stale by it.
+# The claude-code command asks whether to add engram's tools to the settings allowlist, so all three read from /dev/null: this installer never blocks on a prompt, and whichever way that prompt defaults on EOF no longer decides the outcome, because clients/claude.json tracks the allowlist and reconcile_claude_settings writes it after this runs. That command also writes ~/.claude/mcp/engram.json pinned to the absolute path of the current engram binary, which is why install_packages upgrades engram before this runs: the pin is rewritten after the upgrade rather than left stale by it.
 #
 # Setting up Codex also writes `[mcp_servers.engram]` in config.toml, which
 # outranks the server the plugin declares in its .mcp.json. Nothing is lost:
@@ -291,13 +313,20 @@ reconcile_orphans() {
 # "Unchanged" is exit 3, so a crash cannot pass for it. The overloaded 1 read
 # an unreadable ~/.zshrc, or a missing python3, as "nothing to do" and left the
 # aliases silently uninstalled while the run reported success.
-install_aliases() {
-    local rc="$HOME/.zshrc" reconciled status
-    [[ -f "$rc" ]] || touch "$rc"
-    reconciled="$(python3 - "$rc" "$HARNESS_DIR/aliases.sh" <<'PY'
+#
+# Removal is this same pass with its last two lines dropped, because stripping the managed aliases is already the first thing installing them does. The one caller-visible difference is that an uninstall does not create a missing ~/.zshrc: writing a file in order to remove nothing from it would leave the machine with more than it started with.
+reconcile_aliases() {
+    local mode="$1" rc="$HOME/.zshrc" reconciled status
+    if [[ "$mode" == remove ]]; then
+        [[ -f "$rc" ]] || return 0
+    else
+        [[ -f "$rc" ]] || touch "$rc"
+    fi
+    reconciled="$(python3 - "$rc" "$HARNESS_DIR/aliases.sh" "$mode" <<'PY'
 import pathlib, re, sys
 
 rc, source = pathlib.Path(sys.argv[1]), sys.argv[2]
+remove = sys.argv[3] == "remove"
 marker = "# portable-harness aliases"
 managed = {"ccyolo", "cyolo", "oyolo"}
 current = rc.read_text()
@@ -311,7 +340,9 @@ for line in current.splitlines():
     kept.append(line)
 while kept and not kept[-1].strip():
     kept.pop()
-kept += [marker, f'[ -f "{source}" ] && source "{source}"', ""]
+if not remove:
+    kept += [marker, f'[ -f "{source}" ] && source "{source}"']
+kept.append("")
 text = "\n".join(kept)
 if text == current:
     raise SystemExit(3)
@@ -322,22 +353,20 @@ PY
     if [[ "$status" == 0 ]]; then
         backup_copy "$rc"
         printf '%s\n' "$reconciled" > "$rc"
-        log "Reconciled harness aliases in $rc"
+        if [[ "$mode" == remove ]]; then
+            log "Removed the harness aliases from $rc"
+        else
+            log "Reconciled harness aliases in $rc"
+        fi
     fi
 }
 
-# clients/claude.json declares the settings this harness owns, and every other
-# key in a live settings.json is left alone: Orca writes hook manifests into it
-# and `engram setup` writes permissions.allow, the plugin entry, and the
-# marketplace entry. Those are machine state, so they are reconciled here
-# rather than tracked, and a whole-file symlink would either version them or
-# lose them on the next write.
+install_aliases() { reconcile_aliases install; }
+uninstall_aliases() { reconcile_aliases remove; }
+
+# clients/claude.json declares the settings this harness owns, and every other key in a live settings.json is left alone: Orca writes hook manifests into it and `engram setup` writes the plugin entry and the marketplace entry. Those are machine state, so they are reconciled here rather than tracked, and a whole-file symlink would either version them or lose them on the next write.
 #
-# A tracked key replaces the live value outright, so removing a deny from the
-# tracked file removes it from the machine. `permissions` is the one key merged
-# a level down, which is what keeps the engram allowlist while `deny` stays
-# owned. Rewritten only when the result differs, which keeps a hand-edited
-# settings.json otherwise alone, formatting included.
+# A tracked key replaces the live value outright, so removing a deny from the tracked file removes it from the machine. `permissions` is the one key merged a level down, so a permission class this harness does not track, `ask` today, survives while `allow` and `deny` stay owned. `allow` is owned because install_engram runs `engram setup` on /dev/null and never sees its allowlist prompt, so tracking the entries is what decides them rather than whatever that prompt does at EOF. Rewritten only when the result differs, which keeps a hand-edited settings.json otherwise alone, formatting included.
 #
 # The reconciled file is emitted on stdout and written here, rather than
 # written in place, so the backup is taken only when something actually
@@ -398,6 +427,59 @@ PY
     fi
 }
 
+# The inverse of reconcile_claude_settings, and it deletes exactly what that function writes. `permissions` is merged a level down on the way in, so it is unmerged a level down on the way out: only the tracked classes go, and a class this harness never tracked stays. An emptied `permissions` is dropped rather than left as `{}`, because a key the harness introduced and no longer fills is still the harness's leftover.
+#
+# The status codes are the reconciler's, for the same reason it has them: exit 3 is a settings.json that already carries none of these keys, and a crash must not be able to pass for it.
+remove_claude_settings() {
+    local settings="$HOME/.claude/settings.json" reconciled status
+    [[ -f "$settings" ]] || return 0
+    reconciled="$(python3 - "$settings" "$HARNESS_DIR/clients/claude.json" <<'PY'
+import json, sys
+
+path, tracked_path = sys.argv[1], sys.argv[2]
+try:
+    with open(path) as handle:
+        settings = json.load(handle)
+    if not isinstance(settings, dict):
+        raise TypeError(f"expected a JSON object, found {type(settings).__name__}")
+except (OSError, ValueError, TypeError) as error:
+    print(error, file=sys.stderr)
+    raise SystemExit(2)
+try:
+    with open(tracked_path) as handle:
+        tracked = json.load(handle)
+    if not isinstance(tracked, dict):
+        raise TypeError(f"expected a JSON object, found {type(tracked).__name__}")
+except (OSError, ValueError, TypeError) as error:
+    print(error, file=sys.stderr)
+    raise SystemExit(4)
+before = json.dumps(settings, sort_keys=True)
+for key, value in tracked.items():
+    live = settings.get(key)
+    if key == "permissions" and isinstance(live, dict):
+        for name in value:
+            live.pop(name, None)
+        if not live:
+            settings.pop(key)
+    else:
+        settings.pop(key, None)
+if json.dumps(settings, sort_keys=True) == before:
+    raise SystemExit(3)
+json.dump(settings, sys.stdout, indent=2)
+sys.stdout.write("\n")
+PY
+    )" && status=0 || status=$?
+    [[ "$status" != 2 ]] || die "$settings is not a JSON object; fix it and re-run."
+    [[ "$status" != 4 ]] || die "$HARNESS_DIR/clients/claude.json is unreadable or not a JSON object."
+    [[ "$status" == 0 || "$status" == 3 ]] ||
+        die "Removing the tracked settings from $settings failed with status $status."
+    if [[ "$status" == 0 ]]; then
+        backup_copy "$settings"
+        printf '%s\n' "$reconciled" > "$settings"
+        log "Removed the tracked Claude settings from $settings"
+    fi
+}
+
 # Both writers of ~/.codex/config.toml, the tracked settings and the status
 # line. Each provider's status line lives in statusline/, one file per
 # provider: claude.sh is the renderer Claude Code runs on every draw, while
@@ -413,15 +495,22 @@ PY
 write_reconciled_codex() {
     local reconciler="$1" what="$2" config="$HOME/.codex/config.toml"
     local reconciled status
+    # Any remaining argument is a flag for the reconciler itself, --remove
+    # today. `shift` rather than an array slice: an empty array expanded under
+    # `set -u` is an unbound variable in bash 3.2, which is the system bash
+    # every macOS ships, so the no-flag call would abort the run.
+    shift 2
+    local verb="Reconciled"
+    [[ "${1-}" != --remove ]] || verb="Removed"
     mkdir -p "$(dirname "$config")"
-    reconciled="$("$reconciler" "$config")" && status=0 || status=$?
+    reconciled="$("$reconciler" "$@" "$config")" && status=0 || status=$?
     [[ "$status" != 4 ]] || die "$HARNESS_DIR/clients/codex.toml is unreadable."
     [[ "$status" == 0 || "$status" == 3 ]] ||
         die "Reconciling $what in $config failed with status $status."
     if [[ "$status" == 0 ]]; then
         backup_copy "$config"
         printf '%s\n' "$reconciled" > "$config"
-        log "Reconciled $what in $config"
+        log "$verb $what in $config"
     fi
 }
 
@@ -614,7 +703,122 @@ EOF
     fi
 }
 
+# Everything install_links wrote, in one sweep plus four named links.
+#
+# reconcile_orphans with an empty desired set is the sweep: its ownership test
+# is already "this link resolves into $HARNESS_DIR", which is exactly what
+# makes a link this installer's to remove, so an uninstall is that function
+# told that nothing is desired. Writing a second ownership predicate here is
+# what would let install and uninstall disagree about what the harness owns.
+#
+# It carries that function's documented defect unchanged, and does not extend
+# it: a dangling symlink it cannot prove is its own is archived too. At
+# uninstall time the checkout is still on disk, so no link this harness wrote
+# is dangling, and the case is the one already reached on every install run.
+#
+# The four named links are not in either root set, so the sweep never sees
+# them. They go through unlink_managed, which removes a path only when it is
+# still a symlink to the source the installer gave it.
+uninstall_links() {
+    reconcile_orphans ""
+    unlink_managed "$HARNESS_DIR/POLICY.md" "$HOME/.codex/AGENTS.md"
+    unlink_managed "$HARNESS_DIR/POLICY.md" "$HOME/.claude/CLAUDE.md"
+    unlink_managed "$HARNESS_DIR/POLICY.md" "$CONFIG_HOME/opencode/AGENTS.md"
+    unlink_managed "$HARNESS_DIR/statusline/claude.sh" "$HOME/.claude/statusline.sh"
+}
+
+# The mirror of check_links: the mode that removes things confirms the removal
+# the way the mode that writes them confirms the write. Without it an uninstall
+# that silently skipped a root would still report success, and the leftover
+# would surface as a client loading a policy from a checkout that has moved.
+check_removed() {
+    local root entry target script status
+    for root in "${SKILL_ROOTS[@]}" "${COMMAND_ROOTS[@]}"; do
+        [[ -d "$root" ]] || continue
+        for entry in "$root"/*; do
+            [[ -L "$entry" ]] || continue
+            target="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$entry")"
+            [[ "$target" != "$HARNESS_DIR"/* ]] || die "Managed link survived the uninstall: $entry"
+        done
+    done
+    for entry in "$HOME/.codex/AGENTS.md" "$HOME/.claude/CLAUDE.md" \
+        "$CONFIG_HOME/opencode/AGENTS.md" "$HOME/.claude/statusline.sh"; do
+        if [[ -L "$entry" ]]; then
+            target="$(readlink "$entry")"
+            [[ "$target" != "$HARNESS_DIR"/* ]] || die "Managed link survived the uninstall: $entry"
+        fi
+    done
+    if [[ -f "$HOME/.zshrc" ]]; then
+        ! grep -q '# portable-harness aliases' "$HOME/.zshrc" || die "Harness aliases survived the uninstall in $HOME/.zshrc."
+        ! grep -qE '^\s*alias (ccyolo|cyolo|oyolo)=' "$HOME/.zshrc" || die "A yolo alias survived the uninstall in $HOME/.zshrc."
+    fi
+    # Every tracked key is gone from the live settings, and the untracked keys
+    # beside them are not. Asserted by re-running the remover, where only exit
+    # 3 means "the file already carries none of these": exit 0 is a key that
+    # would still be deleted, and anything else is the remover failing to
+    # answer the question.
+    if [[ -f "$HOME/.claude/settings.json" ]]; then
+        if ! python3 - "$HOME/.claude/settings.json" "$HARNESS_DIR/clients/claude.json" <<'PY'
+import json, sys
+
+live, tracked = (json.load(open(path)) for path in sys.argv[1:3])
+for key, value in tracked.items():
+    if key == "permissions":
+        assert not set(live.get(key) or {}) & set(value), key
+    else:
+        assert key not in live, key
+PY
+        then
+            die "Tracked Claude settings survived the uninstall in $HOME/.claude/settings.json."
+        fi
+    fi
+    for script in "$HARNESS_DIR/clients/codex.sh" "$HARNESS_DIR/statusline/codex.sh"; do
+        "$script" --remove "$HOME/.codex/config.toml" >/dev/null && status=0 || status=$?
+        [[ "$status" == 3 ]] ||
+            die "$script reports $status against $HOME/.codex/config.toml; expected 3, already removed."
+    done
+}
+
+uninstall() {
+    log "Removing the harness from this machine"
+    uninstall_links
+    uninstall_aliases
+    remove_claude_settings
+    write_reconciled_codex "$HARNESS_DIR/clients/codex.sh" "the tracked Codex settings" --remove
+    write_reconciled_codex "$HARNESS_DIR/statusline/codex.sh" "the Codex status line" --remove
+    check_removed
+    uninstall_summary
+}
+
+uninstall_summary() {
+    cat <<EOF
+
+$(printf '\033[1;32m✓ Harness AI removed.\033[0m')
+
+Gone: every managed skill and command link, the three POLICY.md links, the
+Claude status line link, the ~/.zshrc alias block, and the tracked keys in
+~/.claude/settings.json and ~/.codex/config.toml.
+
+Left alone, because this reverses the installer rather than uninstalling your
+tools: the packages (codex, claude, opencode, engram, worktrunk, gh, uv, node),
+the Engram plugin, marketplace, and MCP registration, every untracked key in
+both client configs, ~/.dotfiles-backups, and this checkout.
+
+Open a new shell to drop the aliases from the one you are in.
+Reinstall with: $HARNESS_DIR/install.sh
+EOF
+    if [[ -n "$BACKUP_ROOT" ]]; then
+        printf '\nBackups: %s\n' "$BACKUP_ROOT"
+    fi
+}
+
 main() {
+    # Ahead of everything, including warn_unless_zsh: an uninstall runs none of
+    # the two steps that warning is about.
+    if $UNINSTALL; then
+        uninstall
+        return
+    fi
     # First, so the warning precedes the two steps it is about rather than
     # reporting them after both have already skipped what they skip.
     warn_unless_zsh

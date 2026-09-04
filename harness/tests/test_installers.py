@@ -286,11 +286,15 @@ class InstallerTests(unittest.TestCase):
                 tracked["permissions"]["deny"],
             )
             self.assertNotIn("Bash(retired:*)", claude_settings["permissions"]["deny"])
-            # Machine state survives: the engram allowlist beside the deny list
-            # this harness owns, and the keys other tools write beside it.
+            # `allow` is owned too, so the tracked list replaces the live one
+            # rather than merging into it. The seeded lone entry is a subset of
+            # what the harness tracks, so the assertion that matters is that
+            # the live list is now the tracked list exactly.
             self.assertEqual(
-                claude_settings["permissions"]["allow"], ["mcp__engram__mem_save"]
+                claude_settings["permissions"]["allow"],
+                tracked["permissions"]["allow"],
             )
+            # Machine state written by other tools survives beside it.
             self.assertEqual(claude_settings["hooks"], {"Stop": []})
             self.assertEqual(
                 claude_settings["enabledPlugins"], {"engram@engram": True}
@@ -452,6 +456,269 @@ class InstallerTests(unittest.TestCase):
             self.assertIn("--no-backup", text, group)
             # The flag is destructive, so the usage text has to say so.
             self.assertIn("Destructive and unrecoverable", text, group)
+
+
+class UninstallTests(unittest.TestCase):
+    """`--uninstall`: what it takes back, what it must not touch, and the
+    argument handling around it.
+
+    Each case seeds a HOME with state the uninstall has no claim on, installs
+    with --links-only, then removes. Asserting only that the managed paths are
+    gone would pass just as well for `rm -rf ~`, so every case checks the
+    foreign state too.
+    """
+
+    def environment(self, home: Path) -> dict[str, str]:
+        return os.environ | {
+            "HOME": str(home),
+            "XDG_CACHE_HOME": str(home / ".cache"),
+            "XDG_CONFIG_HOME": str(home / ".config"),
+        }
+
+    def run_installer(
+        self, home: Path, *arguments: str, check: bool = True
+    ) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["bash", ROOT / "harness" / "install.sh", *arguments],
+            env=self.environment(home),
+            check=check,
+            capture_output=True,
+            text=True,
+        )
+
+    def seed(self, home: Path) -> None:
+        """A HOME carrying state from every source the uninstall must respect:
+        a private skill, somebody else's command, a hand-written alias, the
+        untracked permission class, machine state Orca and `engram setup`
+        write, and an unrelated top-level Codex key.
+        """
+        private = home / ".agents" / "skills" / "private"
+        private.mkdir(parents=True)
+        (private / "SKILL.md").write_text("---\nname: private\ndescription: private\n---\n")
+        prompts = home / ".codex" / "prompts"
+        prompts.mkdir(parents=True)
+        (prompts / "theirs.md").write_text("theirs\n")
+        (home / ".zshrc").write_text("export PATH=/usr/bin\nalias sail='sh sail'\n")
+        settings = home / ".claude" / "settings.json"
+        settings.parent.mkdir(parents=True, exist_ok=True)
+        settings.write_text(
+            json.dumps(
+                {
+                    "permissions": {"ask": ["WebFetch"]},
+                    "hooks": {"Stop": []},
+                    "enabledPlugins": {"engram@engram": True},
+                }
+            )
+        )
+        (home / ".codex" / "config.toml").write_text(
+            'unrelated = "keep-me"\n\n[tui]\ntheme = "keep-me-too"\n'
+        )
+
+    def assert_nothing_managed_survives(self, home: Path) -> None:
+        harness = ROOT / "harness"
+        roots = [
+            home / ".agents" / "skills",
+            home / ".claude" / "skills",
+            home / ".config" / "opencode" / "skills",
+            home / ".claude" / "commands",
+            home / ".codex" / "prompts",
+            home / ".config" / "opencode" / "command",
+        ]
+        for root in roots:
+            if not root.is_dir():
+                continue
+            for entry in root.iterdir():
+                self.assertFalse(
+                    entry.is_symlink() and harness in entry.resolve().parents,
+                    f"managed link survived: {entry}",
+                )
+        for path in (
+            home / ".codex" / "AGENTS.md",
+            home / ".claude" / "CLAUDE.md",
+            home / ".config" / "opencode" / "AGENTS.md",
+            home / ".claude" / "statusline.sh",
+        ):
+            self.assertFalse(path.is_symlink(), f"managed link survived: {path}")
+        zshrc = (home / ".zshrc").read_text()
+        self.assertNotIn("portable-harness aliases", zshrc)
+        self.assertNotIn("alias cyolo=", zshrc)
+
+    def assert_foreign_state_survives(self, home: Path) -> None:
+        self.assertTrue((home / ".agents" / "skills" / "private" / "SKILL.md").is_file())
+        self.assertTrue((home / ".codex" / "prompts" / "theirs.md").is_file())
+        self.assertIn("alias sail=", (home / ".zshrc").read_text())
+        settings = json.loads((home / ".claude" / "settings.json").read_text())
+        # The untracked permission class and the machine state beside it. The
+        # `ask` list is the case the merge exists for: `permissions` is owned a
+        # class at a time, not whole.
+        self.assertEqual(settings["permissions"], {"ask": ["WebFetch"]})
+        self.assertEqual(settings["hooks"], {"Stop": []})
+        self.assertIn("enabledPlugins", settings)
+        config = (home / ".codex" / "config.toml").read_text()
+        self.assertIn('unrelated = "keep-me"', config)
+        self.assertIn('theme = "keep-me-too"', config)
+
+    def test_uninstall_removes_the_harness_and_nothing_else(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            self.seed(home)
+            self.run_installer(home, "--links-only")
+
+            # The install has to have written something, or the removal below
+            # would pass against a HOME the harness never reached.
+            self.assertTrue((home / ".claude" / "CLAUDE.md").is_symlink())
+            self.assertIn("portable-harness aliases", (home / ".zshrc").read_text())
+            installed = json.loads((home / ".claude" / "settings.json").read_text())
+            self.assertIn("deny", installed["permissions"])
+
+            self.run_installer(home, "--uninstall")
+
+            self.assert_nothing_managed_survives(home)
+            self.assert_foreign_state_survives(home)
+            # Removed, not deleted: the default is an archive, and the tracked
+            # keys are archived as the file they were in.
+            backups = home / ".dotfiles-backups"
+            self.assertTrue(backups.is_dir())
+            self.assertTrue(any(backups.rglob("settings.json*")))
+
+    def test_uninstall_leaves_no_tracked_key_in_either_client(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            self.seed(home)
+            self.run_installer(home, "--links-only")
+            self.run_installer(home, "--uninstall")
+
+            tracked = json.loads((ROOT / "harness" / "clients" / "claude.json").read_text())
+            settings = json.loads((home / ".claude" / "settings.json").read_text())
+            for key, value in tracked.items():
+                if key == "permissions":
+                    self.assertFalse(set(settings.get(key, {})) & set(value), key)
+                else:
+                    self.assertNotIn(key, settings)
+
+            config = (home / ".codex" / "config.toml").read_text()
+            for line in (ROOT / "harness" / "clients" / "codex.toml").read_text().splitlines():
+                key = re.match(r"\s*([A-Za-z0-9_.-]+)\s*=", line)
+                if key:
+                    self.assertNotRegex(config, rf"(?m)^{key.group(1)}\s*=")
+            # The status line half of the same file, whose items live in one
+            # declaration the tests read rather than restate.
+            for item in codex_status_items():
+                self.assertNotIn(f'"{item}"', config)
+            self.assertNotRegex(config, r"(?m)^\s*status_line\s*=")
+
+    def test_uninstall_is_idempotent_and_needs_no_prior_install(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            # A HOME the harness never touched. Nothing to remove is a clean
+            # exit, not a failure, or a partially installed machine could not
+            # be cleaned up.
+            self.run_installer(home, "--uninstall")
+
+            self.seed(home)
+            self.run_installer(home, "--links-only")
+            self.run_installer(home, "--uninstall")
+            first = (home / ".codex" / "config.toml").read_text()
+            self.run_installer(home, "--uninstall")
+
+            self.assert_nothing_managed_survives(home)
+            self.assert_foreign_state_survives(home)
+            # A second pass is a fixed point, which is what check_removed
+            # asserts by re-running both Codex reconcilers for exit 3.
+            self.assertEqual((home / ".codex" / "config.toml").read_text(), first)
+
+    def test_install_after_uninstall_restores_the_machine(self) -> None:
+        # The round trip is the real contract: an uninstall that could not be
+        # undone would be a migration, not a mode of the installer.
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            self.seed(home)
+            self.run_installer(home, "--links-only")
+            installed = {
+                "settings": (home / ".claude" / "settings.json").read_text(),
+                "config": (home / ".codex" / "config.toml").read_text(),
+                "zshrc": (home / ".zshrc").read_text(),
+            }
+
+            self.run_installer(home, "--uninstall")
+            self.run_installer(home, "--links-only")
+
+            self.assertEqual((home / ".claude" / "settings.json").read_text(), installed["settings"])
+            self.assertEqual((home / ".zshrc").read_text(), installed["zshrc"])
+            self.assertTrue((home / ".claude" / "CLAUDE.md").is_symlink())
+            # config.toml is compared by the lines the harness owns rather than
+            # whole: `engram setup` runs on every install and orders its own
+            # tables differently once they already exist, so asserting the
+            # whole file here would be asserting engram's idempotency instead
+            # of this installer's.
+            def owned(text: str) -> list[str]:
+                keys = ("model", "model_reasoning_effort", "plan_mode_reasoning_effort",
+                        "status_line", "status_line_use_colors")
+                return [
+                    line for line in text.splitlines()
+                    if re.match(rf"\s*({'|'.join(keys)})\s*=", line)
+                ]
+
+            self.assertEqual(
+                owned((home / ".codex" / "config.toml").read_text()),
+                owned(installed["config"]),
+            )
+
+    def test_uninstall_no_backup_deletes_instead_of_archiving(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            self.seed(home)
+            self.run_installer(home, "--links-only")
+            # The install archived what it displaced, so the claim is that the
+            # uninstall minted no backup root of its own, not that the machine
+            # has none.
+            backups = home / ".dotfiles-backups"
+            before = sorted(path.name for path in backups.rglob("*")) if backups.exists() else []
+
+            self.run_installer(home, "--uninstall", "--no-backup")
+
+            after = sorted(path.name for path in backups.rglob("*")) if backups.exists() else []
+            self.assertEqual(after, before)
+            self.assert_nothing_managed_survives(home)
+            self.assert_foreign_state_survives(home)
+
+    def test_uninstall_refuses_the_contradictory_flag(self) -> None:
+        # --links-only names a subset of the install to write and --uninstall
+        # writes none of it, so letting one win silently would make the other
+        # look like it did something.
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            self.seed(home)
+            self.run_installer(home, "--links-only")
+            result = self.run_installer(home, "--uninstall", "--links-only", check=False)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("--uninstall", result.stderr)
+            self.assertIn("--links-only", result.stderr)
+            # It refused before removing anything.
+            self.assertTrue((home / ".claude" / "CLAUDE.md").is_symlink())
+
+    def test_argument_handling_writes_nothing(self) -> None:
+        for arguments, expect_success in ((["--help"], True), (["-h"], True), (["--bogus"], False)):
+            with self.subTest(arguments=arguments):
+                with tempfile.TemporaryDirectory() as temporary_home:
+                    home = Path(temporary_home)
+                    result = self.run_installer(home, *arguments, check=False)
+                    self.assertEqual(result.returncode == 0, expect_success)
+                    if expect_success:
+                        self.assertIn("--uninstall", result.stdout)
+                    else:
+                        self.assertIn("--bogus", result.stderr)
+                    # Neither branch reaches an install or a removal.
+                    self.assertEqual(list(home.iterdir()), [])
+
+    def test_uninstall_is_documented_in_the_usage(self) -> None:
+        installer = (ROOT / "harness" / "install.sh").read_text()
+        self.assertIn("--uninstall", installer)
+        # The scope is the part a user gets wrong, so the usage has to state
+        # that this reverses the installer rather than uninstalling their
+        # tools.
+        self.assertIn("it does not\n                 uninstall your tools", installer)
 
 
 if __name__ == "__main__":
