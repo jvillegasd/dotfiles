@@ -7,7 +7,7 @@
 # installs the AI clients and integrations it needs on its own, so it stays
 # runnable without this file.
 #
-# No python@ or python-tk@ formula: harness/install.sh installs 3.14 and 3.11
+# No python@ or python-tk@ formula: the platform scripts install 3.14 with uv
 # with uv, which resolves them by its own registry rather than by PATH, and
 # whose standalone builds already bundle tkinter. Homebrew still pulls a python@
 # in as a dependency of other formulae; that copy is nobody's declared
