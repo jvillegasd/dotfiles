@@ -16,7 +16,6 @@
       "Edit(**/.env*)",
       "Edit(**/secrets/**)",
       "Edit(**/.ssh/**)",
-      "Bash(git stash:*)",
       "Bash(git reset --hard:*)",
       "Bash(git reset --keep:*)",
       "Bash(git clean:*)",
