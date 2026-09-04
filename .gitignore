@@ -14,4 +14,7 @@
 .codex/
 .opencode/
 .engram/
+
+# Names clients and employers. The committed example names nobody.
+harness/bench/cohorts.json
 *.backup.*

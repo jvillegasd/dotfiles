@@ -328,6 +328,10 @@ Do not enable the Worktrunk Claude Code plugin. Its `UserPromptSubmit` hook rewr
 
 It reads Claude Code JSONL transcripts, Codex rollout JSONL, and the OpenCode SQLite database, and reports each client separately; `--client` narrows it. A metric a client does not record, such as a declined tool call in Codex or OpenCode, prints as `-` rather than zero.
 
+Eight medians per cohort: `turns`, `tool_calls`, and `minutes` for cost, `interrupts`, `denials`, and `errors` for friction, and `commands` and `delegation` for the two things this policy actually claims to move, routing adoption and subagent use. A subagent gets a transcript of its own in both clients that delegate, and is counted as the parent's delegation rather than as a session of its own.
+
+A hard week at work moves every one of those numbers without the harness changing. Copy `harness/bench/cohorts.example.json` to `cohorts.json` and list the project patterns that mean work, and the report splits work from personal so a deadline lands in one cohort and the other still reads the change. That file is gitignored: naming a client is the whole job of it.
+
 Populations, not pairs. Cost and friction are the measured part; quality stays a human read of the sessions.
 
 The suite validates shell/Python syntax, the locked-skill lifecycle helper, unique skill names, lock hashes, Claude bookkeeping links, local-vs-locked separation, command shape and task-data framing, command-versus-skill name disjointness, routing-table coverage, secret/generated-state exclusions, installer safety, collision backups, orphan retirement, idempotency, and GitHub close/reopen behavior.
