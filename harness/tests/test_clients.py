@@ -29,21 +29,15 @@ def reconcile(config: Path) -> subprocess.CompletedProcess:
 class TrackedSettingsTests(unittest.TestCase):
     def test_tracked_files_declare_only_what_the_harness_owns(self) -> None:
         claude = json.loads((CLIENTS / "claude.json").read_text())
-        # The Orca hook manifests and the plugin and marketplace entries are
-        # machine state. Tracking any of them would commit a generated
-        # absolute path, and the merge rule only protects what is not named
-        # here.
+        # The engram allowlist and the Orca hook manifests are machine state.
+        # Tracking either would commit a generated absolute path, and the
+        # merge rule only protects what is not named here. The allowlist in
+        # particular is engram's own tool set: a copy here is a second
+        # declaration that goes stale without saying so, and the install then
+        # deletes whatever tools the copy predates.
+        self.assertNotIn("allow", claude["permissions"])
         for key in ("hooks", "enabledPlugins", "extraKnownMarketplaces"):
             self.assertNotIn(key, claude, key)
-        # `allow` is the exception, and it is tracked for a reason the file
-        # itself cannot state: install_engram runs `engram setup` on /dev/null
-        # and so never sees its allowlist prompt. Tracking the entries is what
-        # decides them. Every one names an engram tool, because that prompt is
-        # the only thing this list stands in for.
-        self.assertTrue(
-            all(entry.startswith("mcp__") and "engram" in entry for entry in claude["permissions"]["allow"]),
-            claude["permissions"]["allow"],
-        )
         # The statusline pointer lives here rather than in the installer, so
         # the file Claude Code runs has one declaration.
         self.assertEqual(

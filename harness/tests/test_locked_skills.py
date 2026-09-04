@@ -138,8 +138,13 @@ class LockedSkillsTests(unittest.TestCase):
             r"skills(?:@\d+)?\s+(?:add|update|experimental_install)",
         )
         # Every client is set up with its own documented command, and none of
-        # them may block on a prompt.
-        for command in ("claude-code", "codex", "opencode"):
+        # them may block on a prompt. claude-code is answered rather than left
+        # to default, because the one question it asks is whether engram's
+        # tools may run without a permission prompt on every call; the other
+        # two get a closed stdin, since a blind yes would be answering
+        # questions this repository has not read.
+        self.assertRegex(text, r"(?m)^\s*printf 'y\\n' \| engram setup claude-code$")
+        for command in ("codex", "opencode"):
             self.assertRegex(
                 text, rf"(?m)^\s*engram setup {command} < /dev/null", command
             )

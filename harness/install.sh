@@ -17,6 +17,13 @@ NO_BACKUP=false
 UNINSTALL=false
 CLEAR_BACKUPS=false
 BACKUP_ROOT=""
+# Set when the uninstall could not remove the formula, so the summary reports
+# what happened rather than what was attempted.
+ENGRAM_FORMULA_KEPT=false
+# Fully qualified, and it has to stay the name install_packages installs: the
+# bare `engram` is ambiguous in that tap, and `brew uninstall engram` resolves
+# it to a cask and refuses with "Refusing to load cask ... from untrusted tap".
+ENGRAM_FORMULA="gentleman-programming/tap/engram"
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*" >&2; }
@@ -42,9 +49,11 @@ Usage: harness/install.sh [--links-only] [--no-backup]
   --uninstall    Remove what this installer writes: every managed link, the
                  ~/.zshrc alias block, and the tracked keys in the Claude and
                  Codex configs. It reverses the installer, it does not
-                 uninstall your tools. Packages, the Engram plugin and MCP
-                 registration, ~/.dotfiles-backups, this checkout, and every
-                 untracked key in either client config are left alone.
+                 uninstall your tools, with one exception: Engram, which a
+                 full install installs and registers, is removed here too,
+                 formula included. Your ~/.engram memory database is kept.
+                 The other packages, ~/.dotfiles-backups, this checkout, and
+                 every untracked key in either client config are left alone.
                  Destructive and unrecoverable: what it removes is deleted,
                  not archived, so --no-backup adds nothing to it. Reinstall
                  to get the harness back; anything of your own that was
@@ -251,7 +260,11 @@ install_packages() {
 # plugin, marketplace entry and all, so nothing here drives a client's plugin
 # CLI by hand.
 #
-# The claude-code command asks whether to add engram's tools to the settings allowlist, so all three read from /dev/null: this installer never blocks on a prompt, and whichever way that prompt defaults on EOF no longer decides the outcome, because clients/claude.json tracks the allowlist and reconcile_claude_settings writes it after this runs. That command also writes ~/.claude/mcp/engram.json pinned to the absolute path of the current engram binary, which is why install_packages upgrades engram before this runs: the pin is rewritten after the upgrade rather than left stale by it.
+# The claude-code command asks whether to add engram's tools to the settings allowlist, and it is answered yes rather than left to default, because declining means Claude Code prompts on every memory call and the policy assumes memory is always available. The `y` goes only to that command: the other two are not known to ask anything, and piping a blind yes into whatever a future version decides to ask is not the same as answering this question. Both still take a closed stdin, so the installer never blocks on a prompt.
+#
+# The allowlist itself is deliberately not tracked in clients/claude.json. Engram is what knows its own tool set, and a tracked copy is a second declaration that goes stale silently: the copy this repository briefly carried listed 15 tools per prefix while engram 1.20.0 writes 18, so tracking it would have removed three real tools on the next install.
+#
+# That command also writes ~/.claude/mcp/engram.json pinned to the absolute path of the current engram binary, which is why install_packages upgrades engram before this runs: the pin is rewritten after the upgrade rather than left stale by it.
 #
 # Setting up Codex also writes `[mcp_servers.engram]` in config.toml, which
 # outranks the server the plugin declares in its .mcp.json. Nothing is lost:
@@ -262,7 +275,7 @@ install_packages() {
 install_engram() {
     log "Reconciling Engram"
     command -v engram >/dev/null || die "Engram is missing; run without --links-only to install it."
-    engram setup claude-code < /dev/null
+    printf 'y\n' | engram setup claude-code
     engram setup codex < /dev/null
     engram setup opencode < /dev/null
 }
@@ -394,9 +407,9 @@ PY
 install_aliases() { reconcile_aliases install; }
 uninstall_aliases() { reconcile_aliases remove; }
 
-# clients/claude.json declares the settings this harness owns, and every other key in a live settings.json is left alone: Orca writes hook manifests into it and `engram setup` writes the plugin entry and the marketplace entry. Those are machine state, so they are reconciled here rather than tracked, and a whole-file symlink would either version them or lose them on the next write.
+# clients/claude.json declares the settings this harness owns, and every other key in a live settings.json is left alone: Orca writes hook manifests into it and `engram setup` writes permissions.allow, the plugin entry, and the marketplace entry. Those are machine state, so they are reconciled here rather than tracked, and a whole-file symlink would either version them or lose them on the next write.
 #
-# A tracked key replaces the live value outright, so removing a deny from the tracked file removes it from the machine. `permissions` is the one key merged a level down, so a permission class this harness does not track, `ask` today, survives while `allow` and `deny` stay owned. `allow` is owned because install_engram runs `engram setup` on /dev/null and never sees its allowlist prompt, so tracking the entries is what decides them rather than whatever that prompt does at EOF. Rewritten only when the result differs, which keeps a hand-edited settings.json otherwise alone, formatting included.
+# A tracked key replaces the live value outright, so removing a deny from the tracked file removes it from the machine. `permissions` is the one key merged a level down, which is what keeps the engram allowlist `engram setup` writes, and any class this harness does not track, while `deny` stays owned. Rewritten only when the result differs, which keeps a hand-edited settings.json otherwise alone, formatting included.
 #
 # The reconciled file is emitted on stdout and written here, rather than
 # written in place, so the backup is taken only when something actually
@@ -733,6 +746,174 @@ EOF
     fi
 }
 
+# Engram, taken back off. install_packages installs it and install_engram
+# registers it, so the uninstall owes both halves; leaving a registration
+# behind is worse than leaving nothing, because every entry engram writes pins
+# the absolute path of a binary that is about to stop existing.
+#
+# `brew uninstall` does none of this on its own. The formula is GoReleaser
+# generated and does nothing but `bin.install "engram"`: no uninstall block, no
+# post_uninstall, and `zap` is a cask stanza a formula cannot carry. So the
+# package removal is last, and the configuration is removed while the binary it
+# names is still on disk.
+#
+# ~/.engram is deliberately untouched. It is the memory database, it is the
+# user's own data rather than anything this installer put there, and an
+# uninstall that no longer archives is the last thing that should be deleting
+# it. `engram export` is the documented way out; reinstalling finds the
+# database where it was.
+#
+# Each client's own CLI removes what that client owns, because the plugin and
+# marketplace registries are several files apiece and hand-deleting another
+# tool's registry is how an uninstall goes stale. They are best effort: a
+# plugin that is already gone is the state being asked for, not a failure.
+uninstall_engram() {
+    log "Removing Engram"
+    if command -v claude >/dev/null; then
+        claude plugin uninstall engram@engram >/dev/null 2>&1 || true
+        claude plugin marketplace remove engram >/dev/null 2>&1 || true
+    fi
+    if command -v codex >/dev/null; then
+        codex plugin remove engram@engram >/dev/null 2>&1 || true
+        codex plugin marketplace remove engram >/dev/null 2>&1 || true
+    fi
+    remove_engram_config
+    rm -f "$HOME/.claude/mcp/engram.json"
+    rm -f "$HOME/.codex/engram-instructions.md" "$HOME/.codex/engram-compact-prompt.md"
+    rm -f "$CONFIG_HOME/opencode/plugins/engram.ts"
+    # Last, and only what Homebrew actually has: a machine that installed
+    # engram some other way keeps whatever it installed, and `brew uninstall`
+    # on a formula that is not there exits non-zero for no reason worth
+    # failing the run over.
+    if command -v brew >/dev/null && brew list --formula "$ENGRAM_FORMULA" >/dev/null 2>&1; then
+        brew uninstall "$ENGRAM_FORMULA" || {
+            ENGRAM_FORMULA_KEPT=true
+            warn "Could not uninstall the engram formula. Remove it with: brew uninstall $ENGRAM_FORMULA"
+        }
+    fi
+}
+
+# What the client CLIs do not own: the MCP server entries and the instruction
+# file pointers `engram setup` writes directly. Three files, one pass, because
+# the surgery is the same shape in each and a caller that had to sequence three
+# reconcilers would be the interesting part rather than the edit.
+#
+# Every edit is keyed on the name engram, never on position, and an emptied
+# container is dropped rather than left behind as `{}`. A file that does not
+# exist is a file with nothing to remove.
+remove_engram_config() {
+    python3 - "$HOME/.claude/settings.json" "$CONFIG_HOME/opencode/opencode.json" "$HOME/.codex/config.toml" <<'PY'
+import json, pathlib, re, sys
+
+settings, opencode, codex = (pathlib.Path(argument) for argument in sys.argv[1:4])
+
+
+def rewrite(path, edit):
+    """Apply `edit` to a file's text, writing only when it changed."""
+    if not path.exists():
+        return
+    try:
+        current = path.read_text()
+        updated = edit(current)
+    except (OSError, ValueError) as error:
+        print(f"{path}: {error}", file=sys.stderr)
+        raise SystemExit(2)
+    if updated is not None and updated != current:
+        path.write_text(updated)
+        print(f"Removed the engram entries from {path}")
+
+
+def prune_json(text, prune):
+    document = json.loads(text)
+    if not isinstance(document, dict):
+        raise ValueError("expected a JSON object")
+    prune(document)
+    return json.dumps(document, indent=2) + "\n"
+
+
+def claude(text):
+    def prune(document):
+        permissions = document.get("permissions")
+        if isinstance(permissions, dict):
+            allow = permissions.get("allow")
+            if isinstance(allow, list):
+                # Engram is reachable under two server names, its own and the
+                # plugin-scoped one, so the test is the tool rather than
+                # either prefix.
+                kept = [entry for entry in allow if "engram" not in entry]
+                if kept:
+                    permissions["allow"] = kept
+                else:
+                    permissions.pop("allow")
+            if not permissions:
+                document.pop("permissions")
+        for key in ("enabledPlugins", "extraKnownMarketplaces"):
+            section = document.get(key)
+            if isinstance(section, dict):
+                for name in [n for n in section if "engram" in n]:
+                    section.pop(name)
+                if not section:
+                    document.pop(key)
+
+    return prune_json(text, prune)
+
+
+def opencode_config(text):
+    def prune(document):
+        for key in ("mcp", "plugin"):
+            section = document.get(key)
+            if isinstance(section, dict):
+                for name in [n for n in section if "engram" in n]:
+                    section.pop(name)
+                if not section:
+                    document.pop(key)
+            elif isinstance(section, list):
+                kept = [item for item in section if "engram" not in str(item)]
+                if kept:
+                    document[key] = kept
+                else:
+                    document.pop(key)
+
+    return prune_json(text, prune)
+
+
+def codex_config(text):
+    """Drop engram's top-level pointers and every table named after it.
+
+    Textual, for the reason clients/codex.sh gives: tomllib needs Python 3.11
+    and the system python3 macOS ships is older. A table runs to the next
+    header, so dropping one is dropping that span.
+    """
+    lines, kept, index = text.splitlines(), [], 0
+    header = re.compile(r'\s*\[([^]]*)]')
+    pointer = re.compile(r"\s*(model_instructions_file|experimental_compact_prompt_file)\s*=\s*(.*)$")
+    while index < len(lines):
+        line = lines[index]
+        table = header.match(line)
+        if table and "engram" in table.group(1):
+            index += 1
+            # Up to the next header, which takes the blank line that
+            # separated this table from the one after it. The blank line
+            # before the removed table stays and becomes that separator, so
+            # the neighbours keep the spacing they had.
+            while index < len(lines) and not header.match(lines[index]):
+                index += 1
+            continue
+        key = pointer.match(line)
+        if key and "engram" in key.group(2):
+            index += 1
+            continue
+        kept.append(line)
+        index += 1
+    return "\n".join(kept).strip("\n") + "\n" if any(l.strip() for l in kept) else ""
+
+
+rewrite(settings, claude)
+rewrite(opencode, opencode_config)
+rewrite(codex, codex_config)
+PY
+}
+
 # Everything install_links wrote, in one sweep plus four named links.
 #
 # reconcile_orphans with an empty desired set is the sweep: its ownership test
@@ -807,10 +988,29 @@ PY
         [[ "$status" == 3 ]] ||
             die "$script reports $status against $HOME/.codex/config.toml; expected 3, already removed."
     done
+    check_engram_removed
+}
+
+# Engram leaves entries in three client configs and three loose files, and a
+# survivor is worse than a leftover link: each one names the absolute path of a
+# binary this uninstall just deleted, so the client fails at startup rather
+# than quietly doing less.
+check_engram_removed() {
+    local path
+    for path in "$HOME/.claude/mcp/engram.json" "$HOME/.codex/engram-instructions.md" \
+        "$HOME/.codex/engram-compact-prompt.md" "$CONFIG_HOME/opencode/plugins/engram.ts"; do
+        [[ ! -e "$path" ]] || die "Engram file survived the uninstall: $path"
+    done
+    for path in "$HOME/.claude/settings.json" "$CONFIG_HOME/opencode/opencode.json" \
+        "$HOME/.codex/config.toml"; do
+        [[ -f "$path" ]] || continue
+        ! grep -qi engram "$path" || die "Engram entries survived the uninstall in $path"
+    done
 }
 
 uninstall() {
     log "Removing the harness from this machine"
+    uninstall_engram
     uninstall_links
     uninstall_aliases
     remove_claude_settings
@@ -826,13 +1026,20 @@ uninstall_summary() {
 $(printf '\033[1;32m✓ Harness AI removed.\033[0m')
 
 Gone: every managed skill and command link, the three POLICY.md links, the
-Claude status line link, the ~/.zshrc alias block, and the tracked keys in
-~/.claude/settings.json and ~/.codex/config.toml.
+Claude status line link, the ~/.zshrc alias block, the tracked keys in
+~/.claude/settings.json and ~/.codex/config.toml, and Engram: its plugin,
+marketplace, and MCP registration in all three clients, plus the formula.
 
-Left alone, because this reverses the installer rather than uninstalling your
-tools: the packages (codex, claude, opencode, engram, worktrunk, gh, uv, node),
-the Engram plugin, marketplace, and MCP registration, every untracked key in
-both client configs, ~/.dotfiles-backups, and this checkout.
+Kept: ~/.engram, which is your memory database rather than anything this
+installer wrote. Reinstalling finds it where it was. To take it with you:
+engram export <file>   (before uninstalling, while the binary still exists)
+$($ENGRAM_FORMULA_KEPT && printf '%s' "
+The engram formula could not be removed and is still installed; the warning
+above says so. Its configuration is gone either way.")
+
+Also left alone: the other packages (codex, claude, opencode, worktrunk, gh,
+uv, node), every untracked key in both client configs, ~/.dotfiles-backups,
+and this checkout.
 
 Nothing was archived: an uninstall deletes what it removes. Everything above
 comes back from this checkout.

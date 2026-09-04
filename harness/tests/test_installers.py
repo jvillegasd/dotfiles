@@ -286,15 +286,11 @@ class InstallerTests(unittest.TestCase):
                 tracked["permissions"]["deny"],
             )
             self.assertNotIn("Bash(retired:*)", claude_settings["permissions"]["deny"])
-            # `allow` is owned too, so the tracked list replaces the live one
-            # rather than merging into it. The seeded lone entry is a subset of
-            # what the harness tracks, so the assertion that matters is that
-            # the live list is now the tracked list exactly.
-            self.assertEqual(
-                claude_settings["permissions"]["allow"],
-                tracked["permissions"]["allow"],
-            )
-            # Machine state written by other tools survives beside it.
+            # Machine state survives: the engram allowlist beside the deny list
+            # this harness owns, and the keys other tools write beside it. The
+            # seeded entry is one `engram setup` also writes, so the assertion
+            # is that the class was merged rather than replaced.
+            self.assertIn("mcp__engram__mem_save", claude_settings["permissions"]["allow"])
             self.assertEqual(claude_settings["hooks"], {"Stop": []})
             self.assertEqual(
                 claude_settings["enabledPlugins"], {"engram@engram": True}
@@ -473,7 +469,40 @@ class UninstallTests(unittest.TestCase):
             "HOME": str(home),
             "XDG_CACHE_HOME": str(home / ".cache"),
             "XDG_CONFIG_HOME": str(home / ".config"),
+            "PATH": f"{self.stubs(home)}:{os.environ['PATH']}",
         }
+
+    def stubs(self, home: Path) -> Path:
+        """Recording stubs for the three commands the uninstall shells out to.
+
+        `brew` is the one that has to be stubbed rather than merely recorded:
+        it is the only global this uninstall touches, and a real run would take
+        the machine's own engram with it on every pass of the suite. `claude`
+        and `codex` are stubbed alongside it because their plugin registries
+        are slow to drive and prove nothing the config assertions do not.
+
+        Each call is appended to calls.log, so a test can assert the installer
+        asked for the right thing rather than that something happened.
+        """
+        binaries = home / ".stubs"
+        if binaries.is_dir():
+            return binaries
+        binaries.mkdir(parents=True)
+        for name in ("brew", "claude", "codex"):
+            stub = binaries / name
+            # `brew list --formula engram` exits 0 so the uninstall reaches the
+            # `brew uninstall` it guards.
+            stub.write_text(
+                "#!/bin/sh\n"
+                f'echo "{name} $*" >> "$HOME/.stubs/calls.log"\n'
+                "exit 0\n"
+            )
+            stub.chmod(0o755)
+        return binaries
+
+    def calls(self, home: Path) -> str:
+        log = home / ".stubs" / "calls.log"
+        return log.read_text() if log.exists() else ""
 
     def run_installer(
         self, home: Path, *arguments: str, check: bool = True
@@ -514,9 +543,13 @@ class UninstallTests(unittest.TestCase):
         settings.write_text(
             json.dumps(
                 {
-                    "permissions": {"ask": ["WebFetch"]},
+                    "permissions": {"ask": ["WebFetch"], "allow": ["Bash(ls:*)"]},
                     "hooks": {"Stop": []},
-                    "enabledPlugins": {"engram@engram": True},
+                    # A neighbour in each container the engram removal prunes.
+                    # Without one, "pruned engram" and "emptied the file" are
+                    # the same assertion.
+                    "enabledPlugins": {"engram@engram": True, "other@x": True},
+                    "extraKnownMarketplaces": {"engram": {}, "keep": {}},
                 }
             )
         )
@@ -561,9 +594,13 @@ class UninstallTests(unittest.TestCase):
         # The untracked permission class and the machine state beside it. The
         # `ask` list is the case the merge exists for: `permissions` is owned a
         # class at a time, not whole.
-        self.assertEqual(settings["permissions"], {"ask": ["WebFetch"]})
+        self.assertEqual(settings["permissions"]["ask"], ["WebFetch"])
         self.assertEqual(settings["hooks"], {"Stop": []})
-        self.assertIn("enabledPlugins", settings)
+        # The engram removal prunes by name, so a neighbour in the same
+        # container survives while the engram entry beside it goes.
+        self.assertEqual(settings["permissions"]["allow"], ["Bash(ls:*)"])
+        self.assertEqual(settings["enabledPlugins"], {"other@x": True})
+        self.assertEqual(settings["extraKnownMarketplaces"], {"keep": {}})
         config = (home / ".codex" / "config.toml").read_text()
         self.assertIn('unrelated = "keep-me"', config)
         self.assertIn('theme = "keep-me-too"', config)
@@ -654,7 +691,24 @@ class UninstallTests(unittest.TestCase):
             self.run_installer(home, "--uninstall")
             self.run_installer(home, "--links-only")
 
-            self.assertEqual((home / ".claude" / "settings.json").read_text(), installed["settings"])
+            # settings.json is compared by the keys the harness owns rather
+            # than whole, for the reason config.toml is below and one more:
+            # `engram setup` registers its plugin by shelling out to the
+            # client's own CLI, which is stubbed here, so engram's half of the
+            # file cannot come back in this environment. The real round trip
+            # is exercised on a real machine.
+            def owned(text: str) -> dict:
+                settings = json.loads(text)
+                keys = set(json.loads((ROOT / "harness" / "clients" / "claude.json").read_text()))
+                kept = {key: settings[key] for key in keys & set(settings) if key != "permissions"}
+                kept["deny"] = settings["permissions"]["deny"]
+                kept["ask"] = settings["permissions"]["ask"]
+                return kept
+
+            self.assertEqual(
+                owned((home / ".claude" / "settings.json").read_text()),
+                owned(installed["settings"]),
+            )
             self.assertEqual((home / ".zshrc").read_text(), installed["zshrc"])
             self.assertTrue((home / ".claude" / "CLAUDE.md").is_symlink())
             # config.toml is compared by the lines the harness owns rather than
@@ -729,7 +783,74 @@ class UninstallTests(unittest.TestCase):
                     else:
                         self.assertIn("--bogus", result.stderr)
                     # Neither branch reaches an install or a removal.
-                    self.assertEqual(list(home.iterdir()), [])
+                    # .stubs is the harness of the test, not the installer's
+                    # output, so it is the one permitted entry.
+                    written = [path.name for path in home.iterdir() if path.name != ".stubs"]
+                    self.assertEqual(written, [])
+
+    def test_uninstall_removes_engram_from_every_client(self) -> None:
+        # install_packages installs engram and install_engram registers it, so
+        # the uninstall owes both halves. A surviving entry is worse than a
+        # leftover link: every one names the absolute path of a binary that is
+        # now gone, so the client fails rather than quietly doing less.
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            self.seed(home)
+            self.run_installer(home, "--links-only")
+
+            # The install has to have registered engram, or there is nothing
+            # here to remove and the assertions below are vacuous.
+            settings = home / ".claude" / "settings.json"
+            self.assertIn("engram", settings.read_text())
+            self.assertTrue((home / ".claude" / "mcp" / "engram.json").is_file())
+
+            self.run_installer(home, "--uninstall")
+
+            for path in (
+                settings,
+                home / ".config" / "opencode" / "opencode.json",
+                home / ".codex" / "config.toml",
+            ):
+                if path.exists():
+                    self.assertNotIn("engram", path.read_text().lower(), path)
+            for path in (
+                home / ".claude" / "mcp" / "engram.json",
+                home / ".codex" / "engram-instructions.md",
+                home / ".codex" / "engram-compact-prompt.md",
+                home / ".config" / "opencode" / "plugins" / "engram.ts",
+            ):
+                self.assertFalse(path.exists(), path)
+
+            # It asked each client to remove what that client owns, and asked
+            # Homebrew for the formula, rather than hand-deleting registries.
+            calls = self.calls(home)
+            self.assertIn("claude plugin uninstall engram@engram", calls)
+            self.assertIn("claude plugin marketplace remove engram", calls)
+            self.assertIn("codex plugin remove engram@engram", calls)
+            # Fully qualified, and the same name install_packages installs.
+            # The bare `engram` resolves to a cask in that tap and `brew
+            # uninstall` refuses it, which is a failure the warning reports
+            # and the summary then has to admit.
+            formula, _ = harness_packages()
+            engram = next(name for name in formula if name.endswith("/engram"))
+            self.assertIn(f"brew uninstall {engram}", calls)
+
+    def test_uninstall_keeps_the_engram_database(self) -> None:
+        # ~/.engram is the user's memories, not something this installer wrote,
+        # and an uninstall that no longer archives is the last thing that
+        # should be deleting it.
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            self.seed(home)
+            database = home / ".engram" / "engram.db"
+            database.parent.mkdir(parents=True)
+            database.write_text("memories")
+
+            self.run_installer(home, "--links-only")
+            self.run_installer(home, "--uninstall")
+
+            self.assertEqual(database.read_text(), "memories")
+            self.assertTrue((home / ".engram").is_dir())
 
     def test_clear_backups_deletes_only_the_harness_subtree(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_home:
@@ -770,6 +891,19 @@ class UninstallTests(unittest.TestCase):
                     )
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn("--clear-backups", result.stderr)
+
+    def test_install_accepts_the_engram_allowlist_prompt(self) -> None:
+        # Declining means Claude Code prompts on every memory call, and the
+        # policy assumes memory is always available. The `y` goes to the one
+        # command known to ask; piping a blind yes into the other two would be
+        # answering questions this repository has not read.
+        installer = (ROOT / "harness" / "install.sh").read_text()
+        self.assertIn("printf 'y\\n' | engram setup claude-code", installer)
+        for agent in ("codex", "opencode"):
+            self.assertIn(f"engram setup {agent} < /dev/null", installer)
+        # And the allowlist is engram's to declare, not this repository's.
+        tracked = json.loads((ROOT / "harness" / "clients" / "claude.json").read_text())
+        self.assertNotIn("allow", tracked["permissions"])
 
     def test_uninstall_is_documented_in_the_usage(self) -> None:
         installer = (ROOT / "harness" / "install.sh").read_text()

@@ -32,7 +32,11 @@ class StatuslineTests(unittest.TestCase):
         items = codex_status_items()
         self.assertTrue(items)
         for item in items:
-            self.assertNotIn(item, installer, item)
+            # The quoted form, which is how an id is declared in the
+            # status_line array. A bare substring test also matched ordinary
+            # words: `model` caught `model_instructions_file`, an engram key
+            # the uninstall removes and nothing to do with a status line.
+            self.assertNotIn(f'"{item}"', installer, item)
         self.assertIn('"$HARNESS_DIR/statusline/codex.sh"', installer)
 
     def test_codex_statusline_reconciler_is_idempotent(self) -> None:
