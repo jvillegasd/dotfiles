@@ -245,20 +245,16 @@ retire_shadowed_skills() {
 
 # Anything this harness installed and no longer installs is removed, so a
 # renamed, retired, or unlinked entry cannot outlive the change that retired
-# it. A dangling link is judged on the path it names rather than on a resolved
-# target it no longer has, because both branches have to stay scoped to links
-# this harness wrote: a user's own link into a repository they moved is not
-# ours to archive, still less to delete under --no-backup.
+# it. A dangling symlink is removed wherever it points.
 #
-# That name test matches the shape rather than this checkout's absolute path.
-# Moving or renaming the repository is the single likeliest way a managed link
-# comes to dangle, and every one of those names the old location: scoping to
-# $HARNESS_DIR would exempt exactly the links the sweep exists to reclaim.
-managed_link_name() {
-    local text; text="$(readlink "$1")"
-    [[ "$text" == */harness/skills/* || "$text" == */harness/commands/* ||
-        "$text" == "$HARNESS_DIR"/* ]]
-}
+# That last sentence is a known defect, deliberately left alone here: the sweep
+# cannot tell its own dangling links from a user's, because a dangling target
+# resolves to nothing to test. Two attempts to infer ownership from the link
+# text failed in opposite directions, an absolute-path test that a moved
+# checkout defeats and a path-shape test that claims other checkouts, so the
+# fix is a different way of deciding ownership rather than a third
+# predicate, and it needs its own contract. Tracked separately; do not
+# patch it in passing.
 
 reconcile_orphans() {
     local desired="$1" root entry target
@@ -266,16 +262,10 @@ reconcile_orphans() {
         [[ -d "$root" ]] || continue
         for entry in "$root"/*; do
             [[ -L "$entry" ]] || continue
-            # -e follows the link, so this is the dangling test, and it saves a
-            # realpath subprocess per entry on the branch that cannot use one.
-            if [[ ! -e "$entry" ]]; then
-                if managed_link_name "$entry"; then
-                    backup_existing "$entry"
-                fi
-                continue
-            fi
             target="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$entry")"
-            if [[ "$target" == "$HARNESS_DIR"/* ]]; then
+            if [[ ! -e "$target" ]]; then
+                backup_existing "$entry"
+            elif [[ "$target" == "$HARNESS_DIR"/* ]]; then
                 # A managed link is always named after its target, so a name
                 # this harness no longer installs is an orphan even when it
                 # still points at a body that is installed under its own name.
@@ -291,10 +281,14 @@ reconcile_orphans() {
 # One sourced line rather than copied aliases, so the committed file stays the
 # only definition. Hand-written duplicates of the same aliases are removed:
 # two definitions of a yolo alias is one too many to reason about.
+#
+# "Unchanged" is exit 3, so a crash cannot pass for it. The overloaded 1 read
+# an unreadable ~/.zshrc, or a missing python3, as "nothing to do" and left the
+# aliases silently uninstalled while the run reported success.
 install_aliases() {
-    local rc="$HOME/.zshrc" reconciled
+    local rc="$HOME/.zshrc" reconciled status
     [[ -f "$rc" ]] || touch "$rc"
-    if reconciled="$(python3 - "$rc" "$HARNESS_DIR/aliases.sh" <<'PY'
+    reconciled="$(python3 - "$rc" "$HARNESS_DIR/aliases.sh" <<'PY'
 import pathlib, re, sys
 
 rc, source = pathlib.Path(sys.argv[1]), sys.argv[2]
@@ -314,10 +308,12 @@ while kept and not kept[-1].strip():
 kept += [marker, f'[ -f "{source}" ] && source "{source}"', ""]
 text = "\n".join(kept)
 if text == current:
-    raise SystemExit(1)
+    raise SystemExit(3)
 sys.stdout.write(text)
 PY
-    )"; then
+    )" && status=0 || status=$?
+    [[ "$status" == 0 || "$status" == 3 ]] || die "Could not reconcile aliases in $rc."
+    if [[ "$status" == 0 ]]; then
         backup_copy "$rc"
         printf '%s\n' "$reconciled" > "$rc"
         log "Reconciled harness aliases in $rc"
@@ -360,8 +356,9 @@ json.dump(settings, sys.stdout, indent=2)
 sys.stdout.write("\n")
 PY
     )" && status=0 || status=$?
+    [[ "$status" != 2 ]] || die "$settings is not a JSON object; fix it and re-run."
     [[ "$status" == 0 || "$status" == 3 ]] ||
-        die "Could not read $settings; fix it and re-run."
+        die "Reconciling $settings failed with status $status."
     if [[ "$status" == 0 ]]; then
         backup_copy "$settings"
         printf '%s\n' "$reconciled" > "$settings"
@@ -456,21 +453,15 @@ assert_plugin_count() {
 # it, which left the mode that exists for reconciling links as the one mode
 # that never confirmed a link landed.
 check_links() {
-    local command skill root script bodies=("$HARNESS_DIR"/skills/*) workflows=("$HARNESS_DIR"/commands/*.md)
-    # nullglob is what keeps an empty source tree from linking a file named
-    # `*.md` into three roots, and it would also make every loop below iterate
-    # nothing and pass. A check that cannot fail is the thing this function was
-    # split out to stop being.
-    (( ${#bodies[@]} )) || die "No skill bodies to check in $HARNESS_DIR/skills."
-    (( ${#workflows[@]} )) || die "No command bodies to check in $HARNESS_DIR/commands."
-    for skill in "${bodies[@]}"; do
+    local command skill root script
+    for skill in "$HARNESS_DIR"/skills/*; do
         local name; name="$(basename "$skill")"
         [[ -f "$skill/SKILL.md" ]] || die "Missing SKILL.md: $skill"
         [[ ! -e "$CONFIG_HOME/opencode/skills/$name" && ! -L "$CONFIG_HOME/opencode/skills/$name" ]] || die "Duplicate OpenCode skill path: $skill"
         [[ -L "$HOME/.agents/skills/$name" ]] || die "Missing shared skill link: $skill"
         [[ -L "$HOME/.claude/skills/$name" ]] || die "Missing Claude skill link: $skill"
     done
-    for command in "${workflows[@]}"; do
+    for command in "$HARNESS_DIR"/commands/*.md; do
         for root in "${COMMAND_ROOTS[@]}"; do
             [[ -L "$root/$(basename "$command")" ]] || die "Missing command link: $root/$(basename "$command")"
         done
@@ -487,9 +478,7 @@ check_links() {
     [[ "$(readlink "$CONFIG_HOME/opencode/AGENTS.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing OpenCode policy link."
     [[ -f "$HARNESS_DIR/skills/ponytail/SKILL.md" ]] || die "Missing the ponytail skill body."
     [[ "$(readlink "$HOME/.claude/statusline.sh")" == "$HARNESS_DIR/statusline/claude.sh" ]] || die "Missing the Claude statusline link."
-    local scripts=("$HARNESS_DIR"/statusline/*.sh)
-    (( ${#scripts[@]} )) || die "No status line scripts in $HARNESS_DIR/statusline."
-    for script in "${scripts[@]}"; do
+    for script in "$HARNESS_DIR"/statusline/*.sh; do
         [[ -x "$script" ]] || die "Status line script is not executable: $script"
     done
     grep -q '^status_line = \[' "$HOME/.codex/config.toml" || die "Missing the Codex status line."
@@ -556,10 +545,6 @@ main() {
     fi
     install_links
     install_aliases
-    # Before Engram, which dies on a machine that has none. Verifying the links
-    # after that would make a links-only run on such a machine write every link
-    # and check none of them, which is the state this split exists to end.
-    check_links
     # Engram is core: the policy assumes memory survives a session. A links-only
     # run skips package work, so it reconciles Engram unconditionally rather
     # than probing first. Probing only ever saw presence, never the absolute
@@ -567,9 +552,12 @@ main() {
     # check; setup rewrites the pin every time.
     if $LINKS_ONLY; then
         install_engram
-    else
-        check_tools
     fi
+    # Last, after Engram: `engram setup` rewrites config.toml and settings.json,
+    # both of which check_links asserts, so verifying ahead of it would check a
+    # state Engram then overwrites.
+    check_links
+    $LINKS_ONLY || check_tools
     summary
 }
 

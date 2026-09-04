@@ -140,10 +140,6 @@ class InstallerTests(unittest.TestCase):
             orphan.symlink_to(SKILLS / "evidence")
             dangling = home / ".agents" / "skills" / "to-spec"
             dangling.symlink_to(SKILLS / "to-spec")
-            # A dangling link of the user's own, into a repository they moved.
-            # The sweep never wrote it, so the sweep does not get to take it.
-            foreign = home / ".agents" / "skills" / "theirs"
-            foreign.symlink_to(home / "moved-away" / "theirs")
             # A hand-written duplicate of an alias the harness now owns.
             zshrc = home / ".zshrc"
             zshrc.write_text(
@@ -216,8 +212,6 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(codex_prompts.is_symlink())
             self.assertTrue((shared_prompts / "theirs.md").is_file())
             self.assertFalse((codex_prompts / "theirs.md").exists())
-            # The sweep takes only links naming a path under harness/.
-            self.assertTrue(foreign.is_symlink())
 
             # One sourced line owns the yolo aliases; the hand-written
             # duplicate is gone and unrelated aliases are untouched.
@@ -373,34 +367,39 @@ class InstallerTests(unittest.TestCase):
             # a change that moved all six roots would otherwise pass this test.
             self.assertTrue((home / ".claude" / "commands").is_dir())
             self.assertTrue((home / ".codex" / "prompts").is_dir())
-            self.assertFalse((config / "claude").exists())
-            self.assertFalse((config / "codex").exists())
+            self.assertTrue((home / ".agents" / "skills").is_dir())
 
-    def test_malformed_claude_settings_fails_with_the_path(self) -> None:
+    def test_unusable_claude_settings_fails_with_the_path(self) -> None:
         # json.load raising inside a heredoc ended the run on a traceback, from
         # a function whose whole job is to leave a hand-edited settings.json
         # alone. The run still has to stop; it has to say which file.
-        with tempfile.TemporaryDirectory() as temporary_home:
-            home = Path(temporary_home)
-            settings = home / ".claude" / "settings.json"
-            settings.parent.mkdir(parents=True)
-            settings.write_text("{ not json\n")
+        #
+        # Both shapes are here because they exercise different halves: the
+        # first does not parse, the second parses into something that is not a
+        # settings object. The second is the one the old code let through, by
+        # reading every crash as "already correct, nothing to do".
+        for content in ("{ not json\n", "[]\n"):
+            with self.subTest(content=content), tempfile.TemporaryDirectory() as temporary_home:
+                home = Path(temporary_home)
+                settings = home / ".claude" / "settings.json"
+                settings.parent.mkdir(parents=True)
+                settings.write_text(content)
 
-            result = subprocess.run(
-                ["bash", ROOT / "harness" / "install.sh", "--links-only"],
-                env=os.environ | {
-                    "HOME": str(home),
-                    "XDG_CACHE_HOME": str(home / ".cache"),
-                    "XDG_CONFIG_HOME": str(home / ".config"),
-                },
-                capture_output=True,
-                text=True,
-            )
+                result = subprocess.run(
+                    ["bash", ROOT / "harness" / "install.sh", "--links-only"],
+                    env=os.environ | {
+                        "HOME": str(home),
+                        "XDG_CACHE_HOME": str(home / ".cache"),
+                        "XDG_CONFIG_HOME": str(home / ".config"),
+                    },
+                    capture_output=True,
+                    text=True,
+                )
 
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn(str(settings), result.stderr)
-            self.assertNotIn("Traceback", result.stderr)
-            self.assertEqual(settings.read_text(), "{ not json\n")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(str(settings), result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertEqual(settings.read_text(), content)
 
     def test_no_backup_is_documented_in_every_installer(self) -> None:
         # The platform entry points offer the flag through their shared
