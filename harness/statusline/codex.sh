@@ -9,9 +9,13 @@
 # Usage: codex.sh [config.toml]
 #
 # Prints the reconciled file on stdout and exits 0 when something changed; exits
-# 1 when the config already says this, having written nothing. The caller owns
+# 3 when the config already says this, having written nothing. The caller owns
 # the write, so harness/install.sh can take its backup only on a real change
 # rather than minting a fresh backup root on every run.
+#
+# 3 rather than the catch-all 1, matching clients/codex.sh beside it: a crash
+# exits 1 too, and a caller that reads 1 as "nothing to do" leaves the status
+# line unwritten while the run reports success.
 #
 # OpenCode has no third file here. Its configuration schema carries no status
 # line field and @opencode-ai/plugin exposes no hook for one, so there is
@@ -41,7 +45,7 @@ config="${1:-$HOME/.codex/config.toml}"
 # config.toml is hand-maintained and full of trust decisions and hook hashes, so
 # this rewrites the two managed keys in place and leaves every other line byte
 # for byte. Idempotence is textual rather than parsed: the reconciled file is a
-# fixed point, so an unchanged run exits 1. That also avoids tomllib, which
+# fixed point, so an unchanged run exits 3. That also avoids tomllib, which
 # needs Python 3.11 and is therefore not on the system python3 macOS ships.
 exec python3 - "$config" "${ITEMS[@]}" <<'PY'
 import pathlib, re, sys
@@ -83,6 +87,6 @@ else:
 
 text = "\n".join(kept).strip("\n") + "\n"
 if text == current:
-    raise SystemExit(1)
+    raise SystemExit(3)
 sys.stdout.write(text)
 PY

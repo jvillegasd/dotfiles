@@ -88,6 +88,9 @@ backup_existing() {
     log "Backed up $path -> $backup"
 }
 
+# The first copy wins. Two functions reconcile ~/.codex/config.toml, the status
+# line and the tracked settings, so a second copy would archive the first one's
+# output and the backup would no longer be the file this run started with.
 backup_copy() {
     local path="$1" relative backup
     [[ -f "$path" ]] || return 0
@@ -97,6 +100,9 @@ backup_copy() {
     ensure_backup_root
     relative="${path#"$HOME"/}"
     backup="$BACKUP_ROOT/$relative.pre-reconcile"
+    if [[ -f "$backup" ]]; then
+        return 0
+    fi
     mkdir -p "$(dirname "$backup")"
     cp -p "$path" "$backup"
 }
@@ -320,9 +326,19 @@ PY
     fi
 }
 
-# statusline/claude.sh is linked to the path Claude Code already reads, so
-# settings.json only ever needs the one command line pointing at it. Rewritten
-# only when it differs, which keeps a hand-edited settings.json otherwise alone.
+# clients/claude.json declares the settings this harness owns, and every other
+# key in a live settings.json is left alone: Orca writes hook manifests into it
+# and `engram setup` writes permissions.allow, the plugin entry, and the
+# marketplace entry. Those are machine state, so they are reconciled here
+# rather than tracked, and a whole-file symlink would either version them or
+# lose them on the next write.
+#
+# A tracked key replaces the live value outright, so removing a deny from the
+# tracked file removes it from the machine. `permissions` is the one key merged
+# a level down, which is what keeps the engram allowlist while `deny` stays
+# owned. Rewritten only when the result differs, which keeps a hand-edited
+# settings.json otherwise alone, formatting included.
+#
 # The reconciled file is emitted on stdout and written here, rather than
 # written in place, so the backup is taken only when something actually
 # changes. Backing up unconditionally minted a fresh backup root on every run.
@@ -330,55 +346,82 @@ PY
 # "Already correct" is its own exit code rather than the catch-all 1, so a
 # settings.json that cannot be read at all is fatal and says which file. The
 # overloaded 1 read every crash as "nothing to do": a file that was valid JSON
-# but not an object, or unreadable, or a missing python3, all left the status
-# line unset while the run went on to report success.
-point_statusline_at_link() {
+# but not an object, or unreadable, or a missing python3, all left the settings
+# unreconciled while the run went on to report success.
+reconcile_claude_settings() {
     local settings="$HOME/.claude/settings.json" reconciled status
     mkdir -p "$(dirname "$settings")"
     [[ -f "$settings" ]] || printf '{}\n' > "$settings"
-    reconciled="$(python3 - "$settings" <<'PY'
+    reconciled="$(python3 - "$settings" "$HARNESS_DIR/clients/claude.json" <<'PY'
 import json, sys
 
-path = sys.argv[1]
-wanted = {"type": "command", "command": 'bash "$HOME/.claude/statusline.sh"'}
+path, tracked_path = sys.argv[1], sys.argv[2]
 try:
     with open(path) as handle:
         settings = json.load(handle)
     if not isinstance(settings, dict):
         raise TypeError(f"expected a JSON object, found {type(settings).__name__}")
-    if settings.get("statusLine") == wanted:
-        raise SystemExit(3)
 except (OSError, ValueError, TypeError) as error:
     print(error, file=sys.stderr)
     raise SystemExit(2)
-settings["statusLine"] = wanted
+# Its own status, because a defect in the tracked file is a repository bug and
+# telling the user to fix their settings.json names the wrong file.
+try:
+    with open(tracked_path) as handle:
+        tracked = json.load(handle)
+    if not isinstance(tracked, dict):
+        raise TypeError(f"expected a JSON object, found {type(tracked).__name__}")
+except (OSError, ValueError, TypeError) as error:
+    print(error, file=sys.stderr)
+    raise SystemExit(4)
+before = json.dumps(settings, sort_keys=True)
+for key, value in tracked.items():
+    live = settings.get(key)
+    if key == "permissions" and isinstance(live, dict):
+        settings[key] = {**live, **value}
+    else:
+        settings[key] = value
+if json.dumps(settings, sort_keys=True) == before:
+    raise SystemExit(3)
 json.dump(settings, sys.stdout, indent=2)
 sys.stdout.write("\n")
 PY
     )" && status=0 || status=$?
     [[ "$status" != 2 ]] || die "$settings is not a JSON object; fix it and re-run."
+    [[ "$status" != 4 ]] || die "$HARNESS_DIR/clients/claude.json is unreadable or not a JSON object."
     [[ "$status" == 0 || "$status" == 3 ]] ||
         die "Reconciling $settings failed with status $status."
     if [[ "$status" == 0 ]]; then
         backup_copy "$settings"
         printf '%s\n' "$reconciled" > "$settings"
-        log "Pointed the Claude statusline at $HOME/.claude/statusline.sh"
+        log "Reconciled the tracked Claude settings in $settings"
     fi
 }
 
-# Each provider's status line lives in statusline/, one file per provider.
-# claude.sh is the renderer Claude Code runs on every draw; codex.sh is a
-# reconciler, because Codex draws its own and takes a list of built-in item ids
-# instead of a command. The write stays here so the backup is taken only on a
-# real change: codex.sh prints the reconciled file and exits 1 when the config
-# already says this.
-point_codex_statusline() {
-    local config="$HOME/.codex/config.toml" reconciled
+# Both writers of ~/.codex/config.toml, the tracked settings and the status
+# line. Each provider's status line lives in statusline/, one file per
+# provider: claude.sh is the renderer Claude Code runs on every draw, while
+# codex.sh is a reconciler, because Codex draws its own line and takes a list
+# of built-in item ids instead of a command. Either way the write stays here,
+# so the backup is taken only on a real change.
+#
+# Both print their reconciled file and exit 3 when the config already says
+# this. Anything but 0 or 3 is fatal rather than "nothing to do": a bare `if`
+# read an unreadable config, and a missing python3, as already reconciled, and
+# the run went on to report success having written nothing. Exit 4 is a defect
+# in the tracked file, which is a repository bug rather than the user's.
+write_reconciled_codex() {
+    local reconciler="$1" what="$2" config="$HOME/.codex/config.toml"
+    local reconciled status
     mkdir -p "$(dirname "$config")"
-    if reconciled="$("$HARNESS_DIR/statusline/codex.sh" "$config")"; then
+    reconciled="$("$reconciler" "$config")" && status=0 || status=$?
+    [[ "$status" != 4 ]] || die "$HARNESS_DIR/clients/codex.toml is unreadable."
+    [[ "$status" == 0 || "$status" == 3 ]] ||
+        die "Reconciling $what in $config failed with status $status."
+    if [[ "$status" == 0 ]]; then
         backup_copy "$config"
         printf '%s\n' "$reconciled" > "$config"
-        log "Reconciled the Codex status line in $config"
+        log "Reconciled $what in $config"
     fi
 }
 
@@ -419,8 +462,6 @@ install_links() {
     done
 
     link_managed "$HARNESS_DIR/statusline/claude.sh" "$HOME/.claude/statusline.sh"
-    point_statusline_at_link
-    point_codex_statusline
 
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.codex/AGENTS.md"
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.claude/CLAUDE.md"
@@ -428,6 +469,18 @@ install_links() {
     # The SEO group is gone. Its launcher lives outside the roots the orphan
     # sweep covers, so retiring it stays an explicit line.
     backup_existing "$HOME/.local/bin/claude-seo"
+}
+
+# The three writers of a mutable client config, kept together because all three
+# have to run after `engram setup`. Engram rewrites settings.json and
+# config.toml from its own template: it overwrites keys this harness declares,
+# drops keys it does not know, and would silently undo a reconcile that ran
+# before it. The harness is the last writer, which is what makes the tracked
+# values the ones a client actually reads.
+reconcile_clients() {
+    reconcile_claude_settings
+    write_reconciled_codex "$HARNESS_DIR/clients/codex.sh" "the tracked Codex settings"
+    write_reconciled_codex "$HARNESS_DIR/statusline/codex.sh" "the Codex status line"
 }
 
 # The listing is fetched before the substitution rather than inside a `case`
@@ -453,7 +506,7 @@ assert_plugin_count() {
 # it, which left the mode that exists for reconciling links as the one mode
 # that never confirmed a link landed.
 check_links() {
-    local command skill root script
+    local command skill root script status
     for skill in "$HARNESS_DIR"/skills/*; do
         local name; name="$(basename "$skill")"
         [[ -f "$skill/SKILL.md" ]] || die "Missing SKILL.md: $skill"
@@ -477,10 +530,36 @@ check_links() {
     [[ "$(readlink "$HOME/.claude/CLAUDE.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing Claude policy link."
     [[ "$(readlink "$CONFIG_HOME/opencode/AGENTS.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing OpenCode policy link."
     [[ -f "$HARNESS_DIR/skills/ponytail/SKILL.md" ]] || die "Missing the ponytail skill body."
-    [[ "$(readlink "$HOME/.claude/statusline.sh")" == "$HARNESS_DIR/statusline/claude.sh" ]] || die "Missing the Claude statusline link."
-    for script in "$HARNESS_DIR"/statusline/*.sh; do
-        [[ -x "$script" ]] || die "Status line script is not executable: $script"
+    # Every tracked key reached the live config. Each TOML half asserts by
+    # re-running its own reconciler, where only exit 3 means "the config
+    # already says this": exit 0 is a key that would still change, and
+    # anything else is the reconciler failing to answer the question.
+    if ! python3 - "$HOME/.claude/settings.json" "$HARNESS_DIR/clients/claude.json" <<'PY'
+import json, sys
+
+live, tracked = (json.load(open(path)) for path in sys.argv[1:3])
+for key, value in tracked.items():
+    if key == "permissions":
+        owned = live.get(key) or {}
+        assert all(owned.get(name) == entry for name, entry in value.items()), key
+    else:
+        assert live.get(key) == value, key
+PY
+    then
+        die "Tracked Claude settings are not reconciled in $HOME/.claude/settings.json."
+    fi
+    # Ahead of the re-run below, which executes these directly: a lost mode bit
+    # is exit 126 there, and "reports 126, expected 3" reads as a
+    # reconciliation failure rather than the permission problem it is.
+    for script in "$HARNESS_DIR"/statusline/*.sh "$HARNESS_DIR"/clients/*.sh; do
+        [[ -x "$script" ]] || die "Reconciler is not executable: $script"
     done
+    for script in "$HARNESS_DIR/clients/codex.sh" "$HARNESS_DIR/statusline/codex.sh"; do
+        "$script" "$HOME/.codex/config.toml" >/dev/null && status=0 || status=$?
+        [[ "$status" == 3 ]] ||
+            die "$script reports $status against $HOME/.codex/config.toml; expected 3, already reconciled."
+    done
+    [[ "$(readlink "$HOME/.claude/statusline.sh")" == "$HARNESS_DIR/statusline/claude.sh" ]] || die "Missing the Claude statusline link."
     grep -q '^status_line = \[' "$HOME/.codex/config.toml" || die "Missing the Codex status line."
 }
 
@@ -553,9 +632,10 @@ main() {
     if $LINKS_ONLY; then
         install_engram
     fi
-    # Last, after Engram: `engram setup` rewrites config.toml and settings.json,
-    # both of which check_links asserts, so verifying ahead of it would check a
-    # state Engram then overwrites.
+    # Both after Engram: `engram setup` rewrites config.toml and settings.json,
+    # so reconciling ahead of it would write a state Engram then overwrites,
+    # and verifying ahead of it would check one.
+    reconcile_clients
     check_links
     $LINKS_ONLY || check_tools
     summary

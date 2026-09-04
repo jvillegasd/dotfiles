@@ -150,11 +150,30 @@ class InstallerTests(unittest.TestCase):
             policy = home / ".codex" / "AGENTS.md"
             policy.parent.mkdir()
             policy.write_text("old policy")
+            # settings.json is written by Orca and by `engram setup` too, so
+            # the reconciler owns the tracked keys and has to leave the rest
+            # alone. The stale deny is the case that matters most: a tracked
+            # list replaces the live one, so removing an entry upstream
+            # removes it from the machine.
+            settings = home / ".claude" / "settings.json"
+            settings.parent.mkdir(parents=True)
+            settings.write_text(
+                json.dumps(
+                    {
+                        "permissions": {
+                            "allow": ["mcp__engram__mem_save"],
+                            "deny": ["Bash(retired:*)"],
+                        },
+                        "hooks": {"Stop": []},
+                        "enabledPlugins": {"engram@engram": True},
+                    }
+                )
+            )
             # config.toml carries trust decisions and hook hashes, so the
             # status line reconciler has to leave everything else alone.
             codex_config = home / ".codex" / "config.toml"
             codex_config.write_text(
-                'model = "keep-me"\n\n'
+                'unrelated = "keep-me"\n\n'
                 "[tui]\n"
                 'status_line = [\n  "stale",\n]\n'
                 "status_line_use_colors = false\n"
@@ -254,13 +273,36 @@ class InstallerTests(unittest.TestCase):
                 os.path.realpath(home / ".claude" / "statusline.sh"),
                 str(STATUSLINE / "claude.sh"),
             )
-            claude_settings = json.loads(
-                (home / ".claude" / "settings.json").read_text()
+            claude_settings = json.loads(settings.read_text())
+            tracked = json.loads(
+                (ROOT / "harness" / "clients" / "claude.json").read_text()
             )
             self.assertEqual(
                 claude_settings["statusLine"],
                 {"type": "command", "command": 'bash "$HOME/.claude/statusline.sh"'},
             )
+            self.assertEqual(
+                claude_settings["permissions"]["deny"],
+                tracked["permissions"]["deny"],
+            )
+            self.assertNotIn("Bash(retired:*)", claude_settings["permissions"]["deny"])
+            # Machine state survives: the engram allowlist beside the deny list
+            # this harness owns, and the keys other tools write beside it.
+            self.assertEqual(
+                claude_settings["permissions"]["allow"], ["mcp__engram__mem_save"]
+            )
+            self.assertEqual(claude_settings["hooks"], {"Stop": []})
+            self.assertEqual(
+                claude_settings["enabledPlugins"], {"engram@engram": True}
+            )
+            for key, value in tracked.items():
+                if key != "permissions":
+                    self.assertEqual(claude_settings[key], value, key)
+            for line in (
+                (ROOT / "harness" / "clients" / "codex.toml").read_text().splitlines()
+            ):
+                if line and not line.startswith("#"):
+                    self.assertIn(f"\n{line}\n", f"\n{codex_config.read_text()}", line)
             codex = codex_config.read_text()
             items = ", ".join(f'"{item}"' for item in codex_status_items())
             self.assertIn(f"status_line = [{items}]", codex)
@@ -268,7 +310,7 @@ class InstallerTests(unittest.TestCase):
             self.assertNotIn('"stale"', codex)
             self.assertNotIn("status_line_use_colors = false", codex)
             # Unrelated keys, including a same-named key in a subtable, survive.
-            self.assertIn('model = "keep-me"', codex)
+            self.assertIn('unrelated = "keep-me"', codex)
             self.assertIn('theme = "keep-me-too"', codex)
             self.assertIn('status_line = "not-ours"', codex)
             self.assertEqual(codex.count("[tui]"), 1)

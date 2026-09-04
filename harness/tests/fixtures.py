@@ -20,6 +20,7 @@ sys.dont_write_bytecode = True
 SKILLS = ROOT / "harness" / "skills"
 COMMANDS = ROOT / "harness" / "commands"
 STATUSLINE = ROOT / "harness" / "statusline"
+CLIENTS = ROOT / "harness" / "clients"
 LOCKED_SKILLS = ROOT / "harness" / "locked-skills.sh"
 
 # The two platform entry points plus the library they both source. They differ

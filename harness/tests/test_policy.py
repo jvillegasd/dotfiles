@@ -10,6 +10,7 @@ body lives in test_consistency.py.
 
 from __future__ import annotations
 
+import re
 import unittest
 
 from fixtures import COMMAND_NAMES, ROOT
@@ -27,6 +28,26 @@ class PolicyTests(unittest.TestCase):
         for name in ("code-review", "to-spec", "to-tickets", "`ship`"):
             self.assertNotIn(name, policy, name)
         self.assertIn('| "mock up this ticket\'s frontend", a mockup for one ticket or spec | `/proto` |', policy)
+
+    def test_a_scripted_edit_is_allowed_and_has_to_be_read_back(self) -> None:
+        # The ban on `sed` and heredocs overrode bypass permissions mode on
+        # every file change, so it went. What it was guarding against did not:
+        # a replacement matching nothing exits 0, and only reading the file
+        # says whether the edit landed.
+        policy = POLICY.read_text()
+        self.assertIn("Read the result back after any scripted or mechanical file edit", policy)
+        # Matched by shape, not by the phrase that was deleted: pinning the old
+        # wording would pass again the moment the ban came back as "do not use
+        # `sed`", which is the check surviving deletion of what it guards. The
+        # rule itself is exempt, or "do not skip the read-back" would fail the
+        # test whose whole purpose is to keep that sentence alive.
+        ban = re.compile(
+            r"(?i)\b(never|don['\u2019]t|do not|avoid|forbid|no)\b[^.]*\b(sed|heredoc)\b"
+        )
+        for line in policy.splitlines():
+            if "Read the result back" in line:
+                continue
+            self.assertIsNone(ban.search(line), line)
 
     def test_the_frontend_design_body_is_bounded_by_scope(self) -> None:
         # The policy hands no skill authority over a UI surface. `ponytail` is

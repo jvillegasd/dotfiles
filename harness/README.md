@@ -9,6 +9,7 @@ One committed source for Codex, Claude Code, and OpenCode:
 - `locked-skills.sh` adds, updates, removes, and validates reviewed third-party skill locks.
 - `bench/measure.py` compares the real session population before and after a harness change, reading all three clients' own session stores. Its manual is `bench/README.md`.
 - `statusline/` holds one file per provider: `claude.sh` renders Claude Code's line, `codex.sh` reconciles Codex's built-in one to match.
+- `clients/` holds the client settings this harness owns: `claude.json` and `codex.toml` declare them, and `codex.sh` reconciles the TOML half. Nothing here is symlinked, because both live files are mostly machine state written by other tools, hook manifests and per-project trust decisions and generated absolute paths. A tracked key replaces the live value on every install, so removing one here removes it from the machine; every key not named there is left alone. `permissions` is the one exception, merged a level down so `deny` stays owned while the Engram allowlist survives. The install runs these after `engram setup`, which rewrites both files from its own template, so a tracked key wins over every other writer. That includes the client itself: `model`, `effortLevel`, and `theme` are what `/model` and `/config` write back at runtime, so an in-session change to one of them survives until the next install and no longer.
 - `tests/` checks supply-chain, installer, and contract invariants, one file per subject.
 
 ## Development lifecycle
@@ -174,7 +175,7 @@ The two files are different kinds of thing, which is the whole point of the fold
 
 `claude.sh` renders the model, context-window percentage, directory and branch with a dirty marker, session duration, and reasoning effort on one line, then the five-hour and weekly rate-limit bars underneath, fetched from the OAuth usage endpoint and cached for sixty seconds in `/tmp/claude`.
 
-`codex.sh` owns the item ids, so the installer never names them. It prints the reconciled `config.toml` on stdout and exits 1 when the file already says this, which is what lets `install.sh` take its backup only on a real change rather than mint a fresh backup root every run. Run it by hand to see the diff it would make:
+`codex.sh` owns the item ids, so the installer never names them. It prints the reconciled `config.toml` on stdout and exits 3 when the file already says this, which is what lets `install.sh` take its backup only on a real change rather than mint a fresh backup root every run. Run it by hand to see the diff it would make:
 
 ```sh
 ./harness/statusline/codex.sh ~/.codex/config.toml
