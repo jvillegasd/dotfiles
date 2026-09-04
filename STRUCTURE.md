@@ -48,6 +48,10 @@ harness/
 ├── statusline/                 # one file per provider, named after it
 │   ├── claude.sh               # → ~/.claude/statusline.sh; the renderer Claude Code runs
 │   └── codex.sh                # reconciles [tui] status_line in ~/.codex/config.toml
+├── clients/                    # the client settings the harness owns, reconciled not symlinked
+│   ├── claude.json             # tracked keys merged into ~/.claude/settings.json
+│   ├── codex.toml              # tracked top-level keys for ~/.codex/config.toml
+│   └── codex.sh                # reconciles the TOML half; install.sh reconciles claude.json inline
 ├── aliases.sh                  # yolo-mode launchers, sourced from ~/.zshrc
 ├── commands/                   # the workflows, reachable only as /name in all three clients
 ├── skills/
@@ -61,8 +65,9 @@ harness/
 
 A locked directory is named after the upstream body's own frontmatter `name`, not after its repository or its path there, because `tests/test_locked_skills.py` asserts the two match. Nothing inside one is editable: an edit there is clobbered by the next `skills update`, with the lockfile rewritten to record the loss as correct.
 
-Global mutable client configs are reconciled during installation but are not
-tracked. Per-project lifecycle configuration lives under `docs/agents/` only
+Global mutable client configs are reconciled during installation but are not tracked wholesale: `harness/clients/` declares the keys the harness owns, and every other key in `~/.claude/settings.json` and `~/.codex/config.toml` belongs to the machine and to the tools that write there. The harness writes last, after `engram setup`, so a tracked key wins over whatever else wrote it: an in-session `/model` or `/config` change is reverted by the next install, which is what tracking a preference means.
+
+Per-project lifecycle configuration lives under `docs/agents/` only
 after `setup-harness` is explicitly invoked in that project. This repository is
 one of those projects: `docs/agents/harness.json` and
 `docs/agents/issue-tracker.md` describe its own GitHub tracker binding, and
