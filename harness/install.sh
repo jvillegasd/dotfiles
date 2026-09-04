@@ -15,6 +15,7 @@ CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 LINKS_ONLY=false
 NO_BACKUP=false
 UNINSTALL=false
+CLEAR_BACKUPS=false
 BACKUP_ROOT=""
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
@@ -29,6 +30,7 @@ usage() {
     cat <<'EOF'
 Usage: harness/install.sh [--links-only] [--no-backup]
        harness/install.sh --uninstall
+       harness/install.sh --clear-backups
 
   --links-only   Reconcile policy, command, and skill links without installing
                  packages. Engram is still reconciled, so it has to be
@@ -47,6 +49,13 @@ Usage: harness/install.sh [--links-only] [--no-backup]
                  not archived, so --no-backup adds nothing to it. Reinstall
                  to get the harness back; anything of your own that was
                  sitting at a managed path is gone.
+  --clear-backups
+                 Delete every archive under ~/.dotfiles-backups/harness/,
+                 which is where an install moves whatever was in the way of a
+                 managed path. Destructive and unrecoverable, and it is the
+                 only copy of anything of yours an install displaced. Touches
+                 nothing else in ~/.dotfiles-backups and installs nothing;
+                 runs on its own.
 EOF
 }
 
@@ -55,6 +64,7 @@ for arg in "$@"; do
         --links-only) LINKS_ONLY=true ;;
         --no-backup) NO_BACKUP=true ;;
         --uninstall) UNINSTALL=true ;;
+        --clear-backups) CLEAR_BACKUPS=true ;;
         -h|--help) usage; exit 0 ;;
         *) die "Unknown argument: $arg" ;;
     esac
@@ -71,6 +81,12 @@ fi
 # what an install does because it displaces things it did not put there and has
 # to hand them back; an uninstall removes only what this installer wrote, and a
 # backup of that is a copy of the checkout it can be reinstalled from.
+# A mode of its own rather than a rider on another: it writes and removes no
+# harness state at all, and deleting the only copy of what an install displaced
+# is worth being the whole command rather than a side effect of one.
+if $CLEAR_BACKUPS && { $UNINSTALL || $LINKS_ONLY; }; then
+    die "--clear-backups runs on its own; it neither installs nor uninstalls."
+fi
 # An `if` rather than `$UNINSTALL && NO_BACKUP=true`, which exits the script
 # under `set -e` on every install run, because a false test is a failed
 # command at the top level.
@@ -826,7 +842,43 @@ Reinstall with: $HARNESS_DIR/install.sh
 EOF
 }
 
+# Every archive an install left, and nothing else in ~/.dotfiles-backups.
+#
+# Scoped to the harness subtree on purpose: this installer writes only under
+# .../harness/, and a sibling directory there belongs to whatever wrote it. A
+# command that cleared the parent would be deleting other tools' archives on
+# the strength of owning one directory inside it.
+#
+# Each timestamped root goes separately rather than the subtree in one `rm`,
+# so the log names what was deleted. That listing is the only record left
+# afterwards, which is the point: there is nothing to restore from.
+clear_backups() {
+    local root="$HOME/.dotfiles-backups/harness" entry size count=0
+    if [[ ! -d "$root" ]]; then
+        log "No harness backups to delete at $root"
+        return
+    fi
+    # `tr -d` because the du every macOS ships right-pads its size column.
+    size="$(du -sh "$root" 2>/dev/null | cut -f1 | tr -d ' ')"
+    for entry in "$root"/*; do
+        rm -rf "$entry"
+        log "Deleted $entry"
+        count=$((count + 1))
+    done
+    # Only when it is empty, and never the parent: `rmdir` refusing a
+    # non-empty directory is the guard, so a file this loop did not match
+    # keeps the directory rather than being swept with it.
+    rmdir "$root" 2>/dev/null || true
+    log "Deleted $count harness backup(s), ${size:-unknown} reclaimed."
+}
+
 main() {
+    # Ahead of the uninstall, which is itself ahead of the install: this mode
+    # touches no client and no package, so none of what follows applies to it.
+    if $CLEAR_BACKUPS; then
+        clear_backups
+        return
+    fi
     # Ahead of everything, including warn_unless_zsh: an uninstall runs none of
     # the two steps that warning is about.
     if $UNINSTALL; then

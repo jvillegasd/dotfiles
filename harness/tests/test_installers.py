@@ -487,7 +487,13 @@ class UninstallTests(unittest.TestCase):
         )
 
     def backups(self, home: Path) -> list[str]:
-        root = home / ".dotfiles-backups"
+        """What the harness has archived, scoped to its own subtree.
+
+        The parent holds other tools' archives, so walking it would make
+        "the harness archived nothing" false for reasons that have nothing to
+        do with the harness.
+        """
+        root = home / ".dotfiles-backups" / "harness"
         return sorted(str(path.relative_to(home)) for path in root.rglob("*")) if root.exists() else []
 
     def seed(self, home: Path) -> None:
@@ -719,10 +725,51 @@ class UninstallTests(unittest.TestCase):
                     self.assertEqual(result.returncode == 0, expect_success)
                     if expect_success:
                         self.assertIn("--uninstall", result.stdout)
+                        self.assertIn("--clear-backups", result.stdout)
                     else:
                         self.assertIn("--bogus", result.stderr)
                     # Neither branch reaches an install or a removal.
                     self.assertEqual(list(home.iterdir()), [])
+
+    def test_clear_backups_deletes_only_the_harness_subtree(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            self.seed(home)
+            # A collision, so the install has something to archive and the
+            # command has something to delete.
+            collision = home / ".agents" / "skills" / "evidence"
+            collision.mkdir(parents=True, exist_ok=True)
+            (collision / "keep").write_text("mine")
+            # A sibling under ~/.dotfiles-backups written by something else.
+            # The harness owns one directory in there, not the parent.
+            theirs = home / ".dotfiles-backups" / "private-skills" / "archive"
+            theirs.mkdir(parents=True)
+            (theirs / "keep").write_text("not the harness's")
+
+            self.run_installer(home, "--links-only")
+            self.assertTrue(self.backups(home), "the install archived nothing to delete")
+
+            self.run_installer(home, "--clear-backups")
+
+            self.assertEqual(self.backups(home), [])
+            self.assertEqual((theirs / "keep").read_text(), "not the harness's")
+            # It removed archives, not the harness.
+            self.assertTrue((home / ".claude" / "CLAUDE.md").is_symlink())
+
+    def test_clear_backups_is_a_clean_no_op_and_runs_alone(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            # Nothing archived yet is a clean exit, not a failure.
+            self.run_installer(home, "--clear-backups")
+            self.assertFalse((home / ".dotfiles-backups").exists())
+
+            for other in ("--uninstall", "--links-only"):
+                with self.subTest(other=other):
+                    result = self.run_installer(
+                        home, "--clear-backups", other, check=False
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("--clear-backups", result.stderr)
 
     def test_uninstall_is_documented_in_the_usage(self) -> None:
         installer = (ROOT / "harness" / "install.sh").read_text()
@@ -733,8 +780,12 @@ class UninstallTests(unittest.TestCase):
         self.assertIn("it does not\n                 uninstall your tools", installer)
         # Deleting rather than archiving is the surprising half, so the usage
         # has to warn about it in the same words --no-backup does.
-        uninstall = installer.split("  --uninstall")[1].split("EOF")[0]
+        uninstall = installer.split("  --uninstall")[1].split("  --clear-backups")[0]
         self.assertIn("Destructive and unrecoverable", uninstall)
+        # --clear-backups deletes the only copy of what an install displaced,
+        # so it carries the same warning in the same words.
+        clear = installer.split("  --clear-backups")[1].split("EOF")[0]
+        self.assertIn("Destructive and unrecoverable", clear)
 
 
 if __name__ == "__main__":
