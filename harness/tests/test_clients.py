@@ -41,7 +41,12 @@ class TrackedSettingsTests(unittest.TestCase):
             claude["statusLine"],
             {"type": "command", "command": 'bash "$HOME/.claude/statusline.sh"'},
         )
-        self.assertIn("Bash(gh pr merge:*)", claude["permissions"]["deny"])
+        # A sentinel from the destructive half of the list. `gh pr merge` is
+        # deliberately not denied: /squash-land is a human typing the command,
+        # and the workflow's own gates are what keep an unreviewed merge out,
+        # not a permission the merge step then cannot get past.
+        self.assertIn("Bash(git push --force:*)", claude["permissions"]["deny"])
+        self.assertNotIn("Bash(gh pr merge:*)", claude["permissions"]["deny"])
 
         # The [tui] table belongs to statusline/codex.sh. Two writers of one
         # key would each undo the other on alternate runs.
