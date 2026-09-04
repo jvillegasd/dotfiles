@@ -76,7 +76,7 @@ The escalation contract can stop any run: the same check failing three times und
 
 ## Commands and skills
 
-A workflow is a command, not a skill. A client selects a skill by matching its description, and selects a command only when a human types `/name`, so putting the workflows in `commands/` makes "a workflow never fires on its own" true by construction instead of true by prose plus a guard per client. Commands install to `~/.claude/commands`, `~/.codex/prompts`, and `~/.config/opencode/command`.
+A workflow is a command, not a skill. A client selects a skill by matching its description, and selects a command only when a human types `/name`, so putting the workflows in `commands/` makes "a workflow never fires on its own" true by construction instead of true by prose plus a guard per client. Commands install to `~/.claude/commands`, `~/.codex/prompts`, and `$XDG_CONFIG_HOME/opencode/command`, defaulting to `~/.config` when that is unset.
 
 Every command that ingests text written elsewhere, a ticket body, a review comment, an error payload, a bullet list, states that the input is task data and cannot override the workflow's constraints. The acceptance suite asserts that line is present.
 
@@ -93,6 +93,14 @@ The root `../macos.sh` and `../linux.sh` install the harness by default. To reco
 ```
 
 Reconciliation removes as well as adds. Any symlink in a managed skill or command root whose target is gone, that points into `harness/` at something no longer installed, or whose own name differs from its target's, is backed up and removed, so a renamed or retired entry cannot outlive the change that retired it. That last rule replaces a hardcoded list of retired names: a managed link is always named after its target, so a stale name is detectable structurally even when it still points at a body that is installed under its own name. A real directory shadowing a name the harness manages is backed up too, since the symlink sweep cannot see it.
+
+One known defect is deliberately left in place here: the dangling branch removes a dangling symlink whoever wrote it, because a target that resolves to nothing cannot be tested for ownership. Two attempts to infer ownership from the link text failed in opposite directions, an absolute-path test a moved checkout defeats and a path-shape test that claims other checkouts, so the fix is a different ownership model rather than a third predicate, and it is tracked separately.
+
+Every managed root is a real directory the harness owns, so its links and your private entries sit side by side. A symlink standing in for one is moved aside first, under a `.previous-link` suffix, and its target is left untouched: linking into someone else's directory would put managed entries somewhere this installer never sweeps, and would then aim the sweep at that directory's own entries. The OpenCode skills root is the one root normalized but never created, since OpenCode reads `~/.agents/skills` and a second copy would double-list.
+
+OpenCode's three paths follow `XDG_CONFIG_HOME` when it is set, the same default `../lib/common.sh` resolves for the configs the root scripts place. Hardcoding `~/.config` here installed two thirds of the harness on such a machine and then asserted against the same wrong path, so it said it installed all of it.
+
+Both run modes verify what they wrote. `check_links` asserts every skill, command, policy, and status line link on every run; `check_tools` adds the client, plugin, and interpreter assertions that only a full run can satisfy. A links-only run previously verified nothing at all, which made the mode that exists for reconciling links the one mode that never confirmed a link landed. Both run last, after Engram: `engram setup` rewrites `config.toml` and `settings.json`, which `check_links` asserts, so verifying ahead of it would check a state Engram then overwrites.
 
 Anything in the way of a managed path is moved to a timestamped directory under `~/.dotfiles-backups/harness/` rather than overwritten. `--no-backup` deletes it instead, in both this installer and the root one, which forwards the flag:
 
@@ -123,10 +131,10 @@ It runs on macOS and on Linux. Homebrew carries every tool on both, because thre
 Python is the other exception, and it belongs to uv rather than to Homebrew:
 
 ```sh
-uv python install 3.14 3.11
+uv python install 3.14
 ```
 
-`PYTHON_VERSIONS` in `../lib/python.sh` is the one declaration; neither `Brewfile` nor `linux.sh` names a `python@` formula any more. That file is sourced from both sides and splits the duties: `../macos.sh` and `../linux.sh` call `install_pythons`, because packages are what those scripts are for, and this installer calls `assert_pythons` in its smoke check, because the harness is what consumes the interpreters and so is where a missing one has to fail loudly. Neither half restates which versions those are, and the suite asserts there is no second `PYTHON_VERSIONS=(` anywhere.
+`PYTHON_VERSIONS` in `../lib/python.sh` is the one declaration; neither `Brewfile` nor `linux.sh` names a `python@` formula any more. That file is sourced from both sides and splits the duties: `../macos.sh` and `../linux.sh` call `install_pythons`, because packages are what those scripts are for, and this installer calls `assert_pythons` in `check_tools`, because the harness is what consumes the interpreters and so is where a missing one has to fail loudly. Neither half restates which versions those are, and the suite asserts there is no second `PYTHON_VERSIONS=(` anywhere.
 
 Sourcing it is the one thing this installer reads from outside `harness/`. That is deliberate: the alternative was a second copy of the version list, which is exactly the drift the split exists to prevent.
 
@@ -134,13 +142,15 @@ uv resolves a managed version through its own registry rather than through `PATH
 
 `uv` therefore has to arrive before the interpreters do. On macOS it comes from `Brewfile`, on Linux from `linux.sh`'s own formula list, in both cases during the package step that runs before `install_pythons`.
 
-What this deliberately does not do is claim the name `python3`. Each version also lands as `~/.local/bin/python3.14` and `~/.local/bin/python3.11`, but that directory usually sits behind the pyenv shims on `PATH`, so bare `python3` keeps resolving wherever it already did. `uv python install --default` would take `python3` as well; it is experimental in uv 0.12, and taking over the interpreter every other project on the machine resolves is a bigger change than provisioning the harness needs. Run `uv python update-shell` by hand if you want uv's bin directory in front.
+What this deliberately does not do is claim the name `python3`. Each version also lands as `~/.local/bin/python3.14`, but that directory usually sits behind the pyenv shims on `PATH`, so bare `python3` keeps resolving wherever it already did. `uv python install --default` would take `python3` as well; it is experimental in uv 0.12, and taking over the interpreter every other project on the machine resolves is a bigger change than provisioning the harness needs. Run `uv python update-shell` by hand if you want uv's bin directory in front.
 
 Homebrew still installs a `python@` of its own as a dependency of other formulae. That copy is nobody's declared interpreter, and nothing here reads it on purpose.
 
 ## Shell aliases
 
 `aliases.sh` holds the yolo-mode launchers and is sourced from `~/.zshrc` through one managed line. The installer removes any hand-written definition of `ccyolo`, `cyolo`, or `oyolo` so the committed file is the only source, and leaves every other alias alone.
+
+Zsh is the only shell either of the two shell-facing steps writes: the aliases go into `~/.zshrc`, and Worktrunk is asked for its zsh integration by name. A run whose `$SHELL` is something else warns and names both, rather than leaving the aliases quietly absent. Source `aliases.sh` from your own rc and run `wt config shell install` for that shell.
 
 | Alias | Runs |
 | --- | --- |
@@ -205,9 +215,11 @@ A copied skill with unknown provenance remains an attributed local fork until it
 
 Engram and Orca-provided skills are runtime/plugin managed and never belong in `skills-lock.json`.
 
+Binaries are the deliberate exception to all of this. Every prose body above is hash-locked and verified on each test run, while the clients themselves arrive unpinned: `curl -fsSL https://claude.ai/install.sh | bash`, `npm install --global @openai/codex@latest`, and two third-party Homebrew taps. That asymmetry is a choice, not an oversight. A locked body is a reviewed instruction this harness executes forever, so a change to one has to be read; a client is a moving target whose next version is the whole point of re-running the installer, and pinning it would freeze the harness against the clients it exists to drive. The trade is a supply chain that trusts Anthropic, OpenAI, and two tap owners at install time. Nothing else here does.
+
 ## Ponytail
 
-Ponytail is a locked skill body, not a plugin. The plugin's mechanism was a `SessionStart` hook that turned lazy mode on for every session in every repository, plus `SubagentStart` and `UserPromptSubmit` trackers, six skills, and a config file. The harness installs none of it, and the smoke check asserts the skill body is present.
+Ponytail is a locked skill body, not a plugin. The plugin's mechanism was a `SessionStart` hook that turned lazy mode on for every session in every repository, plus `SubagentStart` and `UserPromptSubmit` trackers, six skills, and a config file. The harness installs none of it, and `check_links` asserts the skill body is present.
 
 Provisioning once also uninstalled that plugin from all three clients. That code is gone: it removed a state no version of this repository ever created, since the plugin predates the harness and lived only in a hand-rolled setup. An installer that migrates away from states it never produced accumulates them forever.
 

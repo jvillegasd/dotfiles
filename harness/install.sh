@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+# An unmatched glob would otherwise iterate its own pattern, and a link named
+# `*.md` in three command roots is a worse failure than an empty loop.
+shopt -s nullglob
 
 HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The same default lib/common.sh resolves. Restated rather than sourced: this
+# installer runs on its own, and lib/python.sh is the one thing it may pull in.
+# A machine that moves XDG_CONFIG_HOME moves OpenCode with it, so hardcoding
+# ~/.config here would install two thirds of the harness and say it installed
+# all of it.
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 LINKS_ONLY=false
 NO_BACKUP=false
 BACKUP_ROOT=""
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m[err]\033[0m %s\n' "$*" >&2; exit 1; }
 
 # The interpreter set, shared with macos.sh and linux.sh so the versions have
@@ -18,7 +28,9 @@ usage() {
     cat <<'EOF'
 Usage: harness/install.sh [--links-only] [--no-backup]
 
-  --links-only   Reconcile policy, command, and skill links without packages/plugins.
+  --links-only   Reconcile policy, command, and skill links without installing
+                 packages. Engram is still reconciled, so it has to be
+                 installed already; a full run is what installs it.
   --no-backup    Delete whatever is in the way instead of moving it to
                  ~/.dotfiles-backups. Destructive and unrecoverable: a private
                  skill or a hand-edited config sitting at a managed path is
@@ -38,12 +50,12 @@ done
 SKILL_ROOTS=(
     "$HOME/.agents/skills"
     "$HOME/.claude/skills"
-    "$HOME/.config/opencode/skills"
+    "$CONFIG_HOME/opencode/skills"
 )
 COMMAND_ROOTS=(
     "$HOME/.claude/commands"
     "$HOME/.codex/prompts"
-    "$HOME/.config/opencode/command"
+    "$CONFIG_HOME/opencode/command"
 )
 
 skill_names() {
@@ -100,18 +112,24 @@ link_managed() {
     log "Linked $destination -> $source"
 }
 
-# The harness owns a real directory here, so its links and a user's private
-# skills can sit side by side. Anything else at the path is moved aside; a
-# symlink included, because linking into someone else's directory would write
-# managed entries somewhere this installer never sweeps.
-ensure_skill_dir() {
-    local destination="$1"
+# The harness owns a real directory at every root it links into or sweeps, so
+# its links and a user's private entries can sit side by side. Anything else at
+# the path is moved aside; a symlink included, because linking into someone
+# else's directory would write managed entries somewhere this installer never
+# sweeps, and the orphan sweep would then archive that directory's own entries.
+#
+# `create` is false for a root the harness reads but never populates: normalize
+# what is already there, and leave the path absent otherwise.
+ensure_managed_dir() {
+    local destination="$1" create="${2:-true}"
     if [[ -L "$destination" ]]; then
         backup_existing "$destination" .previous-link
     elif [[ -e "$destination" && ! -d "$destination" ]]; then
         backup_existing "$destination"
     fi
-    mkdir -p "$destination"
+    if [[ "$create" == true ]]; then
+        mkdir -p "$destination"
+    fi
 }
 
 brew_latest_formula() {
@@ -191,6 +209,18 @@ install_engram() {
     engram setup opencode < /dev/null
 }
 
+# Both of these write zsh and only zsh: the aliases go into ~/.zshrc, and
+# worktrunk is asked for its zsh integration by name. Neither is worth a second
+# implementation, but a user on another shell has to be told what they did not
+# get, or the aliases are simply missing and nothing says why.
+warn_unless_zsh() {
+    [[ "${SHELL##*/}" != zsh ]] || return 0
+    warn "Your login shell is ${SHELL:-unknown}, not zsh. The yolo aliases go into"
+    warn "~/.zshrc and Worktrunk gets its zsh integration. Source"
+    warn "$HARNESS_DIR/aliases.sh from your own shell rc, and run"
+    warn "\`wt config shell install\` for the shell you use."
+}
+
 install_integrations() {
     install_engram
 
@@ -216,6 +246,16 @@ retire_shadowed_skills() {
 # Anything this harness installed and no longer installs is removed, so a
 # renamed, retired, or unlinked entry cannot outlive the change that retired
 # it. A dangling symlink is removed wherever it points.
+#
+# That last sentence is a known defect, deliberately left alone here: the sweep
+# cannot tell its own dangling links from a user's, because a dangling target
+# resolves to nothing to test. Two attempts to infer ownership from the link
+# text failed in opposite directions, an absolute-path test that a moved
+# checkout defeats and a path-shape test that claims other checkouts, so the
+# fix is a different way of deciding ownership rather than a third
+# predicate, and it needs its own contract. Tracked separately; do not
+# patch it in passing.
+
 reconcile_orphans() {
     local desired="$1" root entry target
     for root in "${SKILL_ROOTS[@]}" "${COMMAND_ROOTS[@]}"; do
@@ -241,10 +281,14 @@ reconcile_orphans() {
 # One sourced line rather than copied aliases, so the committed file stays the
 # only definition. Hand-written duplicates of the same aliases are removed:
 # two definitions of a yolo alias is one too many to reason about.
+#
+# "Unchanged" is exit 3, so a crash cannot pass for it. The overloaded 1 read
+# an unreadable ~/.zshrc, or a missing python3, as "nothing to do" and left the
+# aliases silently uninstalled while the run reported success.
 install_aliases() {
-    local rc="$HOME/.zshrc" reconciled
+    local rc="$HOME/.zshrc" reconciled status
     [[ -f "$rc" ]] || touch "$rc"
-    if reconciled="$(python3 - "$rc" "$HARNESS_DIR/aliases.sh" <<'PY'
+    reconciled="$(python3 - "$rc" "$HARNESS_DIR/aliases.sh" <<'PY'
 import pathlib, re, sys
 
 rc, source = pathlib.Path(sys.argv[1]), sys.argv[2]
@@ -264,10 +308,12 @@ while kept and not kept[-1].strip():
 kept += [marker, f'[ -f "{source}" ] && source "{source}"', ""]
 text = "\n".join(kept)
 if text == current:
-    raise SystemExit(1)
+    raise SystemExit(3)
 sys.stdout.write(text)
 PY
-    )"; then
+    )" && status=0 || status=$?
+    [[ "$status" == 0 || "$status" == 3 ]] || die "Could not reconcile aliases in $rc."
+    if [[ "$status" == 0 ]]; then
         backup_copy "$rc"
         printf '%s\n' "$reconciled" > "$rc"
         log "Reconciled harness aliases in $rc"
@@ -280,24 +326,40 @@ PY
 # The reconciled file is emitted on stdout and written here, rather than
 # written in place, so the backup is taken only when something actually
 # changes. Backing up unconditionally minted a fresh backup root on every run.
+#
+# "Already correct" is its own exit code rather than the catch-all 1, so a
+# settings.json that cannot be read at all is fatal and says which file. The
+# overloaded 1 read every crash as "nothing to do": a file that was valid JSON
+# but not an object, or unreadable, or a missing python3, all left the status
+# line unset while the run went on to report success.
 point_statusline_at_link() {
-    local settings="$HOME/.claude/settings.json" reconciled
+    local settings="$HOME/.claude/settings.json" reconciled status
     mkdir -p "$(dirname "$settings")"
     [[ -f "$settings" ]] || printf '{}\n' > "$settings"
-    if reconciled="$(python3 - "$settings" <<'PY'
+    reconciled="$(python3 - "$settings" <<'PY'
 import json, sys
 
 path = sys.argv[1]
-with open(path) as handle:
-    settings = json.load(handle)
 wanted = {"type": "command", "command": 'bash "$HOME/.claude/statusline.sh"'}
-if settings.get("statusLine") == wanted:
-    raise SystemExit(1)
+try:
+    with open(path) as handle:
+        settings = json.load(handle)
+    if not isinstance(settings, dict):
+        raise TypeError(f"expected a JSON object, found {type(settings).__name__}")
+    if settings.get("statusLine") == wanted:
+        raise SystemExit(3)
+except (OSError, ValueError, TypeError) as error:
+    print(error, file=sys.stderr)
+    raise SystemExit(2)
 settings["statusLine"] = wanted
 json.dump(settings, sys.stdout, indent=2)
 sys.stdout.write("\n")
 PY
-    )"; then
+    )" && status=0 || status=$?
+    [[ "$status" != 2 ]] || die "$settings is not a JSON object; fix it and re-run."
+    [[ "$status" == 0 || "$status" == 3 ]] ||
+        die "Reconciling $settings failed with status $status."
+    if [[ "$status" == 0 ]]; then
         backup_copy "$settings"
         printf '%s\n' "$reconciled" > "$settings"
         log "Pointed the Claude statusline at $HOME/.claude/statusline.sh"
@@ -322,9 +384,15 @@ point_codex_statusline() {
 
 install_links() {
     local skill source command root desired="|"
-    ensure_skill_dir "$HOME/.agents/skills"
-    ensure_skill_dir "$HOME/.claude/skills"
-    mkdir -p "${COMMAND_ROOTS[@]}"
+    ensure_managed_dir "$HOME/.agents/skills"
+    ensure_managed_dir "$HOME/.claude/skills"
+    # Never created, only normalized: OpenCode reads ~/.agents/skills, so this
+    # root exists here just to be swept, and a symlink standing in for it would
+    # aim that sweep at a directory the harness does not own.
+    ensure_managed_dir "$CONFIG_HOME/opencode/skills" false
+    for root in "${COMMAND_ROOTS[@]}"; do
+        ensure_managed_dir "$root"
+    done
     retire_shadowed_skills
 
     while IFS= read -r skill; do
@@ -338,7 +406,7 @@ install_links() {
     while IFS= read -r skill; do
         source="$HARNESS_DIR/skills/$skill"
         # OpenCode reads ~/.agents/skills, so a second copy would double-list.
-        backup_existing "$HOME/.config/opencode/skills/$skill"
+        backup_existing "$CONFIG_HOME/opencode/skills/$skill"
         [[ "$desired" == *"|$source|"* ]] || continue
         link_managed "$source" "$HOME/.agents/skills/$skill"
         link_managed "$source" "$HOME/.claude/skills/$skill"
@@ -356,7 +424,7 @@ install_links() {
 
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.codex/AGENTS.md"
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.claude/CLAUDE.md"
-    link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.config/opencode/AGENTS.md"
+    link_managed "$HARNESS_DIR/POLICY.md" "$CONFIG_HOME/opencode/AGENTS.md"
     # The SEO group is gone. Its launcher lives outside the roots the orphan
     # sweep covers, so retiring it stays an explicit line.
     backup_existing "$HOME/.local/bin/claude-seo"
@@ -380,15 +448,16 @@ assert_plugin_count() {
     [[ "$count" == "$expected" ]] || die "Expected $expected $plugin integration in $client; found $count."
 }
 
-smoke_check() {
+# What every run installs, checked on every run. The link half of the old
+# smoke_check: a links-only run writes all of this and used to verify none of
+# it, which left the mode that exists for reconciling links as the one mode
+# that never confirmed a link landed.
+check_links() {
     local command skill root script
-    for command in codex claude opencode gh python3 uv engram wt; do
-        command -v "$command" >/dev/null || die "Missing required command: $command"
-    done
     for skill in "$HARNESS_DIR"/skills/*; do
         local name; name="$(basename "$skill")"
         [[ -f "$skill/SKILL.md" ]] || die "Missing SKILL.md: $skill"
-        [[ ! -e "$HOME/.config/opencode/skills/$name" && ! -L "$HOME/.config/opencode/skills/$name" ]] || die "Duplicate OpenCode skill path: $skill"
+        [[ ! -e "$CONFIG_HOME/opencode/skills/$name" && ! -L "$CONFIG_HOME/opencode/skills/$name" ]] || die "Duplicate OpenCode skill path: $skill"
         [[ -L "$HOME/.agents/skills/$name" ]] || die "Missing shared skill link: $skill"
         [[ -L "$HOME/.claude/skills/$name" ]] || die "Missing Claude skill link: $skill"
     done
@@ -406,15 +475,25 @@ smoke_check() {
     done
     [[ "$(readlink "$HOME/.codex/AGENTS.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing Codex policy link."
     [[ "$(readlink "$HOME/.claude/CLAUDE.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing Claude policy link."
-    [[ "$(readlink "$HOME/.config/opencode/AGENTS.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing OpenCode policy link."
-    assert_plugin_count codex engram 1
-    assert_plugin_count claude engram 1
+    [[ "$(readlink "$CONFIG_HOME/opencode/AGENTS.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing OpenCode policy link."
     [[ -f "$HARNESS_DIR/skills/ponytail/SKILL.md" ]] || die "Missing the ponytail skill body."
     [[ "$(readlink "$HOME/.claude/statusline.sh")" == "$HARNESS_DIR/statusline/claude.sh" ]] || die "Missing the Claude statusline link."
     for script in "$HARNESS_DIR"/statusline/*.sh; do
         [[ -x "$script" ]] || die "Status line script is not executable: $script"
     done
     grep -q '^status_line = \[' "$HOME/.codex/config.toml" || die "Missing the Codex status line."
+}
+
+# What only a full run installs. Separate from check_links because every
+# assertion here needs a client or a package on PATH, which is exactly what
+# --links-only does not install.
+check_tools() {
+    local command
+    for command in codex claude opencode gh python3 uv engram wt; do
+        command -v "$command" >/dev/null || die "Missing required command: $command"
+    done
+    assert_plugin_count codex engram 1
+    assert_plugin_count claude engram 1
     # Installed by the root script, asserted here: the harness is what consumes
     # them, so this is where a missing one has to fail loudly.
     assert_pythons
@@ -457,6 +536,9 @@ EOF
 }
 
 main() {
+    # First, so the warning precedes the two steps it is about rather than
+    # reporting them after both have already skipped what they skip.
+    warn_unless_zsh
     if ! $LINKS_ONLY; then
         install_packages
         install_integrations
@@ -470,9 +552,12 @@ main() {
     # check; setup rewrites the pin every time.
     if $LINKS_ONLY; then
         install_engram
-    else
-        smoke_check
     fi
+    # Last, after Engram: `engram setup` rewrites config.toml and settings.json,
+    # both of which check_links asserts, so verifying ahead of it would check a
+    # state Engram then overwrites.
+    check_links
+    $LINKS_ONLY || check_tools
     summary
 }
 
