@@ -31,7 +31,10 @@ class TrackedSettingsTests(unittest.TestCase):
         claude = json.loads((CLIENTS / "claude.json").read_text())
         # The engram allowlist and the Orca hook manifests are machine state.
         # Tracking either would commit a generated absolute path, and the
-        # merge rule only protects what is not named here.
+        # merge rule only protects what is not named here. The allowlist in
+        # particular is engram's own tool set: a copy here is a second
+        # declaration that goes stale without saying so, and the install then
+        # deletes whatever tools the copy predates.
         self.assertNotIn("allow", claude["permissions"])
         for key in ("hooks", "enabledPlugins", "extraKnownMarketplaces"):
             self.assertNotIn(key, claude, key)

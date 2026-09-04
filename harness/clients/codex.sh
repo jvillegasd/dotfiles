@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The tracked top-level Codex settings, reconciled into ~/.codex/config.toml.
 #
-# Usage: codex.sh [config.toml] [tracked.toml]
+# Usage: codex.sh [--remove] [config.toml] [tracked.toml]
 #
 # Same contract as statusline/codex.sh, which reconciles the [tui] half of the
 # same file: prints the reconciled config on stdout and exits 0 when something
@@ -11,6 +11,8 @@
 # naming the user's config for it sends them to the wrong file. The caller owns
 # the write, so harness/install.sh takes its backup only on a real change.
 #
+# --remove is what harness/install.sh --uninstall runs. It is the same pass with the write-back dropped: the loop below already deletes every owned key before re-emitting it, so removal is that loop without the re-emit, and the tracked file is still read because it is what says which keys are owned. Exit 3 then means the config already carries none of them.
+#
 # "Already correct" is 3 rather than the catch-all 1 for the reason the Claude
 # half carries the same three codes: a crash exits 1 too, and a caller reading
 # that as "nothing to do" leaves the tracked keys unwritten while the run
@@ -19,6 +21,11 @@
 
 set -euo pipefail
 
+remove=false
+if [[ "${1-}" == --remove ]]; then
+    remove=true
+    shift
+fi
 config="${1:-$HOME/.codex/config.toml}"
 tracked="${2:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/codex.toml}"
 
@@ -33,10 +40,11 @@ tracked="${2:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/codex.toml}"
 # would be mis-split into a comment, which corrupts the value rather than
 # preserving a note about it. Put a note about an owned key on its own line
 # above it, or in clients/codex.toml.
-exec python3 - "$config" "$tracked" <<'PY'
+exec python3 - "$config" "$tracked" "$remove" <<'PY'
 import pathlib, re, sys
 
 config, tracked = (pathlib.Path(argument) for argument in sys.argv[1:3])
+remove = sys.argv[3] == "true"
 
 
 def read(path, status, missing_is_empty=False):
@@ -82,6 +90,12 @@ while index < len(tracked_lines):
     index += 1
 
 current = read(config, 2, missing_is_empty=True)
+# Nothing to remove from a config that is not there. Without this the
+# reconciled text is a bare newline against an empty `current`, so removal
+# reports a change and the caller creates ~/.codex/config.toml on a machine
+# that had none.
+if remove and not current.strip():
+    raise SystemExit(3)
 lines = current.splitlines()
 head, tail, written = [], [], set()
 index = 0
@@ -96,7 +110,7 @@ while index < len(lines):
         # A wrapped value is replaced whole, and a repeated key is invalid
         # TOML, so a duplicate is dropped rather than reconciled twice.
         index = wrapped(lines, index, key.group(2))
-        if key.group(1) not in written:
+        if key.group(1) not in written and not remove:
             written.add(key.group(1))
             head.append(managed[key.group(1)])
         index += 1
@@ -115,7 +129,8 @@ blanks = []
 while head and not head[-1].strip():
     blanks.append(head.pop())
 blanks.reverse()
-head += [line for key, line in managed.items() if key not in written]
+if not remove:
+    head += [line for key, line in managed.items() if key not in written]
 head += blanks
 
 text = "\n".join(head + tail).strip("\n") + "\n"

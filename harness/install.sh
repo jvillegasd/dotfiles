@@ -14,7 +14,16 @@ HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 LINKS_ONLY=false
 NO_BACKUP=false
+UNINSTALL=false
+CLEAR_BACKUPS=false
 BACKUP_ROOT=""
+# Set when the uninstall could not remove the formula, so the summary reports
+# what happened rather than what was attempted.
+ENGRAM_FORMULA_KEPT=false
+# Fully qualified, and it has to stay the name install_packages installs: the
+# bare `engram` is ambiguous in that tap, and `brew uninstall engram` resolves
+# it to a cask and refuses with "Refusing to load cask ... from untrusted tap".
+ENGRAM_FORMULA="gentleman-programming/tap/engram"
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*" >&2; }
@@ -27,6 +36,8 @@ source "$(dirname "$HARNESS_DIR")/lib/python.sh"
 usage() {
     cat <<'EOF'
 Usage: harness/install.sh [--links-only] [--no-backup]
+       harness/install.sh --uninstall
+       harness/install.sh --clear-backups
 
   --links-only   Reconcile policy, command, and skill links without installing
                  packages. Engram is still reconciled, so it has to be
@@ -35,6 +46,25 @@ Usage: harness/install.sh [--links-only] [--no-backup]
                  ~/.dotfiles-backups. Destructive and unrecoverable: a private
                  skill or a hand-edited config sitting at a managed path is
                  gone, not archived.
+  --uninstall    Remove what this installer writes: every managed link, the
+                 ~/.zshrc alias block, and the tracked keys in the Claude and
+                 Codex configs. It reverses the installer, it does not
+                 uninstall your tools, with one exception: Engram, which a
+                 full install installs and registers, is removed here too,
+                 formula included. Your ~/.engram memory database is kept.
+                 The other packages, ~/.dotfiles-backups, this checkout, and
+                 every untracked key in either client config are left alone.
+                 Destructive and unrecoverable: what it removes is deleted,
+                 not archived, so --no-backup adds nothing to it. Reinstall
+                 to get the harness back; anything of your own that was
+                 sitting at a managed path is gone.
+  --clear-backups
+                 Delete every archive under ~/.dotfiles-backups/harness/,
+                 which is where an install moves whatever was in the way of a
+                 managed path. Destructive and unrecoverable, and it is the
+                 only copy of anything of yours an install displaced. Touches
+                 nothing else in ~/.dotfiles-backups and installs nothing;
+                 runs on its own.
 EOF
 }
 
@@ -42,10 +72,36 @@ for arg in "$@"; do
     case "$arg" in
         --links-only) LINKS_ONLY=true ;;
         --no-backup) NO_BACKUP=true ;;
+        --uninstall) UNINSTALL=true ;;
+        --clear-backups) CLEAR_BACKUPS=true ;;
         -h|--help) usage; exit 0 ;;
         *) die "Unknown argument: $arg" ;;
     esac
 done
+
+# Contradictory rather than merely redundant: --links-only names a subset of
+# the install to write, and --uninstall writes none of it. Silently letting one
+# win would make the flag that lost look like it did something.
+if $UNINSTALL && $LINKS_ONLY; then
+    die "--uninstall and --links-only are contradictory; --uninstall removes every link."
+fi
+# An uninstall deletes rather than archives, so --no-backup is redundant beside
+# it rather than contradictory, and passing it is not an error. Archiving is
+# what an install does because it displaces things it did not put there and has
+# to hand them back; an uninstall removes only what this installer wrote, and a
+# backup of that is a copy of the checkout it can be reinstalled from.
+# A mode of its own rather than a rider on another: it writes and removes no
+# harness state at all, and deleting the only copy of what an install displaced
+# is worth being the whole command rather than a side effect of one.
+if $CLEAR_BACKUPS && { $UNINSTALL || $LINKS_ONLY; }; then
+    die "--clear-backups runs on its own; it neither installs nor uninstalls."
+fi
+# An `if` rather than `$UNINSTALL && NO_BACKUP=true`, which exits the script
+# under `set -e` on every install run, because a false test is a failed
+# command at the top level.
+if $UNINSTALL; then
+    NO_BACKUP=true
+fi
 
 SKILL_ROOTS=(
     "$HOME/.agents/skills"
@@ -116,6 +172,17 @@ link_managed() {
     mkdir -p "$(dirname "$destination")"
     ln -s "$source" "$destination"
     log "Linked $destination -> $source"
+}
+
+# The inverse of link_managed, and it tests exactly what link_managed writes: a
+# symlink whose text is this source. A path that is anything else, a real file
+# the user put there or a link to somebody else's copy, is left alone rather
+# than removed, because the uninstall has no claim on it. backup_existing does
+# the removal, so --no-backup means the same thing here as everywhere else.
+unlink_managed() {
+    local source="$1" destination="$2"
+    [[ -L "$destination" && "$(readlink "$destination")" == "$source" ]] || return 0
+    backup_existing "$destination"
 }
 
 # The harness owns a real directory at every root it links into or sweeps, so
@@ -193,13 +260,13 @@ install_packages() {
 # plugin, marketplace entry and all, so nothing here drives a client's plugin
 # CLI by hand.
 #
-# The claude-code command asks whether to add engram's tools to the settings
-# allowlist, so all three read from /dev/null: this installer never blocks on a
-# prompt, and declining leaves the tools working with Claude Code's own
-# permission handling. That command also writes ~/.claude/mcp/engram.json
-# pinned to the absolute path of the current engram binary, which is why
-# install_packages upgrades engram before this runs: the pin is rewritten after
-# the upgrade rather than left stale by it.
+# The claude-code command asks whether to add engram's tools to the settings allowlist, and it is answered yes rather than left to default, because declining means Claude Code prompts on every memory call and the policy assumes memory is always available. The `y` goes only to that command: the other two are not known to ask anything, and answering a blind yes to whatever a future version decides to ask is not the same as answering this question. Both still take a closed stdin, so the installer never blocks on a prompt.
+#
+# A here-string rather than a pipe: under `set -o pipefail` a version that exits without reading stdin gives the writer SIGPIPE, the pipeline reports 141, and `set -e` kills an install that actually succeeded.
+#
+# The allowlist itself is deliberately not tracked in clients/claude.json. Engram is what knows its own tool set, and a tracked copy is a second declaration that goes stale silently: the copy this repository briefly carried listed 15 tools per prefix while engram 1.20.0 writes 18, so tracking it would have removed three real tools on the next install.
+#
+# That command also writes ~/.claude/mcp/engram.json pinned to the absolute path of the current engram binary, which is why install_packages upgrades engram before this runs: the pin is rewritten after the upgrade rather than left stale by it.
 #
 # Setting up Codex also writes `[mcp_servers.engram]` in config.toml, which
 # outranks the server the plugin declares in its .mcp.json. Nothing is lost:
@@ -210,7 +277,7 @@ install_packages() {
 install_engram() {
     log "Reconciling Engram"
     command -v engram >/dev/null || die "Engram is missing; run without --links-only to install it."
-    engram setup claude-code < /dev/null
+    engram setup claude-code <<< y
     engram setup codex < /dev/null
     engram setup opencode < /dev/null
 }
@@ -270,6 +337,11 @@ reconcile_orphans() {
             [[ -L "$entry" ]] || continue
             target="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$entry")"
             if [[ ! -e "$target" ]]; then
+                # Left alone during an uninstall. An install archives what it
+                # cannot prove is its own, and the owner can fetch it back; an
+                # uninstall deletes, so the same guess becomes unrecoverable.
+                # A link to an unmounted volume is the ordinary case.
+                $UNINSTALL && continue
                 backup_existing "$entry"
             elif [[ "$target" == "$HARNESS_DIR"/* ]]; then
                 # A managed link is always named after its target, so a name
@@ -291,27 +363,44 @@ reconcile_orphans() {
 # "Unchanged" is exit 3, so a crash cannot pass for it. The overloaded 1 read
 # an unreadable ~/.zshrc, or a missing python3, as "nothing to do" and left the
 # aliases silently uninstalled while the run reported success.
-install_aliases() {
-    local rc="$HOME/.zshrc" reconciled status
-    [[ -f "$rc" ]] || touch "$rc"
-    reconciled="$(python3 - "$rc" "$HARNESS_DIR/aliases.sh" <<'PY'
+#
+# Removal is this same pass with its last two lines dropped, because stripping the managed aliases is already the first thing installing them does. The one caller-visible difference is that an uninstall does not create a missing ~/.zshrc: writing a file in order to remove nothing from it would leave the machine with more than it started with.
+reconcile_aliases() {
+    local mode="$1" rc="$HOME/.zshrc" reconciled status
+    if [[ "$mode" == remove ]]; then
+        [[ -f "$rc" ]] || return 0
+    else
+        [[ -f "$rc" ]] || touch "$rc"
+    fi
+    reconciled="$(python3 - "$rc" "$HARNESS_DIR/aliases.sh" "$mode" <<'PY'
 import pathlib, re, sys
 
 rc, source = pathlib.Path(sys.argv[1]), sys.argv[2]
+remove = sys.argv[3] == "remove"
 marker = "# portable-harness aliases"
 managed = {"ccyolo", "cyolo", "oyolo"}
 current = rc.read_text()
-kept = []
+kept, dropped = [], False
 for line in current.splitlines():
     alias = re.match(r"\s*alias\s+([A-Za-z0-9_-]+)=", line)
     if alias and alias.group(1) in managed:
+        dropped = True
         continue
     if marker in line or source in line:
+        dropped = True
         continue
     kept.append(line)
+# A removal that found nothing changes nothing. Falling through would still
+# normalize trailing blank lines and the final newline, so a ~/.zshrc that
+# never had the block was rewritten and the run reported removing aliases it
+# had not removed.
+if remove and not dropped:
+    raise SystemExit(3)
 while kept and not kept[-1].strip():
     kept.pop()
-kept += [marker, f'[ -f "{source}" ] && source "{source}"', ""]
+if not remove:
+    kept += [marker, f'[ -f "{source}" ] && source "{source}"']
+kept.append("")
 text = "\n".join(kept)
 if text == current:
     raise SystemExit(3)
@@ -322,22 +411,20 @@ PY
     if [[ "$status" == 0 ]]; then
         backup_copy "$rc"
         printf '%s\n' "$reconciled" > "$rc"
-        log "Reconciled harness aliases in $rc"
+        if [[ "$mode" == remove ]]; then
+            log "Removed the harness aliases from $rc"
+        else
+            log "Reconciled harness aliases in $rc"
+        fi
     fi
 }
 
-# clients/claude.json declares the settings this harness owns, and every other
-# key in a live settings.json is left alone: Orca writes hook manifests into it
-# and `engram setup` writes permissions.allow, the plugin entry, and the
-# marketplace entry. Those are machine state, so they are reconciled here
-# rather than tracked, and a whole-file symlink would either version them or
-# lose them on the next write.
+install_aliases() { reconcile_aliases install; }
+uninstall_aliases() { reconcile_aliases remove; }
+
+# clients/claude.json declares the settings this harness owns, and every other key in a live settings.json is left alone: Orca writes hook manifests into it and `engram setup` writes permissions.allow, the plugin entry, and the marketplace entry. Those are machine state, so they are reconciled here rather than tracked, and a whole-file symlink would either version them or lose them on the next write.
 #
-# A tracked key replaces the live value outright, so removing a deny from the
-# tracked file removes it from the machine. `permissions` is the one key merged
-# a level down, which is what keeps the engram allowlist while `deny` stays
-# owned. Rewritten only when the result differs, which keeps a hand-edited
-# settings.json otherwise alone, formatting included.
+# A tracked key replaces the live value outright, so removing a deny from the tracked file removes it from the machine. `permissions` is the one key merged a level down, which is what keeps the engram allowlist `engram setup` writes, and any class this harness does not track, while `deny` stays owned. Rewritten only when the result differs, which keeps a hand-edited settings.json otherwise alone, formatting included.
 #
 # The reconciled file is emitted on stdout and written here, rather than
 # written in place, so the backup is taken only when something actually
@@ -398,6 +485,59 @@ PY
     fi
 }
 
+# The inverse of reconcile_claude_settings, and it deletes exactly what that function writes. `permissions` is merged a level down on the way in, so it is unmerged a level down on the way out: only the tracked classes go, and a class this harness never tracked stays. An emptied `permissions` is dropped rather than left as `{}`, because a key the harness introduced and no longer fills is still the harness's leftover.
+#
+# The status codes are the reconciler's, for the same reason it has them: exit 3 is a settings.json that already carries none of these keys, and a crash must not be able to pass for it.
+remove_claude_settings() {
+    local settings="$HOME/.claude/settings.json" reconciled status
+    [[ -f "$settings" ]] || return 0
+    reconciled="$(python3 - "$settings" "$HARNESS_DIR/clients/claude.json" <<'PY'
+import json, sys
+
+path, tracked_path = sys.argv[1], sys.argv[2]
+try:
+    with open(path) as handle:
+        settings = json.load(handle)
+    if not isinstance(settings, dict):
+        raise TypeError(f"expected a JSON object, found {type(settings).__name__}")
+except (OSError, ValueError, TypeError) as error:
+    print(error, file=sys.stderr)
+    raise SystemExit(2)
+try:
+    with open(tracked_path) as handle:
+        tracked = json.load(handle)
+    if not isinstance(tracked, dict):
+        raise TypeError(f"expected a JSON object, found {type(tracked).__name__}")
+except (OSError, ValueError, TypeError) as error:
+    print(error, file=sys.stderr)
+    raise SystemExit(4)
+before = json.dumps(settings, sort_keys=True)
+for key, value in tracked.items():
+    live = settings.get(key)
+    if key == "permissions" and isinstance(live, dict):
+        for name in value:
+            live.pop(name, None)
+        if not live:
+            settings.pop(key)
+    else:
+        settings.pop(key, None)
+if json.dumps(settings, sort_keys=True) == before:
+    raise SystemExit(3)
+json.dump(settings, sys.stdout, indent=2)
+sys.stdout.write("\n")
+PY
+    )" && status=0 || status=$?
+    [[ "$status" != 2 ]] || die "$settings is not a JSON object; fix it and re-run."
+    [[ "$status" != 4 ]] || die "$HARNESS_DIR/clients/claude.json is unreadable or not a JSON object."
+    [[ "$status" == 0 || "$status" == 3 ]] ||
+        die "Removing the tracked settings from $settings failed with status $status."
+    if [[ "$status" == 0 ]]; then
+        backup_copy "$settings"
+        printf '%s\n' "$reconciled" > "$settings"
+        log "Removed the tracked Claude settings from $settings"
+    fi
+}
+
 # Both writers of ~/.codex/config.toml, the tracked settings and the status
 # line. Each provider's status line lives in statusline/, one file per
 # provider: claude.sh is the renderer Claude Code runs on every draw, while
@@ -413,15 +553,22 @@ PY
 write_reconciled_codex() {
     local reconciler="$1" what="$2" config="$HOME/.codex/config.toml"
     local reconciled status
+    # Any remaining argument is a flag for the reconciler itself, --remove
+    # today. `shift` rather than an array slice: an empty array expanded under
+    # `set -u` is an unbound variable in bash 3.2, which is the system bash
+    # every macOS ships, so the no-flag call would abort the run.
+    shift 2
+    local verb="Reconciled"
+    [[ "${1-}" != --remove ]] || verb="Removed"
     mkdir -p "$(dirname "$config")"
-    reconciled="$("$reconciler" "$config")" && status=0 || status=$?
+    reconciled="$("$reconciler" "$@" "$config")" && status=0 || status=$?
     [[ "$status" != 4 ]] || die "$HARNESS_DIR/clients/codex.toml is unreadable."
     [[ "$status" == 0 || "$status" == 3 ]] ||
         die "Reconciling $what in $config failed with status $status."
     if [[ "$status" == 0 ]]; then
         backup_copy "$config"
         printf '%s\n' "$reconciled" > "$config"
-        log "Reconciled $what in $config"
+        log "$verb $what in $config"
     fi
 }
 
@@ -614,7 +761,468 @@ EOF
     fi
 }
 
+# Engram, taken back off. install_packages installs it and install_engram
+# registers it, so the uninstall owes both halves; leaving a registration
+# behind is worse than leaving nothing, because every entry engram writes pins
+# the absolute path of a binary that is about to stop existing.
+#
+# `brew uninstall` does none of this on its own. The formula is GoReleaser
+# generated and does nothing but `bin.install "engram"`: no uninstall block, no
+# post_uninstall, and `zap` is a cask stanza a formula cannot carry. So the
+# package removal is last, and the configuration is removed while the binary it
+# names is still on disk.
+#
+# ~/.engram is deliberately untouched. It is the memory database, it is the
+# user's own data rather than anything this installer put there, and an
+# uninstall that no longer archives is the last thing that should be deleting
+# it. `engram export` is the documented way out; reinstalling finds the
+# database where it was.
+#
+# Each client's own CLI removes what that client owns, because the plugin and
+# marketplace registries are several files apiece and hand-deleting another
+# tool's registry is how an uninstall goes stale. They are best effort: a
+# plugin that is already gone is the state being asked for, not a failure.
+uninstall_engram() {
+    log "Removing Engram"
+    if command -v claude >/dev/null; then
+        claude plugin uninstall engram@engram >/dev/null 2>&1 || true
+        claude plugin marketplace remove engram >/dev/null 2>&1 || true
+    fi
+    if command -v codex >/dev/null; then
+        codex plugin remove engram@engram >/dev/null 2>&1 || true
+        codex plugin marketplace remove engram >/dev/null 2>&1 || true
+    fi
+    remove_engram_config
+    rm -f "$HOME/.claude/mcp/engram.json"
+    rm -f "$HOME/.codex/engram-instructions.md" "$HOME/.codex/engram-compact-prompt.md"
+    rm -f "$CONFIG_HOME/opencode/plugins/engram.ts"
+    # engram's own docs/AGENT-SETUP.md lists three things `engram setup
+    # opencode` writes, and this is the third: an OpenCode built-in enabled in
+    # tui.json. It is the one entry engram writes that is not named after
+    # engram, so it survives a search for the word and has to be named.
+    # Last, and only what Homebrew actually has: a machine that installed
+    # engram some other way keeps whatever it installed, and `brew uninstall`
+    # on a formula that is not there exits non-zero for no reason worth
+    # failing the run over.
+    if command -v brew >/dev/null && brew list --formula "$ENGRAM_FORMULA" >/dev/null 2>&1; then
+        brew uninstall "$ENGRAM_FORMULA" || {
+            ENGRAM_FORMULA_KEPT=true
+            warn "Could not uninstall the engram formula. Remove it with: brew uninstall $ENGRAM_FORMULA"
+        }
+    fi
+}
+
+# What the client CLIs do not own: the MCP server entries and the instruction
+# file pointers `engram setup` writes directly. Three files, one pass, because
+# the surgery is the same shape in each and a caller that had to sequence three
+# reconcilers would be the interesting part rather than the edit.
+#
+# Every edit is keyed on the name engram, never on position, and an emptied
+# container is dropped rather than left behind as `{}`. A file that does not
+# exist is a file with nothing to remove.
+remove_engram_config() {
+    python3 - "$HOME/.claude/settings.json" "$CONFIG_HOME/opencode/opencode.json" "$HOME/.codex/config.toml" "$CONFIG_HOME/opencode" <<'PY'
+import json, pathlib, re, sys
+
+settings, opencode, codex = (pathlib.Path(argument) for argument in sys.argv[1:4])
+opencode_dir = pathlib.Path(sys.argv[4])
+# Named rather than matched: this is the one thing `engram setup` writes that
+# is not called engram, so nothing that searches for the word would find it.
+SUBAGENT_STATUSLINE = "opencode-subagent-statusline"
+# The two MCP server ids engram registers, per its docs/AGENT-SETUP.md: the
+# durable user-level one and the plugin-scoped one older installs use. A
+# permission entry is engram's when it names one of these, never when it merely
+# contains the word: `Bash(cd ~/src/engram && cargo test)` is the user's.
+TOOL_PREFIXES = ("mcp__engram__", "mcp__plugin_engram_engram__")
+# The exact TOML tables `engram setup codex` writes. A substring test here
+# deleted `[projects."/Users/me/code/engram-fork"]` and the trust decision
+# inside it, which is somebody's config rather than engram's.
+TABLES = ("mcp_servers.engram", "marketplaces.engram", "plugins.engram@engram")
+
+
+def rewrite(path, edit):
+    """Apply `edit` to a file's text, writing only when it removed something.
+
+    `edit` returns None for "nothing of engram's was here". That is the whole
+    contract: comparing the rendered text instead would count a reformat as a
+    change, rewriting a file that had no engram entries and logging that its
+    engram entries were removed.
+    """
+    if not path.exists():
+        return
+    try:
+        updated = edit(path.read_text())
+    except (OSError, ValueError) as error:
+        print(f"{path}: {error}", file=sys.stderr)
+        raise SystemExit(2)
+    if updated is not None:
+        path.write_text(updated)
+        print(f"Removed the engram entries from {path}")
+
+
+def prune_json(text, prune):
+    document = json.loads(text)
+    if not isinstance(document, dict):
+        raise ValueError("expected a JSON object")
+    if not prune(document):
+        return None
+    return json.dumps(document, indent=2) + "\n"
+
+
+def drop_named(section, matches):
+    """Remove matching names from a dict or list, reporting whether it did."""
+    if isinstance(section, dict):
+        names = [name for name in section if matches(name)]
+        for name in names:
+            section.pop(name)
+        return bool(names), not section
+    if isinstance(section, list):
+        kept = [item for item in section if not matches(str(item))]
+        removed = len(kept) != len(section)
+        section[:] = kept
+        return removed, not section
+    return False, False
+
+
+def claude(text):
+    def prune(document):
+        removed = False
+        permissions = document.get("permissions")
+        if isinstance(permissions, dict):
+            allow = permissions.get("allow")
+            if isinstance(allow, list):
+                kept = [
+                    entry for entry in allow
+                    if not entry.startswith(TOOL_PREFIXES)
+                ]
+                if len(kept) != len(allow):
+                    removed = True
+                    if kept:
+                        permissions["allow"] = kept
+                    else:
+                        permissions.pop("allow")
+            if not permissions:
+                document.pop("permissions")
+        for key in ("enabledPlugins", "extraKnownMarketplaces"):
+            section = document.get(key)
+            # A plugin id is `engram@engram` and a marketplace is `engram`, so
+            # the name is matched on its own rather than as a substring of
+            # somebody else's plugin.
+            dropped, empty = drop_named(
+                section, lambda name: name == "engram" or name.startswith("engram@")
+            )
+            removed = removed or dropped
+            if empty and key in document:
+                document.pop(key)
+        return removed
+
+    return prune_json(text, prune)
+
+
+def opencode_config(text):
+    def prune(document):
+        removed = False
+        for key in ("mcp", "plugin"):
+            dropped, empty = drop_named(
+                document.get(key),
+                lambda name: name == "engram" or name.endswith("/engram.ts") or name == "engram.ts",
+            )
+            removed = removed or dropped
+            if empty and key in document:
+                document.pop(key)
+        return removed
+
+    return prune_json(text, prune)
+
+
+def codex_config(text):
+    """Drop engram's own tables and its two instruction-file pointers.
+
+    Textual, for the reason clients/codex.sh gives: tomllib needs Python 3.11
+    and the system python3 macOS ships is older. A table runs to the next
+    header, so dropping one is dropping that span.
+    """
+    lines, kept, index, removed = text.splitlines(), [], 0, False
+    header = re.compile(r'\s*\[([^]]*)]')
+    pointer = re.compile(r"\s*(model_instructions_file|experimental_compact_prompt_file)\s*=\s*(.*)$")
+    while index < len(lines):
+        line = lines[index]
+        table = header.match(line)
+        if table:
+            name = table.group(1).replace('"', "").replace("'", "").strip()
+            if name in TABLES or any(name.startswith(f"{t}.") for t in TABLES):
+                removed = True
+                # Up to the next header, which takes the blank line that
+                # separated this table from the one after it. The blank line
+                # before the removed table stays and becomes that separator,
+                # so the neighbours keep the spacing they had.
+                index += 1
+                while index < len(lines) and not header.match(lines[index]):
+                    index += 1
+                continue
+        key = pointer.match(line)
+        # The value has to name a file engram wrote; the keys themselves are
+        # Codex's own and a user may point them anywhere.
+        if key and re.search(r"engram-(instructions|compact-prompt)\.md", key.group(2)):
+            removed = True
+            index += 1
+            continue
+        kept.append(line)
+        index += 1
+    if not removed:
+        return None
+    return "\n".join(kept).strip("\n") + "\n" if any(l.strip() for l in kept) else ""
+
+
+def tui(text):
+    """Drop the OpenCode built-in `engram setup opencode` enables.
+
+    Tolerant of a file it cannot parse: tui.jsonc may carry comments, and an
+    uninstall is the wrong moment to fail over somebody else's editor
+    settings. Leaving the entry is recoverable, refusing to finish is worse.
+    """
+    try:
+        document = json.loads(text)
+    except ValueError:
+        print(f"Could not parse it, so its {SUBAGENT_STATUSLINE} entry was left", file=sys.stderr)
+        return None
+    if not isinstance(document, dict):
+        return None
+    plugins = document.get("plugin")
+    if not isinstance(plugins, list) or SUBAGENT_STATUSLINE not in plugins:
+        return None
+    kept = [entry for entry in plugins if entry != SUBAGENT_STATUSLINE]
+    if kept:
+        document["plugin"] = kept
+    else:
+        document.pop("plugin")
+    return json.dumps(document, indent=2) + "\n"
+
+
+rewrite(settings, claude)
+rewrite(opencode, opencode_config)
+rewrite(codex, codex_config)
+for name in ("tui.json", "tui.jsonc"):
+    rewrite(opencode_dir / name, tui)
+PY
+}
+
+# Everything install_links wrote, in one sweep plus four named links.
+#
+# reconcile_orphans with an empty desired set is the sweep: its ownership test
+# is already "this link resolves into $HARNESS_DIR", which is exactly what
+# makes a link this installer's to remove, so an uninstall is that function
+# told that nothing is desired. Writing a second ownership predicate here is
+# what would let install and uninstall disagree about what the harness owns.
+#
+# It carries that function's documented defect unchanged, and does not extend
+# it: a dangling symlink it cannot prove is its own is archived too. At
+# uninstall time the checkout is still on disk, so no link this harness wrote
+# is dangling, and the case is the one already reached on every install run.
+#
+# The four named links are not in either root set, so the sweep never sees
+# them. They go through unlink_managed, which removes a path only when it is
+# still a symlink to the source the installer gave it.
+uninstall_links() {
+    reconcile_orphans ""
+    unlink_managed "$HARNESS_DIR/POLICY.md" "$HOME/.codex/AGENTS.md"
+    unlink_managed "$HARNESS_DIR/POLICY.md" "$HOME/.claude/CLAUDE.md"
+    unlink_managed "$HARNESS_DIR/POLICY.md" "$CONFIG_HOME/opencode/AGENTS.md"
+    unlink_managed "$HARNESS_DIR/statusline/claude.sh" "$HOME/.claude/statusline.sh"
+}
+
+# The mirror of check_links: the mode that removes things confirms the removal
+# the way the mode that writes them confirms the write. Without it an uninstall
+# that silently skipped a root would still report success, and the leftover
+# would surface as a client loading a policy from a checkout that has moved.
+check_removed() {
+    local root entry target script status
+    for root in "${SKILL_ROOTS[@]}" "${COMMAND_ROOTS[@]}"; do
+        [[ -d "$root" ]] || continue
+        for entry in "$root"/*; do
+            [[ -L "$entry" ]] || continue
+            target="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$entry")"
+            [[ "$target" != "$HARNESS_DIR"/* ]] || die "Managed link survived the uninstall: $entry"
+        done
+    done
+    for entry in "$HOME/.codex/AGENTS.md" "$HOME/.claude/CLAUDE.md" \
+        "$CONFIG_HOME/opencode/AGENTS.md" "$HOME/.claude/statusline.sh"; do
+        if [[ -L "$entry" ]]; then
+            target="$(readlink "$entry")"
+            [[ "$target" != "$HARNESS_DIR"/* ]] || die "Managed link survived the uninstall: $entry"
+        fi
+    done
+    if [[ -f "$HOME/.zshrc" ]]; then
+        ! grep -q '# portable-harness aliases' "$HOME/.zshrc" || die "Harness aliases survived the uninstall in $HOME/.zshrc."
+        ! grep -qE '^\s*alias (ccyolo|cyolo|oyolo)=' "$HOME/.zshrc" || die "A yolo alias survived the uninstall in $HOME/.zshrc."
+    fi
+    # Every tracked key is gone from the live settings, and the untracked keys
+    # beside them are not. Asserted by re-running the remover, where only exit
+    # 3 means "the file already carries none of these": exit 0 is a key that
+    # would still be deleted, and anything else is the remover failing to
+    # answer the question.
+    if [[ -f "$HOME/.claude/settings.json" ]]; then
+        if ! python3 - "$HOME/.claude/settings.json" "$HARNESS_DIR/clients/claude.json" <<'PY'
+import json, sys
+
+live, tracked = (json.load(open(path)) for path in sys.argv[1:3])
+for key, value in tracked.items():
+    if key == "permissions":
+        assert not set(live.get(key) or {}) & set(value), key
+    else:
+        assert key not in live, key
+PY
+        then
+            die "Tracked Claude settings survived the uninstall in $HOME/.claude/settings.json."
+        fi
+    fi
+    for script in "$HARNESS_DIR/clients/codex.sh" "$HARNESS_DIR/statusline/codex.sh"; do
+        "$script" --remove "$HOME/.codex/config.toml" >/dev/null && status=0 || status=$?
+        [[ "$status" == 3 ]] ||
+            die "$script reports $status against $HOME/.codex/config.toml; expected 3, already removed."
+    done
+    check_engram_removed
+}
+
+# Engram leaves entries in three client configs and three loose files, and a
+# survivor is worse than a leftover link: each one names the absolute path of a
+# binary this uninstall just deleted, so the client fails at startup rather
+# than quietly doing less.
+check_engram_removed() {
+    local path
+    for path in "$HOME/.claude/mcp/engram.json" "$HOME/.codex/engram-instructions.md" \
+        "$HOME/.codex/engram-compact-prompt.md" "$CONFIG_HOME/opencode/plugins/engram.ts"; do
+        [[ ! -e "$path" ]] || die "Engram file survived the uninstall: $path"
+    done
+    # The containers remove_engram_config prunes, not the whole file. A grep
+    # for the word died on any unrelated mention, and it died after the
+    # formula and every link were already gone, so the run had no summary and
+    # re-running repeated the failure.
+    if ! python3 - "$HOME/.claude/settings.json" "$CONFIG_HOME/opencode/opencode.json" \
+        "$HOME/.codex/config.toml" <<'PY'
+import json, pathlib, re, sys
+
+settings, opencode, codex = (pathlib.Path(argument) for argument in sys.argv[1:4])
+PREFIXES = ("mcp__engram__", "mcp__plugin_engram_engram__")
+
+
+def names(section):
+    return list(section) if isinstance(section, dict) else [str(i) for i in section or []]
+
+
+if settings.exists():
+    document = json.loads(settings.read_text())
+    allow = (document.get("permissions") or {}).get("allow") or []
+    assert not [e for e in allow if e.startswith(PREFIXES)], "permissions.allow"
+    for key in ("enabledPlugins", "extraKnownMarketplaces"):
+        assert not [n for n in names(document.get(key)) if n == "engram" or n.startswith("engram@")], key
+if opencode.exists():
+    document = json.loads(opencode.read_text())
+    for key in ("mcp", "plugin"):
+        assert "engram" not in names(document.get(key)), key
+if codex.exists():
+    text = codex.read_text()
+    for table in ("mcp_servers.engram", "marketplaces.engram", 'plugins."engram@engram"'):
+        assert f"[{table}]" not in text, table
+    assert not re.search(r"engram-(instructions|compact-prompt)\.md", text), "instruction pointers"
+PY
+    then
+        die "Engram entries survived the uninstall in one of the client configs."
+    fi
+    for path in "$CONFIG_HOME/opencode/tui.json" "$CONFIG_HOME/opencode/tui.jsonc"; do
+        [[ -f "$path" ]] || continue
+        ! grep -q 'opencode-subagent-statusline' "$path" ||
+            die "The engram-enabled OpenCode statusline survived the uninstall in $path"
+    done
+}
+
+uninstall() {
+    log "Removing the harness from this machine"
+    uninstall_engram
+    uninstall_links
+    uninstall_aliases
+    remove_claude_settings
+    write_reconciled_codex "$HARNESS_DIR/clients/codex.sh" "the tracked Codex settings" --remove
+    write_reconciled_codex "$HARNESS_DIR/statusline/codex.sh" "the Codex status line" --remove
+    check_removed
+    uninstall_summary
+}
+
+uninstall_summary() {
+    cat <<EOF
+
+$(printf '\033[1;32m✓ Harness AI removed.\033[0m')
+
+Gone: every managed skill and command link, the three POLICY.md links, the
+Claude status line link, the ~/.zshrc alias block, the tracked keys in
+~/.claude/settings.json and ~/.codex/config.toml, and Engram: its plugin,
+marketplace, and MCP registration in all three clients, plus the formula.
+
+Kept: ~/.engram, which is your memory database rather than anything this
+installer wrote. Reinstalling finds it where it was. To take it with you:
+engram export <file>   (before uninstalling, while the binary still exists)
+$($ENGRAM_FORMULA_KEPT && printf '%s' "
+The engram formula could not be removed and is still installed; the warning
+above says so. Its configuration is gone either way.")
+
+Also left alone: the other packages (codex, claude, opencode, worktrunk, gh,
+uv, node), every untracked key in both client configs, ~/.dotfiles-backups,
+and this checkout.
+
+Nothing was archived: an uninstall deletes what it removes. Everything above
+comes back from this checkout.
+
+Open a new shell to drop the aliases from the one you are in.
+Reinstall with: $HARNESS_DIR/install.sh
+EOF
+}
+
+# Every archive an install left, and nothing else in ~/.dotfiles-backups.
+#
+# Scoped to the harness subtree on purpose: this installer writes only under
+# .../harness/, and a sibling directory there belongs to whatever wrote it. A
+# command that cleared the parent would be deleting other tools' archives on
+# the strength of owning one directory inside it.
+#
+# Each timestamped root goes separately rather than the subtree in one `rm`,
+# so the log names what was deleted. That listing is the only record left
+# afterwards, which is the point: there is nothing to restore from.
+clear_backups() {
+    local root="$HOME/.dotfiles-backups/harness" entry size count=0
+    if [[ ! -d "$root" ]]; then
+        log "No harness backups to delete at $root"
+        return
+    fi
+    # `tr -d` because the du every macOS ships right-pads its size column.
+    # `|| true` because `set -o pipefail` makes an unreadable subdirectory
+    # under the backup root abort the command before it deletes anything, and
+    # a size for the log is never worth that.
+    size="$(du -sh "$root" 2>/dev/null | cut -f1 | tr -d ' ' || true)"
+    for entry in "$root"/*; do
+        rm -rf "$entry"
+        log "Deleted $entry"
+        count=$((count + 1))
+    done
+    # Only when it is empty, and never the parent: `rmdir` refusing a
+    # non-empty directory is the guard, so a file this loop did not match
+    # keeps the directory rather than being swept with it.
+    rmdir "$root" 2>/dev/null || true
+    log "Deleted $count harness backup(s), ${size:-unknown} reclaimed."
+}
+
 main() {
+    # Ahead of the uninstall, which is itself ahead of the install: this mode
+    # touches no client and no package, so none of what follows applies to it.
+    if $CLEAR_BACKUPS; then
+        clear_backups
+        return
+    fi
+    # Ahead of everything, including warn_unless_zsh: an uninstall runs none of
+    # the two steps that warning is about.
+    if $UNINSTALL; then
+        uninstall
+        return
+    fi
     # First, so the warning precedes the two steps it is about rather than
     # reporting them after both have already skipped what they skip.
     warn_unless_zsh
