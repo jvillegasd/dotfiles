@@ -25,6 +25,7 @@ from fixtures import (
     SKILLS,
     STATUSLINE,
     codex_status_items,
+    harness_formulae,
 )
 
 
@@ -47,6 +48,21 @@ class InstallerTests(unittest.TestCase):
         self.assertNotIn("install_pythons", harness)
         for script in (ROOT / "macos.sh", ROOT / "linux.sh"):
             self.assertRegex(script.read_text(), r"(?m)^\s+install_pythons$", script)
+
+    def test_brewfile_carries_every_tool_the_harness_installs(self) -> None:
+        # The two lists are duplicated on purpose: Brewfile is the machine's
+        # manifest, and the harness installer restates its own tools so it
+        # stays runnable alone. Nothing made them agree, and Brewfile is
+        # regenerated wholesale by `brew bundle dump`, so a formula uninstalled
+        # from the machine silently disappears from the manifest while the
+        # harness keeps installing it.
+        brewfile = (ROOT / "Brewfile").read_text()
+        formulae = harness_formulae()
+        self.assertIn("worktrunk", formulae)
+        for formula in formulae:
+            self.assertIn(f'brew "{formula}"', brewfile, formula)
+        # Codex is the one client Homebrew carries as a cask, and only on macOS.
+        self.assertIn('cask "codex"', brewfile)
 
     def test_installer_functions_parse_under_system_bash(self) -> None:
         # bash 3.2 ships on every macOS and cannot parse `case ... esac` inside
@@ -109,6 +125,10 @@ class InstallerTests(unittest.TestCase):
             orphan.symlink_to(SKILLS / "evidence")
             dangling = home / ".agents" / "skills" / "to-spec"
             dangling.symlink_to(SKILLS / "to-spec")
+            # A dangling link of the user's own, into a repository they moved.
+            # The sweep never wrote it, so the sweep does not get to take it.
+            foreign = home / ".agents" / "skills" / "theirs"
+            foreign.symlink_to(home / "moved-away" / "theirs")
             # A hand-written duplicate of an alias the harness now owns.
             zshrc = home / ".zshrc"
             zshrc.write_text(
@@ -146,6 +166,14 @@ class InstallerTests(unittest.TestCase):
             opencode_collision = home / ".config" / "opencode" / "skills" / "evidence"
             opencode_collision.mkdir()
             (opencode_collision / "keep").write_text("opencode collision")
+            # A symlinked command root. Linking into it would put managed
+            # commands in a directory the installer never sweeps, and the
+            # orphan sweep would then archive that directory's own entries.
+            shared_prompts = home / "shared-prompts"
+            shared_prompts.mkdir()
+            (shared_prompts / "theirs.md").write_text("theirs\n")
+            (home / ".codex").mkdir(exist_ok=True)
+            (home / ".codex" / "prompts").symlink_to(shared_prompts)
 
             environment = os.environ | {
                 "HOME": str(home),
@@ -165,6 +193,15 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(opencode_collision.exists())
             self.assertTrue((home / ".agents" / "skills" / "evidence").is_symlink())
             self.assertFalse(orphan.is_symlink())
+            # A symlinked command root becomes a real directory the installer
+            # owns, and the directory it pointed at keeps its own file.
+            codex_prompts = home / ".codex" / "prompts"
+            self.assertTrue(codex_prompts.is_dir())
+            self.assertFalse(codex_prompts.is_symlink())
+            self.assertTrue((shared_prompts / "theirs.md").is_file())
+            self.assertFalse((codex_prompts / "theirs.md").exists())
+            # The sweep takes only links naming a path under harness/.
+            self.assertTrue(foreign.is_symlink())
 
             # One sourced line owns the yolo aliases; the hand-written
             # duplicate is gone and unrelated aliases are untouched.
@@ -232,6 +269,7 @@ class InstallerTests(unittest.TestCase):
                 (backups[0] / ".agents" / "skills" / "evidence" / "keep").is_file()
             )
             self.assertTrue((backups[0] / ".claude" / "skills.previous-link").is_symlink())
+            self.assertTrue((backups[0] / ".codex" / "prompts.previous-link").is_symlink())
             self.assertTrue(
                 (backups[0] / ".config" / "opencode" / "skills" / "evidence" / "keep").is_file()
             )
@@ -272,6 +310,73 @@ class InstallerTests(unittest.TestCase):
             self.assertTrue((home / ".agents" / "skills" / "evidence").is_symlink())
             self.assertTrue(private.is_dir())
             self.assertTrue((private / "SKILL.md").is_file())
+
+    def test_opencode_paths_follow_xdg_config_home(self) -> None:
+        # lib/common.sh honors XDG_CONFIG_HOME for every config the root
+        # scripts place, and OpenCode honors it too. An installer that
+        # hardcoded ~/.config wrote a third of the harness nowhere OpenCode
+        # reads, then asserted against the same wrong path and passed.
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            config = home / "xdg"
+            # Normalized but never created: OpenCode reads ~/.agents/skills, so
+            # a symlinked skills root is moved aside and nothing replaces it.
+            theirs = home / "their-skills"
+            theirs.mkdir()
+            (theirs / "keep").write_text("theirs")
+            (config / "opencode").mkdir(parents=True)
+            (config / "opencode" / "skills").symlink_to(theirs)
+
+            environment = os.environ | {
+                "HOME": str(home),
+                "XDG_CONFIG_HOME": str(config),
+                "XDG_CACHE_HOME": str(home / ".cache"),
+            }
+            subprocess.run(
+                ["bash", ROOT / "harness" / "install.sh", "--links-only"],
+                env=environment,
+                check=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(
+                os.path.realpath(config / "opencode" / "AGENTS.md"),
+                str(ROOT / "harness" / "POLICY.md"),
+            )
+            for name in COMMAND_NAMES:
+                self.assertEqual(
+                    os.path.realpath(config / "opencode" / "command" / f"{name}.md"),
+                    str(COMMANDS / f"{name}.md"),
+                    name,
+                )
+            self.assertFalse((home / ".config" / "opencode").exists())
+            self.assertFalse((config / "opencode" / "skills").exists())
+            self.assertTrue((theirs / "keep").is_file())
+
+    def test_malformed_claude_settings_fails_with_the_path(self) -> None:
+        # json.load raising inside a heredoc ended the run on a traceback, from
+        # a function whose whole job is to leave a hand-edited settings.json
+        # alone. The run still has to stop; it has to say which file.
+        with tempfile.TemporaryDirectory() as temporary_home:
+            home = Path(temporary_home)
+            settings = home / ".claude" / "settings.json"
+            settings.parent.mkdir(parents=True)
+            settings.write_text("{ not json\n")
+
+            result = subprocess.run(
+                ["bash", ROOT / "harness" / "install.sh", "--links-only"],
+                env=os.environ | {
+                    "HOME": str(home),
+                    "XDG_CACHE_HOME": str(home / ".cache"),
+                },
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(str(settings), result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertEqual(settings.read_text(), "{ not json\n")
 
     def test_no_backup_is_documented_in_every_installer(self) -> None:
         # The platform entry points offer the flag through their shared
