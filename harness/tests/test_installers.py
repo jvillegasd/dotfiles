@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -25,8 +26,22 @@ from fixtures import (
     SKILLS,
     STATUSLINE,
     codex_status_items,
-    harness_formulae,
 )
+
+
+def harness_packages() -> tuple[list[str], str]:
+    """The Homebrew formulae and cask harness/install.sh installs, read from it.
+
+    Parsed rather than copied for the same reason as `codex_status_items`: a
+    literal would keep passing under a renamed formula, and the whole point of
+    the assertion below is that two declarations of one tool set have to agree.
+    """
+    installer = (ROOT / "harness" / "install.sh").read_text()
+    formulae = re.search(r"(?m)^\s*for formula in (.+?); do", installer)
+    cask = re.search(r"(?m)^\s*brew_latest_cask (\S+)", installer)
+    assert formulae is not None, "install.sh no longer loops over a formula list"
+    assert cask is not None, "install.sh no longer installs a cask"
+    return formulae.group(1).split(), cask.group(1)
 
 
 class InstallerTests(unittest.TestCase):
@@ -57,12 +72,12 @@ class InstallerTests(unittest.TestCase):
         # from the machine silently disappears from the manifest while the
         # harness keeps installing it.
         brewfile = (ROOT / "Brewfile").read_text()
-        formulae = harness_formulae()
+        formulae, cask = harness_packages()
         self.assertIn("worktrunk", formulae)
         for formula in formulae:
             self.assertIn(f'brew "{formula}"', brewfile, formula)
         # Codex is the one client Homebrew carries as a cask, and only on macOS.
-        self.assertIn('cask "codex"', brewfile)
+        self.assertIn(f'cask "{cask}"', brewfile, cask)
 
     def test_installer_functions_parse_under_system_bash(self) -> None:
         # bash 3.2 ships on every macOS and cannot parse `case ... esac` inside
@@ -178,6 +193,7 @@ class InstallerTests(unittest.TestCase):
             environment = os.environ | {
                 "HOME": str(home),
                 "XDG_CACHE_HOME": str(home / ".cache"),
+                "XDG_CONFIG_HOME": str(home / ".config"),
             }
             command = ["bash", ROOT / "harness" / "install.sh", "--links-only"]
             subprocess.run(command, env=environment, check=True, capture_output=True)
@@ -298,6 +314,7 @@ class InstallerTests(unittest.TestCase):
             environment = os.environ | {
                 "HOME": str(home),
                 "XDG_CACHE_HOME": str(home / ".cache"),
+                "XDG_CONFIG_HOME": str(home / ".config"),
             }
             subprocess.run(
                 ["bash", ROOT / "harness" / "install.sh", "--links-only", "--no-backup"],
@@ -352,6 +369,12 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse((home / ".config" / "opencode").exists())
             self.assertFalse((config / "opencode" / "skills").exists())
             self.assertTrue((theirs / "keep").is_file())
+            # Only OpenCode follows XDG. Claude and Codex read fixed paths, so
+            # a change that moved all six roots would otherwise pass this test.
+            self.assertTrue((home / ".claude" / "commands").is_dir())
+            self.assertTrue((home / ".codex" / "prompts").is_dir())
+            self.assertFalse((config / "claude").exists())
+            self.assertFalse((config / "codex").exists())
 
     def test_malformed_claude_settings_fails_with_the_path(self) -> None:
         # json.load raising inside a heredoc ended the run on a traceback, from
@@ -368,6 +391,7 @@ class InstallerTests(unittest.TestCase):
                 env=os.environ | {
                     "HOME": str(home),
                     "XDG_CACHE_HOME": str(home / ".cache"),
+                    "XDG_CONFIG_HOME": str(home / ".config"),
                 },
                 capture_output=True,
                 text=True,

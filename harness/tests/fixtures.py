@@ -74,21 +74,6 @@ def load_module(name: str, path: Path):
     return module
 
 
-def harness_formulae() -> list[str]:
-    """The Homebrew formulae harness/install.sh installs, read from its loop.
-
-    Parsed rather than copied for the same reason as the status line items
-    below: a literal here would keep passing under a renamed formula, and the
-    whole point of the assertion that uses it is that two declarations of one
-    tool set have to agree.
-    """
-    loop = re.search(
-        r"(?m)^\s*for formula in (.+?); do", (ROOT / "harness" / "install.sh").read_text()
-    )
-    assert loop is not None, "install.sh no longer loops over a formula list"
-    return loop.group(1).split()
-
-
 def codex_status_items() -> list[str]:
     """The Codex status line item ids, read from the file that declares them.
 
