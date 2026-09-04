@@ -1,10 +1,8 @@
 # Keymaps
 
-Leader is **Space**. Press `<leader>` and wait ~0.4s for the which-key popup.
-Use `<leader>fk` for a fuzzy-searchable snacks.picker view of every mapping.
+Leader is **Space**. Press `<leader>` and wait ~0.4s for the which-key popup, or use `<leader>fk` for a fuzzy-searchable snacks.picker view of every mapping.
 
-Every mapping is defined in `nvim/lua/core/keymaps.lua`; plugin files contain
-setup only. See [`STRUCTURE.md`](STRUCTURE.md) for why.
+Every mapping is defined in `nvim/lua/core/keymaps.lua`; plugin files contain setup only. See [`STRUCTURE.md`](STRUCTURE.md) for why.
 
 ## Core
 
@@ -14,7 +12,7 @@ setup only. See [`STRUCTURE.md`](STRUCTURE.md) for why.
 | `<leader>q` | Quit window |
 | `<leader>h` | Clear search highlight |
 
-## Buffers — `<leader>b*`
+## Buffers: `<leader>b*`
 
 | Key | Action |
 |---|---|
@@ -23,7 +21,7 @@ setup only. See [`STRUCTURE.md`](STRUCTURE.md) for why.
 | `<leader>bo` | Delete all other buffers |
 | `<leader>ba` | Delete all buffers |
 
-## Splits — `<leader>s*`
+## Splits: `<leader>s*`
 
 | Key | Action |
 |---|---|
@@ -51,7 +49,7 @@ setup only. See [`STRUCTURE.md`](STRUCTURE.md) for why.
 | `<` / `>` | v | Indent and keep the selection |
 | `<A-j>` / `<A-k>` | n, v | Move line / block down / up |
 
-## File explorer (snacks.explorer) — `<leader>e`
+## File explorer (snacks.explorer): `<leader>e`
 
 | Key | Action |
 |---|---|
@@ -59,7 +57,7 @@ setup only. See [`STRUCTURE.md`](STRUCTURE.md) for why.
 
 Inside the explorer the snacks defaults apply: `l`/`<CR>` open, `h` collapse, `a` add, `r` rename (LSP-aware via `snacks.rename`), `d` delete, `y`/`p` yank/paste, `H` toggle hidden, `I` toggle gitignored, `]g`/`[g` jump to git changes, `]d`/`[d` jump to diagnostics.
 
-## Find (snacks.picker) — `<leader>f*`
+## Find (snacks.picker): `<leader>f*`
 
 | Key | Action |
 |---|---|
@@ -74,7 +72,7 @@ Inside the explorer the snacks defaults apply: `l`/`<CR>` open, `h` collapse, `a
 | `<leader>fp` | Resume last picker |
 | `<leader>fc` | Colorscheme picker (with preview) |
 
-## Git — `<leader>g*`
+## Git: `<leader>g*`
 
 | Key | Action |
 |---|---|
@@ -86,7 +84,7 @@ Inside the explorer the snacks defaults apply: `l`/`<CR>` open, `h` collapse, `a
 | `<leader>gl` | Lazygit (floating, themed) |
 | `<leader>gB` | Open current file on remote (GitHub/GitLab) in browser |
 
-## Git hunks (gitsigns) — `<leader>gh*` + `[h` / `]h`
+## Git hunks (gitsigns): `<leader>gh*` + `[h` / `]h`
 
 | Key | Mode | Action |
 |---|---|---|
@@ -101,7 +99,7 @@ Inside the explorer the snacks defaults apply: `l`/`<CR>` open, `h` collapse, `a
 | `<leader>ghb` | n | Blame line (full popup) |
 | `<leader>ght` | n | Toggle inline line-blame |
 
-## LSP — `gN` / `K` / `<leader>l*`
+## LSP: `gN` / `K` / `<leader>l*`
 
 | Key | Action |
 |---|---|
@@ -117,7 +115,7 @@ Inside the explorer the snacks defaults apply: `l`/`<CR>` open, `h` collapse, `a
 | `<leader>ld` | Diagnostic loclist |
 | `[d` / `]d` | Previous / next diagnostic |
 
-## DAP — F-keys + `<leader>d*`
+## DAP: F-keys + `<leader>d*`
 
 | Key | Action |
 |---|---|
@@ -133,7 +131,7 @@ Inside the explorer the snacks defaults apply: `l`/`<CR>` open, `h` collapse, `a
 | `<leader>du` | Toggle DAP UI |
 | `<leader>dt` | Terminate |
 
-## Terminal (snacks.terminal) — `<F7>` + `<leader>t*`
+## Terminal (snacks.terminal): `<F7>` + `<leader>t*`
 
 | Key | Mode | Action |
 |---|---|---|
@@ -143,7 +141,7 @@ Inside the explorer the snacks defaults apply: `l`/`<CR>` open, `h` collapse, `a
 | `<leader>tv` | n | Right terminal (vertical split) |
 | `<Esc><Esc>` | t | Exit terminal mode to normal mode |
 
-## Snippets (LuaSnip) — insert / select mode
+## Snippets (LuaSnip): insert / select mode
 
 | Key | Action |
 |---|---|

@@ -30,15 +30,27 @@ CLAUDE_INTERRUPT = "[Request interrupted by user"
 # Claude Code writes one of two sentences when a human refuses a call, and
 # which one depends on how the refusal arrived. Matching only the first read
 # 22 of this machine's 54 refusals as zero friction.
+# `has been denied` is anchored on the sentence around it: unanchored, the
+# phrase matched a grep of this very file quoted back in a tool result, which
+# booked a refusal that never happened and removed a real error from `errors`.
 CLAUDE_DENIALS = (
-    "The user doesn't want to proceed with this tool use",
-    "has been denied",
+    ("The user doesn't want to proceed with this tool use",),
+    ("Permission to use ", " has been denied"),
 )
-# Injected context and client bookkeeping arrive as `user` entries. Counting
-# them inflated turns by roughly a fifth: the transcript writes a separate
-# entry for a slash command, its stdout, and every interrupt.
+# Injected context and client bookkeeping arrive as `user` entries, and there
+# are more shapes than are obvious. A slash command is written two ways: the
+# builtins lead with `<command-name>`, a custom command with the message, and
+# counting only the first form made the two halves of one event disagree.
+# Subagent completions arrive as `<task-notification>` with `isMeta` unset, and
+# they were the largest miss of all, 422 against 1444 counted turns, which also
+# tied the turn metric to the delegation metric printed two rows below it.
 CLAUDE_NON_TURN = (
-    CLAUDE_INTERRUPT, "<command-name>", "<local-command", "<system-reminder>",
+    CLAUDE_INTERRUPT,
+    "<command-name>",
+    "<command-message",
+    "<local-command",
+    "<system-reminder>",
+    "<task-notification>",
 )
 CODEX_TOOL_CALLS = {"function_call", "custom_tool_call"}
 
@@ -56,8 +68,13 @@ def patterns() -> list[str]:
     for name in (COHORTS, "cohorts.example.json"):
         try:
             return json.loads((HERE / name).read_text()).get("work") or []
-        except (OSError, json.JSONDecodeError):
+        except FileNotFoundError:
             continue
+        except (OSError, json.JSONDecodeError, AttributeError) as error:
+            # Falling through silently would report every session as personal,
+            # which is indistinguishable from having configured no cohorts.
+            print(f"{name}: {error}", file=sys.stderr)
+            return []
     return []
 
 
@@ -124,10 +141,11 @@ def claude_text(block: dict) -> str:
 def claude_delegation(path: Path) -> int:
     """Messages in this session's subagent sidecars.
 
-    Delegation used to be readable from an `isSidechain` flag on the inline
-    entries. It moved to `<session-id>/subagents/*.jsonl`, and a reader that
-    still looks inline reports no delegation at all rather than reporting
-    that it cannot see any.
+    Subagent entries moved out of the transcript into
+    `<session-id>/subagents/*.jsonl`. The inline `isSidechain` flag they used
+    to carry is still written on every entry and is now always false, so a
+    reader that still looks there reports no delegation at all rather than
+    reporting that it cannot see any.
     """
     sidecars = path.parent / path.stem / "subagents"
     return sum(
@@ -163,7 +181,8 @@ def read_claude(path: Path) -> dict | None:
             body = claude_text(block)
             if block.get("type") == "tool_result":
                 # A tool result is the harness answering itself, never a turn.
-                if any(literal in body for literal in CLAUDE_DENIALS):
+                if any(all(part in body for part in literal)
+                       for literal in CLAUDE_DENIALS):
                     denials += 1
                 elif block.get("is_error"):
                     errors += 1
@@ -376,6 +395,10 @@ def main(argv: list[str] | None = None) -> int:
 
     sessions = collect(args.home, args.client or list(READERS))
     if args.rows:
+        # The same window the report bins, or these are not the distribution
+        # behind any median it printed.
+        if args.since:
+            sessions = [s for s in sessions if s["date"] >= args.since]
         # Project names leak here, so this output is not shareable the way the
         # aggregate report is.
         for entry in sorted(sessions, key=lambda s: (s["date"], s["client"])):

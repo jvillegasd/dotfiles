@@ -2,9 +2,9 @@
 
 Personal dotfiles: **Neovim**, **Ghostty**, **git**, **Worktrunk**, and **Harness AI** for Codex, Claude Code, and OpenCode. Neovim is built on `lazy.nvim` with a grouped, mnemonic `<leader>` scheme on Space; Ghostty shares its JetBrains Mono Nerd Font and catppuccin-mocha theme so editor and terminal match.
 
-- [`KEYMAPS.md`](KEYMAPS.md) — every mapping
-- [`STRUCTURE.md`](STRUCTURE.md) — Neovim and harness layout
-- [`harness/README.md`](harness/README.md) — the AI workflow, skill supply chain, validation
+- [`KEYMAPS.md`](KEYMAPS.md): every mapping
+- [`STRUCTURE.md`](STRUCTURE.md): Neovim and harness layout
+- [`harness/README.md`](harness/README.md): the AI workflow, skill supply chain, validation
 
 ## Install
 
@@ -37,8 +37,8 @@ Note that `<C-...>` here means Control, never Command; `<D-...>` only works in G
 
 ```
 macos.sh / linux.sh       # platform bootstrap
-lib/common.sh             # symlinking, harness call, nvim bootstrap — shared
-lib/python.sh             # uv-managed interpreter set — shared with harness/install.sh
+lib/common.sh             # symlinking, harness call, nvim bootstrap, shared
+lib/python.sh             # uv-managed interpreter set, shared with harness/install.sh
 Brewfile                  # macOS package manifest
 harness/                  # portable three-client policy, commands, skills, installer, tests
 skills-lock.json          # reviewed standalone third-party skill lock

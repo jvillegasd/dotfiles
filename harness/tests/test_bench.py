@@ -43,13 +43,36 @@ def build_home(home: Path) -> None:
              "content": "Permission to use Bash ... has been denied"}]}},
         {"type": "user", "message": {"content": [
             {"type": "tool_result", "is_error": True, "content": "boom"}]}},
-        # Injected context and client bookkeeping are not human turns.
+        # A tool result that merely quotes the phrase is an error, not a
+        # refusal: unanchored, this booked a denial that never happened.
+        {"type": "user", "message": {"content": [
+            {"type": "tool_result", "is_error": True,
+             "content": "grep hit: the build has been denied by nobody"}]}},
+        # Injected context and client bookkeeping are not human turns, and
+        # there is one entry here per shape the reader has to recognise. A
+        # builtin slash command leads with the name, a custom one with the
+        # message, and counting only the first made one event count twice.
         {"type": "user", "message": {"content": [
             {"type": "text", "text": "<command-name>/yolo</command-name>"}]}},
+        {"type": "user", "message": {"content": [
+            {"type": "text",
+             "text": "<command-message>spec</command-message>\n"
+                     "<command-name>/spec</command-name>"}]}},
+        {"type": "user", "message": {"content": [
+            {"type": "text", "text": "<task-notification>done</task-notification>"}]}},
+        {"type": "user", "message": {"content": [
+            {"type": "text", "text": "<local-command-stdout>out</local-command-stdout>"}]}},
+        {"type": "user", "message": {"content": [
+            {"type": "text", "text": "<system-reminder>ping</system-reminder>"}]}},
         {"type": "user", "isMeta": True,
          "message": {"content": [{"type": "text", "text": "caveat"}]}},
         {"type": "user", "message": {"content": [
             {"type": "text", "text": "[Request interrupted by user]"}]}},
+        # A real prompt arrives with its reminders attached, and one of those
+        # riding along must not cancel the turn.
+        {"type": "user", "message": {"content": [
+            {"type": "text", "text": "and again"},
+            {"type": "text", "text": "<system-reminder>ping</system-reminder>"}]}},
     ))
     # A subagent sidecar is this session's delegation, never a session itself.
     sidecar = claude / "old" / "subagents"
@@ -58,6 +81,8 @@ def build_home(home: Path) -> None:
         {"type": "user", "timestamp": "2026-01-01T00:01:00Z",
          "message": {"content": [{"type": "text", "text": "sub"}]}},
         {"type": "assistant", "message": {"content": []}},
+        # Not a message, so it is not delegation either.
+        {"type": "summary", "summary": "ignored"},
     ))
     (claude / "new.jsonl").write_text(lines(
         {"type": "user", "timestamp": "2026-03-01T00:00:00Z",
@@ -128,22 +153,42 @@ class BenchTests(unittest.TestCase):
 
     def test_claude_counts_only_human_turns(self) -> None:
         old, new = self.by_client["claude"]
-        # `go` and nothing else: a tool result, a slash command, an isMeta
-        # caveat and an interrupt marker each arrive as a `user` entry.
-        self.assertEqual((old["turns"], new["turns"]), (1, 1))
+        # Only `go` and `and again`. A tool result, both slash-command shapes,
+        # a task notification, local-command stdout, a system reminder, an
+        # isMeta caveat and an interrupt marker all arrive as `user` entries.
+        self.assertEqual((old["turns"], new["turns"]), (2, 1))
         self.assertEqual((old["tool_calls"], new["tool_calls"]), (1, 2))
-        self.assertEqual(old["commands"], 1)
+        # Both shapes of one event count once each, never differently.
+        self.assertEqual(old["commands"], 2)
         self.assertEqual(old["interrupts"], 1)
         self.assertEqual(old["minutes"], 6.5)
 
+    def test_each_injected_shape_alone_is_not_a_turn(self) -> None:
+        # One entry per literal, so dropping any single one from
+        # `CLAUDE_NON_TURN` fails rather than leaving the suite green.
+        for text in ("<command-name>/x</command-name>",
+                     "<command-message>x</command-message>\n<command-name>/x</command-name>",
+                     "<task-notification>done</task-notification>",
+                     "<local-command-stdout>out</local-command-stdout>",
+                     "<system-reminder>ping</system-reminder>",
+                     "[Request interrupted by user]"):
+            path = self.home / ".claude" / "projects" / "repo" / "solo.jsonl"
+            path.write_text(lines(
+                {"type": "user", "timestamp": "2026-03-01T00:00:00Z",
+                 "message": {"content": [{"type": "text", "text": text}]}},
+            ))
+            self.assertEqual(self.measure.read_claude(path)["turns"], 0, text)
+
     def test_claude_separates_a_refusal_from_a_failure(self) -> None:
         old = self.by_client["claude"][0]
-        # Both refusal literals count, and neither is also counted as an error.
-        self.assertEqual((old["denials"], old["errors"]), (2, 1))
+        # Both refusal sentences count and neither is also an error, while a
+        # result that merely quotes `has been denied` is an error only.
+        self.assertEqual((old["denials"], old["errors"]), (2, 2))
 
     def test_a_subagent_is_delegation_not_a_session(self) -> None:
         claude = self.by_client["claude"]
-        self.assertEqual([s["turns"] for s in claude], [1, 1])
+        self.assertEqual([s["turns"] for s in claude], [2, 1])
+        # The sidecar holds two messages and one non-message entry.
         self.assertEqual([s["delegation"] for s in claude], [2, 0])
 
         opencode = self.by_client["opencode"]
@@ -182,6 +227,15 @@ class BenchTests(unittest.TestCase):
         self.assertEqual(len(rows), len(self.sessions))
         # The date has to survive the round trip, or a row cannot be binned.
         self.assertEqual(rows[0]["date"], "2026-01-01")
+
+    def test_rows_honour_the_same_window_as_the_report(self) -> None:
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            self.measure.main(["--split", "2026-02-01", "--home", str(self.home),
+                               "--since", "2026-02-01", "--rows"])
+        dates = {json.loads(l)["date"] for l in captured.getvalue().splitlines()}
+        # Rows outside the window are not the distribution behind any median.
+        self.assertNotIn("2026-01-01", dates)
 
     def test_one_pattern_matches_every_client_project_format(self) -> None:
         # Claude names a project by its path with the separators rewritten as

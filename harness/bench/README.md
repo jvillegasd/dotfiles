@@ -16,7 +16,7 @@ python3 harness/bench/measure.py --split <commit-date> --since <window-start>
 | `--since` | Ignore sessions older than this. Cuts off a period whose harness bears no resemblance to today's. |
 | `--client` | Limit to `claude`, `codex`, or `opencode`. Repeatable. |
 | `--home` | Session-store root. Defaults to the current home; the tests point it at a fixture. |
-| `--rows` | One JSON object per session instead of the report, for the distribution behind a median. |
+| `--rows` | One JSON object per session instead of the report, honouring `--since`, for the distribution behind a median. |
 
 ## Metrics
 
@@ -24,7 +24,7 @@ Eight per session, each a median across the cohort. The first three are cost, th
 
 | Metric | What it counts |
 | --- | --- |
-| `turns` | Human turns. A tool result, a slash-command entry, an `isMeta` caveat, an injected `<system-reminder>` and an interrupt marker are all the client writing to its own transcript, and none is a turn. |
+| `turns` | Human turns. A tool result, either shape of slash-command entry, a `<task-notification>`, local-command stdout, an `isMeta` caveat, an injected `<system-reminder>` and an interrupt marker are all the client writing to its own transcript, and none is a turn. |
 | `tool_calls` | Tool invocations the assistant made. |
 | `minutes` | First stamped entry to last. |
 | `commands` | Slash-command invocations, so routing adoption is visible: `POLICY.md` is mostly a routing table. |
@@ -51,7 +51,7 @@ Each client records a project differently: a dashed slug, a `cwd`, a `directory`
 - **Codex**, `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`. Records no declined call, slash command, subagent, or distinguishable failed result, so those four are absent.
 - **OpenCode**, `~/.local/share/opencode/opencode.db`, opened read-only and immutable because a client may be running. No interrupt, denial, failed result, or slash command, so those four are absent.
 
-**A subagent is delegation, not a session.** Claude Code writes `<session-id>/subagents/*.jsonl` beside the session file, and OpenCode gives a subagent a `session` row carrying the parent's id, so a recursive glob or an unfiltered query counts them as sessions: on this machine, 271 phantom against 209 real, and 77 against 36. Both are excluded and counted as the parent's `delegation`. Claude Code's inline `isSidechain` flag is gone, so a reader still looking there reports no delegation rather than reporting it cannot see any.
+**A subagent is delegation, not a session.** Claude Code writes `<session-id>/subagents/*.jsonl` beside the session file, and OpenCode gives a subagent a `session` row carrying the parent's id, so a recursive glob or an unfiltered query counts them as sessions: on this machine, 273 sidecars against 209 real sessions, and 77 against 36. Both are excluded and counted as the parent's `delegation`. The inline `isSidechain` flag those entries used to carry is still written and now always false, so a reader still looking there reports no delegation rather than reporting it cannot see any.
 
 ## Reading the output
 
@@ -71,7 +71,7 @@ claude  work
   errors             2.0       2.0      +0.0
 ```
 
-Headings are bare client names until a cohort is configured. Two rules matter more than the numbers:
+Headings are bare client names until a work pattern matches a session in the window. Two rules matter more than the numbers:
 
 - **A metric a client does not record prints `-`, never `0`.** An absent measurement and a measured zero are different claims, and collapsing them would invent evidence.
 - **`THIN = 20`.** Below that the report warns, and a difference in medians is not a finding.
