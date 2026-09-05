@@ -21,6 +21,7 @@ class SkillTests(unittest.TestCase):
                 "Reviewer A",
                 "Reviewer B",
                 "Never three",
+                "docstring longer than what it documents",
             ),
             "evidence": (
                 "Kill query first",
