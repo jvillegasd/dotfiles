@@ -154,7 +154,7 @@ Homebrew still installs a `python@` of its own as a dependency of other formulae
 
 ## Shell aliases
 
-`aliases.sh` holds the yolo-mode launchers and is sourced from `~/.zshrc` through one managed line. The installer removes any hand-written definition of `ccyolo`, `cyolo`, or `oyolo` so the committed file is the only source, and leaves every other alias alone.
+`aliases.sh` holds the yolo-mode launchers and is sourced from `~/.zshrc` through one managed line. The installer removes any hand-written definition of `ccyolo`, `cyolo`, or `ocyolo` so the committed file is the only source, and leaves every other alias alone.
 
 Zsh is the only shell either of the two shell-facing steps writes: the aliases go into `~/.zshrc`, and Worktrunk is asked for its zsh integration by name. A run whose `$SHELL` is something else warns and names both, rather than leaving the aliases quietly absent. Source `aliases.sh` from your own rc and run `wt config shell install` for that shell.
 
@@ -162,7 +162,7 @@ Zsh is the only shell either of the two shell-facing steps writes: the aliases g
 | --- | --- |
 | `ccyolo` | `claude --dangerously-skip-permissions` |
 | `cyolo` | `codex --dangerously-bypass-approvals-and-sandbox` |
-| `oyolo` | `opencode` with `OPENCODE_PERMISSION` set to allow edit, bash, and webfetch |
+| `ocyolo` | `opencode` with `OPENCODE_PERMISSION` set to allow edit, bash, and webfetch |
 
 OpenCode has no bypass flag: its permissions are configuration, and `OPENCODE_PERMISSION` overrides them for one run.
 

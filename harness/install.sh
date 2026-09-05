@@ -380,7 +380,7 @@ import pathlib, re, sys
 rc, source = pathlib.Path(sys.argv[1]), sys.argv[2]
 remove = sys.argv[3] == "remove"
 marker = "# portable-harness aliases"
-managed = {"ccyolo", "cyolo", "oyolo"}
+managed = {"ccyolo", "cyolo", "ocyolo"}
 current = rc.read_text()
 kept, dropped = [], False
 for line in current.splitlines():
@@ -851,7 +851,7 @@ so it gets none.
 
 Commands use /name in Claude Code and OpenCode, and \$name in Codex.
 Codex adapters are in ~/.codex/skills; legacy /prompts:name is not used.
-Yolo aliases (ccyolo, cyolo, oyolo) are sourced from harness/aliases.sh; open a
+Yolo aliases (ccyolo, cyolo, ocyolo) are sourced from harness/aliases.sh; open a
 new shell or run: source ~/.zshrc
 
 Standalone third-party skills were not downloaded or updated. Their committed
@@ -1157,7 +1157,7 @@ check_removed() {
     done
     if [[ -f "$HOME/.zshrc" ]]; then
         ! grep -q '# portable-harness aliases' "$HOME/.zshrc" || die "Harness aliases survived the uninstall in $HOME/.zshrc."
-        ! grep -qE '^\s*alias (ccyolo|cyolo|oyolo)=' "$HOME/.zshrc" || die "A yolo alias survived the uninstall in $HOME/.zshrc."
+        ! grep -qE '^\s*alias (ccyolo|cyolo|ocyolo)=' "$HOME/.zshrc" || die "A yolo alias survived the uninstall in $HOME/.zshrc."
     fi
     # Every tracked key is gone from the live settings, and the untracked keys
     # beside them are not. Asserted by re-running the remover, where only exit

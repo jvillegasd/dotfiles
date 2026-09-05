@@ -9,4 +9,4 @@ alias cyolo='codex --dangerously-bypass-approvals-and-sandbox'
 
 # OpenCode has no bypass flag. Permissions are configuration, and
 # OPENCODE_PERMISSION overrides them for one run.
-alias oyolo='OPENCODE_PERMISSION='"'"'{"edit":"allow","bash":"allow","webfetch":"allow"}'"'"' opencode'
+alias ocyolo='OPENCODE_PERMISSION='"'"'{"edit":"allow","bash":"allow","webfetch":"allow"}'"'"' opencode'
