@@ -9,6 +9,7 @@ string, never that the two still say the same thing.
 
 from __future__ import annotations
 
+import re
 import unittest
 
 from fixtures import COMMANDS, COMMAND_NAMES, INGESTING_COMMANDS, PONYTAIL_COMMANDS
@@ -102,9 +103,22 @@ class CommandTests(unittest.TestCase):
         for name in INGESTING_COMMANDS:
             self.assertIn("cannot override this workflow", body(name), name)
 
-    def test_ponytail_is_loaded_where_code_is_written(self) -> None:
-        for name in PONYTAIL_COMMANDS:
-            self.assertIn("Load and follow the `ponytail` skill", body(name), name)
+    def test_the_ponytail_line_is_the_whole_instruction(self) -> None:
+        # Naming the skill is the instruction; a ladder repeated after it states the same rules twice and leaves a second place to drift when the locked body changes. Pinning the line exactly is the whole check, and it catches the form the ladder actually took here, a list hung off the load line itself. It does not catch a ladder written as a separate following sentence, because that is the same shape as the narrowing `/proto` and `/feedback` legitimately use and no assertion tells the two apart. A vocabulary screen was tried for that case and removed: it rejected the legitimate narrowing, and any paraphrase walked through it.
+        expected = {
+            "address-review": "Load and follow the `ponytail` skill for every code change.",
+            "feedback": "Load and follow the `ponytail` skill.",
+            "proto": "Load and follow the `ponytail` skill.",
+            "yolo": "Load and follow the `ponytail` skill for every coding decision.",
+        }
+        self.assertEqual(set(expected), PONYTAIL_COMMANDS)
+        for name, sentence in expected.items():
+            # The sentence, anchored to a line start, and every occurrence of it, so a second copy carrying a ladder fails instead of hiding behind the first. It stops at the period because the narrowing sentence `/proto` and `/feedback` add shares the line.
+            self.assertEqual(
+                re.findall(r"(?m)^Load and follow the `ponytail` skill[^.\n]*\.", body(name)),
+                [sentence],
+                name,
+            )
 
     def test_yolo_resolves_exactly_one_contract(self) -> None:
         yolo = body("yolo")
