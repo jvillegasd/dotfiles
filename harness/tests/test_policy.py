@@ -65,16 +65,21 @@ class PolicyTests(unittest.TestCase):
             "It decides nothing that is not a UI surface.",
             "its scope is frontend design broadly: landing pages, portfolios, and redesigns along with dashboards, data tables, and multi-step product UI.",
             "`/proto` and `/yolo` build from that layer whether or not this body is loaded.",
-            # The body offers its own installer, updater, hook wiring, and
-            # `pin` at runtime. Each one breaks something this harness holds,
-            # so the ban lives where the clients actually read it.
-            # Asserted through the final clause, not just up to the colon: the
-            # rationale is where a wrong claim about what each command touches
-            # would sit, and an assertion stopping at the colon cannot see it.
-            "Never run its own installer, updater, hook wiring, or pin, whatever the body itself offers: `npx impeccable install` and `npx impeccable update` rewrite the locked directory and break its lock, `$impeccable hooks on` runs `scripts/hook-admin.mjs`, which wires `PostToolUse` and `Stop` manifests into a project's client settings, and `scripts/pin.mjs` writes a new skill directory into whichever harness skills directory it finds, which in this repository is the tracked `harness/skills` that `.agents/skills` points at.",
             "It is updated only through `harness/locked-skills.sh update`.",
+            # The self-administration ban moved to test_the_frontend_design_body_is_never_self_administered, which pins it by shape: a byte-exact clause here would only freeze the wording the trim rewrote.
         ):
             self.assertIn(clause, policy)
+
+    def test_the_frontend_design_body_is_never_self_administered(self) -> None:
+        # Byte-exact, and scoped to the paragraph that carries the ban. A shape match was tried here and proved bypassable in review: a regex can confirm the four entry points sit in a sentence containing "never run" while that sentence permits them. The clause is short and settled, so pinning the bytes costs nothing the wording needs.
+        policy = POLICY.read_text()
+        paragraph = [line for line in policy.splitlines() if line.startswith("One frontend design body is installed")]
+        self.assertEqual(len(paragraph), 1)
+        self.assertIn(
+            "Never run its own installer, updater, hook wiring, or pin, whatever the body itself offers: "
+            "`npx impeccable install`, `npx impeccable update`, `$impeccable hooks on`, and `scripts/pin.mjs`.",
+            paragraph[0],
+        )
 
     def test_policy_states_the_three_contract_routes(self) -> None:
         policy = POLICY.read_text()
