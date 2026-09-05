@@ -1,6 +1,6 @@
 # Linked to ~/.config/worktrunk/config.toml by macos.sh and linux.sh.
 #
-# Worktrunk is what the harness workflows branch and land through: `/yolo`
+# Worktrunk is what the harness workflows branch and land through: `/ship`
 # creates the worktree, `/land` removes it, and the escalation counters in
 # POLICY.md live in this tool's per-branch vars under .git.
 

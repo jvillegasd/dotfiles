@@ -3,7 +3,7 @@ description: Resolve review threads and red CI on an existing pull request, in i
 argument-hint: "[pull request number or URL]"
 ---
 
-Resolve review or CI feedback on an existing pull request created by `/yolo`.
+Resolve review or CI feedback on an existing pull request created by `/ship`.
 
 <user_input>
 $ARGUMENTS
@@ -33,7 +33,7 @@ Load and follow the `ponytail` skill for every code change.
 
    Commit as you go. Do not push and do not reply yet; every external write is batched behind step 5.
 
-4. Review the new diff the way `/yolo` does: `adversarial-review` first, then your own spec-conformance pass against the resolved contract and the repository's documented standards. In legacy mode, report that contract conformance is unavailable and check the explicit review requests, CI failures, and documented standards instead. Repair all findings and make coherent Conventional Commits.
+4. Review the new diff the way `/ship` does: `adversarial-review` first, then your own spec-conformance pass against the resolved contract and the repository's documented standards. In legacy mode, report that contract conformance is unavailable and check the explicit review requests, CI failures, and documented standards instead. Repair all findings and make coherent Conventional Commits.
 
    If `mergeStateStatus` is `BEHIND` or the base has moved, prepare the update plan without applying it. Default to merging the actual base branch into the pull request branch, to preserve history and avoid rewriting pushed commits. Never assume the base is `main`.
 

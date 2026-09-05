@@ -21,7 +21,7 @@ Require clean credentials and resolve exactly one implementation contract:
 - An approved in-conversation contract, for work too small to justify a published ticket, produced by native plan mode. Retain an existing tracker binding when the work began from a tracker item; otherwise it is trackerless.
 - A finalized `/proto` requirements ledger. It retains the ticket binding when the prototype began from a ticket and is trackerless otherwise.
 
-If no contract resolves, enter native plan mode and let its approval re-enter `/yolo`; never implement a plain sentence directly.
+If no contract resolves, enter native plan mode and let its approval re-enter `/ship`; never implement a plain sentence directly.
 
 A `/research` finding ledger and a `/triage` plan brief are planning inputs, never implementation contracts. Carry their grounded evidence and verification concerns into native planning or `/spec` without re-investigating them, but do not implement until a plan is approved or a ticket is published.
 
