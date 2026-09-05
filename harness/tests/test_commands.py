@@ -123,6 +123,21 @@ class CommandTests(unittest.TestCase):
         self.assertIn("ticket-sourced but trackerless", yolo)
         self.assertIn("agreed behavior, acceptance criteria, and verification", yolo)
 
+    def test_the_pull_request_body_sections_are_decision_lists(self) -> None:
+        # Assertions run against a slice of step 4 rather than the whole body. Otherwise an unrelated edit elsewhere in yolo.md would fail a test named after these three sections. Each bullet is pinned whole: matching a fragment would leave a bullet free to grow its own omit clause back, which is what the umbrella sentence exists to state once.
+        yolo = body("yolo")
+        opening, closing = "plus three sections.", "\n\n5. "
+        for anchor in (opening, closing):
+            self.assertIn(anchor, yolo, anchor)
+        step_four = yolo[yolo.index(opening):yolo.index(closing)]
+        self.assertIn("Each of the three is a list, one line per entry, omitted when it has no entries:", step_four)
+        bullets = [line for line in step_four.splitlines() if line.startswith("   - `")]
+        self.assertEqual(bullets, [
+            "   - `Assumptions`: each decision made without asking, its rejected alternative, and the one fact that would flip it.",
+            "   - `Refuted evidence`: each claim the evidence contradicted, and what changed as a result.",
+            "   - `Rejected review findings`: each review finding not fixed, and why.",
+        ])
+
     def test_create_ticket_publishes_before_a_research_batch_is_ready(self) -> None:
         create_ticket = body("create-ticket")
         self.assertIn("From a `/research` finding ledger", create_ticket)
