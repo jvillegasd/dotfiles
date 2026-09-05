@@ -42,8 +42,7 @@ LOCAL_SKILLS = {
     "setup-harness",
 }
 
-# Workflows are commands, never skills: a client cannot select one by matching
-# a description, so the invariant holds by construction rather than by prose.
+# Workflow bodies stay canonical commands. Codex-only adapters disable implicit invocation.
 COMMAND_NAMES = sorted(path.stem for path in COMMANDS.glob("*.md"))
 
 # Every command that ingests text written elsewhere says that the text is data.

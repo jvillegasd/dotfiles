@@ -53,7 +53,7 @@ harness/
 │   ├── codex.toml              # tracked top-level keys for ~/.codex/config.toml
 │   └── codex.sh                # reconciles the TOML half; install.sh reconciles claude.json inline
 ├── aliases.sh                  # yolo-mode launchers, sourced from ~/.zshrc
-├── commands/                   # the workflows, reachable only as /name in all three clients
+├── commands/                   # canonical workflows; /name in Claude/OpenCode, $name in Codex
 ├── skills/
 │   ├── <locked>/               # pristine skills.sh-managed upstream bodies
 │   ├── setup-harness/          # config + GitHub lifecycle templates

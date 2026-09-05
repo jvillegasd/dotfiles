@@ -124,6 +124,31 @@ class InstallerTests(unittest.TestCase):
             # It really evaluates the listing rather than passing vacuously.
             self.assertNotEqual(run("assert_plugin_count claude engram 2").returncode, 0)
 
+    def test_codex_commands_are_explicit_adapters(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            env = os.environ | {"HOME": temporary, "XDG_CONFIG_HOME": str(home / ".config")}
+            result = subprocess.run(
+                ["bash", ROOT / "harness/install.sh", "--links-only"],
+                env=env, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for name in COMMAND_NAMES:
+                adapter = home / ".codex/skills" / name
+                self.assertTrue((adapter / "SKILL.md").is_file(), name)
+                text = (adapter / "SKILL.md").read_text()
+                self.assertIn(f"name: {name}\n", text)
+                self.assertIn("command.md", text)
+                self.assertIn("$ARGUMENTS", text)
+                self.assertIn("task data", text)
+                self.assertEqual((adapter / "command.md").resolve(), COMMANDS / f"{name}.md")
+                self.assertEqual((adapter / "agents/openai.yaml").read_text(),
+                                 "policy:\n  allow_implicit_invocation: false\n")
+                for root in (".agents/skills", ".claude/skills", ".config/opencode/skills"):
+                    self.assertFalse((home / root / name).exists(), name)
+            self.assertFalse((home / ".codex/prompts").exists())
+            self.assertIn("$name", result.stdout)
+
     def test_link_install_is_safe_and_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_home:
             home = Path(temporary_home)
@@ -224,13 +249,12 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(opencode_collision.exists())
             self.assertTrue((home / ".agents" / "skills" / "evidence").is_symlink())
             self.assertFalse(orphan.is_symlink())
-            # A symlinked command root becomes a real directory the installer
-            # owns, and the directory it pointed at keeps its own file.
+            # Legacy prompt roots are no longer managed; private directory links remain untouched.
             codex_prompts = home / ".codex" / "prompts"
             self.assertTrue(codex_prompts.is_dir())
-            self.assertFalse(codex_prompts.is_symlink())
+            self.assertTrue(codex_prompts.is_symlink())
             self.assertTrue((shared_prompts / "theirs.md").is_file())
-            self.assertFalse((codex_prompts / "theirs.md").exists())
+            self.assertTrue((codex_prompts / "theirs.md").exists())
 
             # One sourced line owns the yolo aliases; the hand-written
             # duplicate is gone and unrelated aliases are untouched.
@@ -254,7 +278,6 @@ class InstallerTests(unittest.TestCase):
             for name in COMMAND_NAMES:
                 for root in (
                     home / ".claude" / "commands",
-                    home / ".codex" / "prompts",
                     home / ".config" / "opencode" / "command",
                 ):
                     self.assertEqual(
@@ -321,7 +344,6 @@ class InstallerTests(unittest.TestCase):
                 (backups[0] / ".agents" / "skills" / "evidence" / "keep").is_file()
             )
             self.assertTrue((backups[0] / ".claude" / "skills.previous-link").is_symlink())
-            self.assertTrue((backups[0] / ".codex" / "prompts.previous-link").is_symlink())
             self.assertTrue(
                 (backups[0] / ".config" / "opencode" / "skills" / "evidence" / "keep").is_file()
             )
@@ -408,7 +430,7 @@ class InstallerTests(unittest.TestCase):
             # Only OpenCode follows XDG. Claude and Codex read fixed paths, so
             # a change that moved all six roots would otherwise pass this test.
             self.assertTrue((home / ".claude" / "commands").is_dir())
-            self.assertTrue((home / ".codex" / "prompts").is_dir())
+            self.assertTrue((home / ".codex" / "skills").is_dir())
             self.assertTrue((home / ".agents" / "skills").is_dir())
 
     def test_unusable_claude_settings_fails_with_the_path(self) -> None:
@@ -681,6 +703,9 @@ class UninstallTests(unittest.TestCase):
                     entry.is_symlink() and harness in entry.resolve().parents,
                     f"managed link survived: {entry}",
                 )
+        self.assertFalse((home / ".codex/harness-commands").exists())
+        for name in COMMAND_NAMES:
+            self.assertFalse((home / ".codex/skills" / name).is_symlink())
         for path in (
             home / ".codex" / "AGENTS.md",
             home / ".claude" / "CLAUDE.md",

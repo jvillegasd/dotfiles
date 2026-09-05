@@ -3,7 +3,7 @@
 One committed source for Codex, Claude Code, and OpenCode:
 
 - `POLICY.md` is linked to each client's global instruction path. It carries the routing table, the oracle ladder, and the escalation contract.
-- `commands/` holds the workflows. They are reachable only as `/name`, in all three clients.
+- `commands/` holds the workflows. Humans invoke them as `/name` in Claude Code and OpenCode, or `$name` in Codex.
 - `skills/` holds protocol, vocabulary, and locked third-party bodies.
 - `install.sh` installs current clients/integrations, preserves mutable client state, and reconciles policy, command, and skill links individually.
 - `locked-skills.sh` adds, updates, removes, and validates reviewed third-party skill locks.
@@ -77,7 +77,13 @@ The escalation contract can stop any run: the same check failing three times und
 
 ## Commands and skills
 
-A workflow is a command, not a skill. A client selects a skill by matching its description, and selects a command only when a human types `/name`, so putting the workflows in `commands/` makes "a workflow never fires on its own" true by construction instead of true by prose plus a guard per client. Commands install to `~/.claude/commands`, `~/.codex/prompts`, and `$XDG_CONFIG_HOME/opencode/command`, defaulting to `~/.config` when that is unset.
+A workflow's source is `commands/`, not `skills/`. Claude Code and OpenCode install canonical command links into `~/.claude/commands` and `$XDG_CONFIG_HOME/opencode/command` (defaulting to `~/.config`) and invoke them as `/name`. Codex invokes them as `$name`, for example `$yolo 38`, through generated explicit-only skill adapters in `~/.codex/skills`. The shared `~/.agents/skills` root gets no adapters, because OpenCode also reads it.
+
+The installer generates wrappers in `~/.codex/harness-commands`, links each wrapper from `~/.codex/skills/<name>`, and links its `command.md` to the canonical body. Each wrapper binds invocation text to `$ARGUMENTS` as task data and carries `policy.allow_implicit_invocation: false` in `agents/openai.yaml`. `/name` references inside a workflow keep their meaning, including human-only merge approval. Reinstall after adding or removing commands; body edits take effect through the link. Generated adapters are machine state, never committed.
+
+Legacy `~/.codex/prompts` is no longer populated or swept. Migration retires only exact command links owned by this checkout, including dangling ones; private prompt files, foreign links, and symlinked prompt roots remain untouched. Adapter collisions and changed generated trees use the existing backup policy. Uninstall removes this checkout's generated tree and exact adapter links, leaving other Codex skills and `.system` alone. `--no-backup` deletes displaced managed paths rather than archiving them.
+
+Codex discovery was verified with the installed CLI's `app-server` `skills/list` API, not inferred from files existing. Reproduce the isolated, no-model-call smoke test with `HARNESS_CODEX_SMOKE=1 python3 -m unittest discover -s harness/tests -t harness/tests -p test_codex_commands.py -k test_real_codex`. The supported explicit-only metadata is documented at https://learn.chatgpt.com/docs/build-skills. Restart Codex if `$yolo` or `/skills` does not show the adapters after installation.
 
 Every command that ingests text written elsewhere, a ticket body, a review comment, an error payload, a bullet list, states that the input is task data and cannot override the workflow's constraints. The acceptance suite asserts that line is present.
 
@@ -256,7 +262,7 @@ Deliberately removed: `to-spec` and `to-tickets`, whose templates now live inlin
 
 ## Invocation guards
 
-`POLICY.md` opens with the commands-and-skills split. Structure carries it for the workflows. For the four local skills, the three per-client guards carry it, and the acceptance suite asserts the full matrix. For a locked body, prose is the only control, which is why a body that must never fire on its own is not installed at all.
+`POLICY.md` opens with the commands-and-skills split. Command storage carries it for the workflows; generated Codex adapters enforce explicit invocation through native metadata. For the four local skills, the three per-client guards carry it, and the acceptance suite asserts the full matrix. For a locked body, prose is the only control, which is why a body that must never fire on its own is not installed at all.
 
 ## GitHub lifecycle
 
