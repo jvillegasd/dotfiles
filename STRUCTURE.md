@@ -67,7 +67,7 @@ Global mutable client configs are reconciled during installation but are not tra
 
 Per-project lifecycle configuration lives under `docs/agents/` only after `setup-harness` is explicitly invoked in that project, and what it writes there is that project's configuration, not a template. The templates `setup-harness` copies into any project stay in `harness/skills/setup-harness/`. This repository currently has none of it checked in.
 
-In local markdown mode `setup-harness` configures no tracker service, so specs and tickets are committed files under the configured `spec_home`, `docs/specs/` by default, one directory per feature holding `spec.md` beside `issues/<NN>-<slug>.md`. That is the point of the mode: the contract is versioned with the code that satisfies it, which a `.scratch` path outside version control would give up.
+In local markdown mode `setup-harness` configures no tracker service, so specs and tickets are committed files under the configured `spec_home`, one directory per feature holding `spec.md` beside `issues/<NN>-<slug>.md`. That is the point of the mode: the contract is versioned with the code that satisfies it, which a `.scratch` path outside version control would give up.
 
 The rest of this document describes the `nvim/` subtree — the Neovim config.
 

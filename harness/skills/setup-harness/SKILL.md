@@ -27,7 +27,7 @@ Write `docs/agents/harness.json` with this stable shape:
 }
 ```
 
-`tracker` and `spec_home` name the configured mode. The harness writes two. Present both by name and ask, because a GitHub remote never settles the choice on its own: a repository hosted there may still want its contracts in the tree. Only the absence of any remote infers local markdown. Any other tracker follows the last section. `domain_layout` may use project-specific values. Wherever a command writes `<spec_home>`, it means this file's `spec_home` value.
+`tracker` and `spec_home` name the configured mode. The harness writes two. Present both by name and ask, always, including in a repository with no remote. A remote reveals where the code is hosted, never where the user wants contracts kept, so nothing about it settles this choice. Any other tracker follows the last section. `domain_layout` may use project-specific values. Wherever a command writes `<spec_home>`, it means this file's `spec_home` value.
 
 Local markdown keeps the same shape, changing only the two mode values:
 
@@ -71,7 +71,7 @@ For local markdown:
 
 Nothing creates labels in this mode, so the four mapped values are only the vocabulary the `Status:` line uses.
 
-1. Write `docs/agents/issue-tracker.md` as the compatibility contract for locked Matt skills: identify local markdown, state that it needs no CLI and no network, name `spec_home` as the root, and point at the `local-tracker` skill for the layout, the `Status:` and `Blocked by:` lines, the ticket id form, and the frontier scan. Restate none of it; one definition is what keeps the two from drifting. Do not tell the user to run a second setup skill.
+1. Write `docs/agents/issue-tracker.md` as the compatibility contract for locked Matt skills. It has to stand alone, because those skills read it and have no reason to load a harness skill: identify local markdown, state that it needs no CLI and no network, and give the root path, the file layout, the `Status:` line, and the ticket id form. Point at the `local-tracker` skill for everything a locked skill never does, meaning the transition-to-commit mapping and the frontier scan. Do not tell the user to run a second setup skill.
 2. Copy no `.github/` workflow and no reconcile script, and state that this is deliberate rather than missing. The lifecycle state is committed lines in the working tree, so no issue event exists for a workflow to react to.
 3. Preserve unrelated documentation and configuration.
 

@@ -45,7 +45,7 @@ Wide refactors are the exception to vertical slicing. A wide refactor is one mec
 
 On GitHub, create every ticket as a native sub-issue of the parent and create native `blocked-by` edges. For an implementation-ready ticket, apply mapped `blocked` while blockers remain; otherwise apply mapped `ready_for_agent`. Leave a planning-only research ticket without a lifecycle label until planning supplies its missing contract fields. Remove both frontier labels from the parent while its children are active. Never close or modify the parent's own body.
 
-For another tracker, use its native relationships where available and record textual edges otherwise. Automatic parent closure is GitHub-only. Where a tracker has no ticket surface at all, write the tickets as files: under `<spec_home>` when that value is a repository path, and under `docs/specs/` when it names an issue surface instead.
+For another tracker, use its native relationships where available and record textual edges otherwise. Automatic parent closure is GitHub-only. Where a tracker has no ticket surface at all, write the tickets as files in the layout the `local-tracker` skill specifies.
 
 In local markdown mode, load the `local-tracker` skill and follow it. It replaces the template's `## Blocked by` section with the `Status:` and `Blocked by:` lines it specifies.
 
