@@ -58,10 +58,10 @@ Inspect `git status --short` before creating anything. A worktree holding pre-ex
 
    Repair every finding and repeat both passes until each is clean.
 
-4. Push, then create or update a draft pull request with a Conventional Commit title. When tracker-bound, include the ticket's closing reference. When the contract came from an approved in-conversation contract or a finalized `/proto` ledger, or when a ticket-sourced contract is trackerless, also include an inline `## Contract` section with the agreed behavior, acceptance criteria, and verification, whether tracker-bound or trackerless, so `/land` can reconstruct conformance later. Only a tracker-bound ticket-sourced contract may rely on the ticket alone. Every body also states what changed, why, and the checks run, plus three sections:
+4. Push, then create or update a draft pull request with a Conventional Commit title. When tracker-bound, include the ticket's closing reference. When the contract came from an approved in-conversation contract or a finalized `/proto` ledger, or when a ticket-sourced contract is trackerless, also include an inline `## Contract` section with the agreed behavior, acceptance criteria, and verification, whether tracker-bound or trackerless, so `/land` can reconstruct conformance later. Only a tracker-bound ticket-sourced contract may rely on the ticket alone. Every body also states what changed, why, and the checks run, plus three sections. Each of the three is a list, one line per entry, omitted when it has no entries:
    - `Assumptions`: each decision made without asking, its rejected alternative, and the one fact that would flip it.
-   - `Refuted evidence`: any claim the evidence contradicted and what changed as a result. Omit when no evidence was gathered.
-   - `Rejected review findings`: each review finding not fixed, with its reason. Omit when there are none.
+   - `Refuted evidence`: each claim the evidence contradicted, and what changed as a result.
+   - `Rejected review findings`: each review finding not fixed, and why.
 
 5. Watch required remote checks. Repair owned failures, rerun local rungs, commit, push, and review again. Apply the escalation contract's do-not-escalate list before counting an attempt, and stop on any rabbit-hole trip. Where a repair changed what the pull request does, bring its title and body back in line with the diff before moving on.
 
