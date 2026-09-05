@@ -138,6 +138,30 @@ class ConsistencyTests(unittest.TestCase):
         for body in (policy, readme):
             self.assertIn("tracker-bound only when a tracker exists", body)
 
+    def test_the_prose_rule_has_an_enforcement_point(self) -> None:
+        # A concision rule nothing checks is inert, and a reviewer lens with no
+        # rule behind it is a reviewer inventing a standard. Both halves are
+        # asserted here so neither can be deleted while the other still passes.
+        policy = POLICY.read_text()
+        self.assertIn("Write prose a human reads once", policy)
+        self.assertIn("never a locked third-party body", policy)
+        review = (SKILLS / "adversarial-review" / "SKILL.md").read_text()
+        self.assertIn("docstring longer than what it documents", review)
+
+    def test_the_commit_body_wrap_belongs_to_the_locked_body(self) -> None:
+        # The no-hard-wrap rule claimed commit bodies while the locked body the
+        # policy delegates commit writing to wraps them at 72. The policy drops
+        # the claim rather than restating the skill's rule: a restatement that
+        # agrees with the body it delegates to buys nothing and adds a second
+        # place to drift. That leaves the wrap stated in exactly one place, so
+        # both ends are pinned here: the rule no longer reaches a commit body,
+        # and the skill still says what the policy now relies on it to say.
+        policy = POLICY.read_text()
+        wrap_rule = [line for line in policy.splitlines() if line.startswith("- Never hard-wrap prose")]
+        self.assertEqual(len(wrap_rule), 1)
+        self.assertNotIn("commit bodies", wrap_rule[0])
+        self.assertIn("Wrap at 72 chars", (SKILLS / "caveman-commit" / "SKILL.md").read_text())
+
     def test_every_other_pull_request_workflow_refuses_to_merge(self) -> None:
         # /squash-land is the one workflow that merges, and only because a
         # human typed its name. Every other pull-request workflow still refuses.

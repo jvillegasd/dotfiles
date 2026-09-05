@@ -53,6 +53,8 @@ correctness depends on information not visible in the diff.
 On a UI diff, add one more lens: a palette, token system, or state set the
 contract never asked for is unrequested surface area.
 
+On added or modified lines, add one more lens: a comment restating the line it sits on, or a docstring longer than what it documents.
+
 ## Reviewer output
 
 One line per finding:
