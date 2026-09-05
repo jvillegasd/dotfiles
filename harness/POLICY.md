@@ -36,13 +36,13 @@ One frontend design body is installed, `impeccable`. It carries no invocation gu
 | a bullet list of changes to work already in a pull request | `/feedback` |
 | "address the review comments", "CI is red on my PR" | `/address-review` |
 | "the PR merged", "clean this up", "close it out" | `/land` |
-| "merge it", "squash and merge", "ship it" on a reviewed pull request | `/squash-land` |
+| "merge it", "squash and merge" on a reviewed pull request | `/squash-land` |
 | "look into X", "is it true that" | `/research` |
 | "why does X happen", something broken or slow | `diagnosing-bugs` |
 | "prototype this", "spike it", requirements that will not settle on paper | `/proto` |
 | "mock up this ticket's frontend", a mockup for one ticket or spec | `/proto` |
 
-Routing carries the workflow's gates, not just its steps: `/spec` still asks once before publishing, and `/ship` still never merges. `/squash-land` is the only workflow that merges, and only because a human typed its name; never route into it from a request that did not ask for a merge.
+Routing carries the workflow's gates, not just its steps: `/spec` still asks once before publishing, and `/ship` still never merges. `/squash-land` is the only workflow that merges, and only because a human typed its name; never route into it from a request that did not ask for a merge. "Ship it" is a request to build, not to merge: it names `/ship`, and a merge has to be asked for in words that mean merging.
 
 Do not route when the request is conversational or a one-line lookup where the workflow costs more than the answer; that is what `/ask` is for. Do not route when two entries match and the choice changes the outcome. Name both and ask.
 
