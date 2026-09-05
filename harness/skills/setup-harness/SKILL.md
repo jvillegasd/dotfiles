@@ -8,9 +8,7 @@ metadata:
 
 # Setup Harness
 
-Explore the repository before writing. Reuse existing tracker, domain, and
-documentation conventions when they are unambiguous; ask only for choices that
-cannot be inferred safely.
+Explore the repository before writing. Reuse existing domain and documentation conventions when they are unambiguous; ask only for choices that cannot be inferred safely. The tracker mode is the exception: present it and ask, because a remote reveals where the code is hosted and not where the user wants contracts kept.
 
 Write `docs/agents/harness.json` with this stable shape:
 
@@ -73,16 +71,8 @@ For local markdown:
 
 Nothing creates labels in this mode, so the four mapped values are only the vocabulary the `Status:` line uses.
 
-1. Write `docs/agents/issue-tracker.md` as the compatibility contract for locked Matt skills. Identify local markdown, state that it needs no CLI and no network, and document the layout and how state is read:
-   - One directory per feature under `spec_home`, committed with the code: the spec at `<spec_home>/<feature-slug>/spec.md` and its slices at `<spec_home>/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` in dependency order, one ticket per file.
-   - A `Status:` line near the top of every ticket and of `spec.md`, carrying one mapped label value or `done`. `done` is terminal and means the work merged; it is what GitHub mode gets from closing an issue. `spec.md` is the parent, and it goes `done` only once every ticket in its `issues/` directory is `done`.
-   - A `Blocked by: NN, NN` line on every ticket, naming ticket numbers in the same feature directory, or `Blocked by: none`. Edges never cross feature directories. A ticket is unblocked once every ticket it names is `done`.
-   - A ticket id of `<feature-slug>-<NN>`, which is what a branch name and a pull request reference use, because `NN` alone repeats across features. A ticket's closing reference is its path; nothing closes it automatically.
-   - Conversation appended under a `## Comments` heading. A ticket is its body plus those comments.
-   - A ready frontier computed by scanning `<spec_home>` for tickets that are mapped `ready_for_agent` and unblocked, ordered by feature directory then number.
-
-   Do not tell the user to run a second setup skill.
-2. Copy no `.github/` workflow and no reconcile script, and state that this is deliberate rather than missing. The `Status:` and `Blocked by:` lines are the lifecycle state, and they live in the working tree, so there is no issue event for a workflow to react to. Reconciling them is a file edit a human reviews like any other change, which is what `/land` and `/squash-land` already do wherever the tracker is not GitHub.
+1. Write `docs/agents/issue-tracker.md` as the compatibility contract for locked Matt skills: identify local markdown, state that it needs no CLI and no network, name `spec_home` as the root, and point at the `local-tracker` skill for the layout, the `Status:` and `Blocked by:` lines, the ticket id form, and the frontier scan. Restate none of it; one definition is what keeps the two from drifting. Do not tell the user to run a second setup skill.
+2. Copy no `.github/` workflow and no reconcile script, and state that this is deliberate rather than missing. The lifecycle state is committed lines in the working tree, so no issue event exists for a workflow to react to.
 3. Preserve unrelated documentation and configuration.
 
 For other trackers, record their native parent/dependency behavior in

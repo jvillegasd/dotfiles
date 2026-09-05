@@ -56,6 +56,7 @@ harness/
 │   ├── <locked>/               # pristine skills.sh-managed upstream bodies
 │   ├── setup-harness/          # config + GitHub lifecycle templates; local markdown copies none
 │   ├── grilling/               # the one interview protocol, interactive and self-grill
+│   ├── local-tracker/          # tracker operations when the tracker is committed files
 │   └── adversarial-review|evidence/  # protocols the delivery commands load
 └── bench/                      # session-population comparison for harness changes, with its own README
 ```

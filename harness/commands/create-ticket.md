@@ -20,7 +20,7 @@ Require `docs/agents/harness.json`. There are two input routes:
 
 1. Work from the conversation. If the input names a spec path, an issue number, or a URL, fetch it and read its full body and comments.
 
-2. Search the tracker for prior art before drafting anything: run its issue listing with the spec's key terms and surface every hit in the draft. Where the tracker has no issue listing, as in local markdown mode, grep `<spec_home>` for the same terms. Duplicate detection is evidence, and it is the cheapest way to avoid filing something already reported, already fixed, or explicitly rejected.
+2. Search the tracker for prior art before drafting anything: run its issue listing with the spec's key terms and surface every hit in the draft. Where the tracker has no issue listing, grep its ticket surface for the same terms. Duplicate detection is evidence, and it is the cheapest way to avoid filing something already reported, already fixed, or explicitly rejected.
 
 3. Explore the codebase if you have not already. Ticket titles and descriptions use the project's glossary vocabulary and respect the ADRs in the area being touched. Look for prefactoring that makes the implementation easier: make the change easy, then make the easy change.
 
@@ -45,9 +45,9 @@ Wide refactors are the exception to vertical slicing. A wide refactor is one mec
 
 On GitHub, create every ticket as a native sub-issue of the parent and create native `blocked-by` edges. For an implementation-ready ticket, apply mapped `blocked` while blockers remain; otherwise apply mapped `ready_for_agent`. Leave a planning-only research ticket without a lifecycle label until planning supplies its missing contract fields. Remove both frontier labels from the parent while its children are active. Never close or modify the parent's own body.
 
-For another tracker, use its native relationships where available and record textual edges otherwise. Automatic parent closure is GitHub-only. Where a tracker has no ticket surface at all, write the tickets as files under `<spec_home>` in the layout below.
+For another tracker, use its native relationships where available and record textual edges otherwise. Automatic parent closure is GitHub-only. Where a tracker has no ticket surface at all, write the tickets as files: under `<spec_home>` when that value is a repository path, and under `docs/specs/` when it names an issue surface instead.
 
-In local markdown mode, write one file per ticket at `<spec_home>/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` in dependency order, one ticket per file, beside the spec `/spec` published at `<spec_home>/<feature-slug>/spec.md`. Replace the template's `## Blocked by` section with two lines near the top: a `Status:` line carrying the same mapped value the GitHub branch would apply as a label, and a `Blocked by: NN, NN` line naming ticket numbers in the same feature directory, or `Blocked by: none`. `docs/agents/issue-tracker.md` holds the full layout.
+In local markdown mode, load the `local-tracker` skill and follow it. It replaces the template's `## Blocked by` section with the `Status:` and `Blocked by:` lines it specifies.
 
 6. Return the ticket DAG and the current ready frontier.
 
