@@ -40,7 +40,7 @@ macos.sh / linux.sh       # platform bootstrap
 lib/common.sh             # symlinking, harness call, nvim bootstrap, shared
 lib/python.sh             # uv-managed interpreter set, shared with harness/install.sh
 Brewfile                  # macOS package manifest
-harness/                  # portable three-client policy, commands, skills, installer, tests
+harness/                  # portable three-client policy, commands, skills, installer
 skills-lock.json          # reviewed standalone third-party skill lock
 .agents/skills            # symlink to the canonical harness/skills
 .claude/skills            # skills.sh/Claude bookkeeping symlinks
