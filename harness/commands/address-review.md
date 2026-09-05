@@ -17,7 +17,7 @@ Resolve the effective input:
 - Otherwise use the latest unambiguous pull request in the conversation; failing that, resolve the current branch's pull request with `gh pr view`.
 - Ask only when no pull request resolves, or when a load-bearing decision is ambiguous. Preserve settled decisions and do not reopen completed scope.
 
-Load and follow the `ponytail` skill for every code change: the laziest solution that works, root cause over symptom, no over-engineering.
+Load and follow the `ponytail` skill for every code change.
 
 1. Resolve the implementation contract from the pull request body. Prefer the inline `## Contract` when present; otherwise fall back to the ticket from its closing reference. If neither exists, continue in legacy mode and report that contract conformance cannot be reconstructed rather than blocking review or CI repair. Locate and reuse the pull request's existing Orca worktree when running inside Orca; otherwise read its `headRefName` with `gh pr view`, find that exact branch in `wt list --format=json`, and switch to it with `wt switch <branch> --no-cd --format=json --yes`. Escalate if the retained worktree is missing. Do not use the `pr:<number>` shortcut here, because Worktrunk creates a worktree when none exists.
 
