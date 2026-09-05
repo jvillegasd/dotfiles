@@ -27,7 +27,7 @@ One directory per feature under `spec_home`, committed with the code:
 
 ## State
 
-Two lines precede the `## Type` heading in every ticket, and a `Status:` line precedes the first heading of `spec.md`:
+Two lines precede the `## Type` heading in every implementation-ready ticket, and a `Status:` line precedes the first heading of `spec.md`:
 
 ```
 Status: ready-for-agent
@@ -36,7 +36,7 @@ Blocked by: 01, 03
 
 `Status:` carries one mapped label value from `harness.json` or the literal `done`. `done` is terminal and means the ticket's pull request merged; it is what GitHub mode gets from closing an issue, and without it nothing ever leaves the frontier. `Blocked by:` names ticket numbers in the same feature directory, or `none`. Edges never cross feature directories; a dependency on another feature is recorded in prose, not as an edge this scan reads.
 
-`spec.md` is the parent. It carries `Status: in-progress` from publication and goes `done` once every ticket in its `issues/` directory that carries a `Status:` line is `done`.
+`spec.md` is the parent. It carries `Status: in-progress` from publication and goes `done` only once every file in its `issues/` directory is `done`. A ticket still carrying no `Status:` line blocks parent closure and is reported as blocking it, the same way GitHub mode refuses to close a parent whose child lacks merge evidence.
 
 A planning-only ticket, one lacking `Acceptance criteria` or `Test seams and checks`, carries no `Status:` line at all. That absence keeps it out of the frontier and out of the parent's closure test, matching the GitHub branch leaving such a ticket unlabelled. Whatever later supplies its missing contract fields, native plan mode or `/spec`, adds the first `Status:` line in the same change.
 
@@ -56,13 +56,17 @@ Duplicate detection has no issue listing to run. Grep `<spec_home>` for the spec
 
 A tracker is useful because everyone sees the same state. A file only has that property once it is on the default branch, and `/ship` builds its worktree from `origin/<default>`, so a ticket that lives only on a feature branch is invisible to the next run and absent from the tree that has to edit it.
 
-So every operation below is a commit on the default branch, fetched and fast-forwarded first, then pushed. These are bookkeeping commits, never implementation, which is what keeps them inside the policy's prohibition on committing implementation to the default branch. Where the default branch is protected, the same edit goes through a bookkeeping pull request instead; say which route you took.
+So every operation below is a commit on the default branch, fetched and fast-forwarded first, then pushed. These are bookkeeping commits, never implementation. This mode depends on the policy's default-branch bookkeeping exception covering them; that clause today names only the post-merge bookkeeping in `/land` and `/squash-land`, and widening it to tracker bookkeeping is a policy change this mode requires and does not itself make.
+
+Never reach the default branch by checking it out. A command that has created a worktree is standing on the feature branch, where `git checkout <default>` exits 128. Resolve the default branch's own worktree with `git worktree list`, take the entry whose branch is `<default>`, and run every tracker edit, commit, and push with `git -C <that path>`.
+
+Where the default branch is protected, stop and escalate under the escalation contract. Do not open a pull request for the bookkeeping: `/ship` never merges, so it would never land, and a second pull request for the same line of work is exactly what the policy forbids.
 
 - **`/spec` publishes.** Write `spec.md` with `Status: in-progress`. Commit as `docs(tracker): publish <feature-slug>`.
 - **`/create-ticket` publishes.** Write every ticket file with its `Status:` and `Blocked by:` lines already correct: mapped `blocked` while blockers remain, otherwise mapped `ready_for_agent`. Commit as `docs(tracker): slice <feature-slug>`. This has to land before any `/ship` run, which is the whole reason publication is not deferred to a branch.
-- **`/ship` claims, at its worktree step.** Set the ticket to mapped `in_progress`. Without this on the default branch two runs claim the same ticket and neither sees the other. Commit as `chore(tracker): claim <feature-slug>-<NN>`.
+- **`/ship` claims, at its worktree step.** Re-read the ticket on freshly fetched `origin/<default>` first and abort the run if its `Status:` is no longer mapped `ready_for_agent`, because another run claimed it between the frontier scan and here. Otherwise set it to mapped `in_progress` and commit as `chore(tracker): claim <feature-slug>-<NN>`. On the default branch this is what makes the claim visible to that other run at all.
 - **`/ship` finishes, when it marks the pull request ready.** Set the ticket to mapped `ready_for_human`. This lands on the default branch, so it adds no commit to the pull request and re-triggers none of its checks; rung 5 stays green.
-- **`/land` and `/squash-land` retire.** After the merge, set the ticket to `done`, set every dependent whose blockers are now all `done` to mapped `ready_for_agent`, and set `spec.md` to `done` if every sibling with a `Status:` line is now `done`. Commit as `chore(tracker): close <feature-slug>-<NN>`. Do this only after the local default branch has been fast-forwarded past the merge, and before the worktree is retired: in `/squash-land` that means after its fetch-and-fast-forward step, not before it, or the push is rejected as non-fast-forward.
+- **`/land` and `/squash-land` retire.** After the merge, set the ticket to `done`, set every dependent whose blockers are now all `done` to mapped `ready_for_agent`, and set `spec.md` to `done` if every sibling with a `Status:` line is now `done`. Commit as `chore(tracker): close <feature-slug>-<NN>`. Do this only after the local default branch has been fast-forwarded past the merge, and before the worktree is retired; committing on a default branch still behind the merge gets the push rejected as non-fast-forward.
 
 Because every one of these is a separate commit on the default branch, none of them appears in a pull request's diff. The review passes and the conformance pass therefore see no bookkeeping and need no path exclusion; a pull request that genuinely contracts to edit a spec or ticket file is reviewed like any other.
 

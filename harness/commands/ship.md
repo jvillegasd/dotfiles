@@ -43,7 +43,7 @@ Inspect `git status --short` before creating anything. A worktree holding pre-ex
 2. For any other contract, derive `<type>/<tracker-id>-<short-slug>` when tracker-bound, or `<type>/<short-slug>` otherwise.
 3. For any other contract inside Orca, use the runtime-provided Orca CLI guide and create an Orca worktree from the updated remote default branch. Never guess Orca commands.
 4. For any other contract outside Orca, run Worktrunk non-interactively: `wt switch --create <branch> --base origin/<default> --no-cd --format=json --yes`, then work only in the returned path.
-5. When tracker-bound, change the ticket from mapped `ready_for_agent` to mapped `in_progress`. Skip this step for trackerless work. Where the tracker is local markdown, load the `local-tracker` skill: the transition is a committed file edit, and it says which commit carries it and how the review passes exclude it.
+5. When tracker-bound, change the ticket from mapped `ready_for_agent` to mapped `in_progress`. Skip this step for trackerless work. Where the tracker is local markdown, load the `local-tracker` skill: the transition is a bookkeeping commit on the default branch, so it never enters this pull request's diff.
 
 ## Delivery loop
 
