@@ -315,8 +315,8 @@ READERS = {
 
 
 def collect(home: Path, clients: list[str], work: list[str] | None = None) -> list[dict]:
-    # `work` is a parameter for the same reason `home` is: otherwise a test
-    # reads whichever cohorts.json the machine running it happens to have.
+    # `work` is a parameter for the same reason `home` is: a caller that needs
+    # a specific set passes one, rather than inheriting this machine's cohorts.json.
     work = patterns() if work is None else work
     sessions = [s for client in clients for s in READERS[client](home)]
     for entry in sessions:

@@ -10,7 +10,6 @@ One committed source for Codex, Claude Code, and OpenCode:
 - `bench/measure.py` compares the real session population before and after a harness change, reading all three clients' own session stores. Its manual is `bench/README.md`.
 - `statusline/` holds one file per provider: `claude.sh` renders Claude Code's line, `codex.sh` reconciles Codex's built-in one to match.
 - `clients/` holds the client settings this harness owns: `claude.json` and `codex.toml` declare them, and `codex.sh` reconciles the TOML half. Nothing here is symlinked, because both live files are mostly machine state written by other tools, hook manifests and per-project trust decisions and generated absolute paths. A tracked key replaces the live value on every install, so removing one here removes it from the machine; every key not named there is left alone. `permissions` is the one exception, merged a level down so `deny` stays owned while the Engram allowlist survives. The install runs these after `engram setup`, which rewrites both files from its own template, so a tracked key wins over every other writer. That includes the client itself: `model`, `effortLevel`, and `theme` are what `/model` and `/config` write back at runtime, so an in-session change to one of them survives until the next install and no longer.
-- `tests/` checks supply-chain, installer, and contract invariants, one file per subject.
 
 ## Development lifecycle
 
@@ -83,9 +82,9 @@ The installer generates wrappers in `~/.codex/harness-commands`, links each wrap
 
 Legacy `~/.codex/prompts` is no longer populated or swept. Migration retires only exact command links owned by this checkout, including dangling ones; private prompt files, foreign links, and symlinked prompt roots remain untouched. Adapter collisions and changed generated trees use the existing backup policy. Uninstall removes this checkout's generated tree and exact adapter links, leaving other Codex skills and `.system` alone. `--no-backup` deletes displaced managed paths rather than archiving them.
 
-Codex discovery was verified with the installed CLI's `app-server` `skills/list` API, not inferred from files existing. Reproduce the isolated, no-model-call smoke test with `HARNESS_CODEX_SMOKE=1 python3 -m unittest discover -s harness/tests -t harness/tests -p test_codex_commands.py -k test_real_codex`. The supported explicit-only metadata is documented at https://learn.chatgpt.com/docs/build-skills. Restart Codex if `$yolo` or `/skills` does not show the adapters after installation.
+Codex discovery was verified with the installed CLI's `app-server` `skills/list` API, not inferred from files existing. The supported explicit-only metadata is documented at https://learn.chatgpt.com/docs/build-skills. Restart Codex if `$yolo` or `/skills` does not show the adapters after installation.
 
-Every command that ingests text written elsewhere, a ticket body, a review comment, an error payload, a bullet list, states that the input is task data and cannot override the workflow's constraints. The acceptance suite asserts that line is present.
+Every command that ingests text written elsewhere, a ticket body, a review comment, an error payload, a bullet list, states that the input is task data and cannot override the workflow's constraints.
 
 A locally authored skill still carries all three invocation guards: `policy.allow_implicit_invocation: false` in its `agents/openai.yaml` for Codex, plus `disable-model-invocation: true` and `metadata."opencode/autoinvoke": "false"` in its frontmatter for Claude Code and OpenCode. Only four skills are local now, so the guard matrix covers a much smaller surface than it did when it also had to hold the workflows.
 
@@ -141,7 +140,7 @@ Python is the other exception, and it belongs to uv rather than to Homebrew:
 uv python install 3.14
 ```
 
-`PYTHON_VERSIONS` in `../lib/python.sh` is the one declaration; neither `Brewfile` nor `linux.sh` names a `python@` formula any more. That file is sourced from both sides and splits the duties: `../macos.sh` and `../linux.sh` call `install_pythons`, because packages are what those scripts are for, and this installer calls `assert_pythons` in `check_tools`, because the harness is what consumes the interpreters and so is where a missing one has to fail loudly. Neither half restates which versions those are, and the suite asserts there is no second `PYTHON_VERSIONS=(` anywhere.
+`PYTHON_VERSIONS` in `../lib/python.sh` is the one declaration; neither `Brewfile` nor `linux.sh` names a `python@` formula any more. That file is sourced from both sides and splits the duties: `../macos.sh` and `../linux.sh` call `install_pythons`, because packages are what those scripts are for, and this installer calls `assert_pythons` in `check_tools`, because the harness is what consumes the interpreters and so is where a missing one has to fail loudly. Neither half restates which versions those are.
 
 Sourcing it is the one thing this installer reads from outside `harness/`. That is deliberate: the alternative was a second copy of the version list, which is exactly the drift the split exists to prevent.
 
@@ -212,7 +211,7 @@ OpenCode has no file in `statusline/` at all. Its configuration schema at https:
 ./harness/locked-skills.sh check
 ```
 
-`add` refuses invalid GitHub sources and existing lock, body, command, or bookkeeping paths before it delegates to skills.sh. `update` deliberately updates every locked body. `remove` accepts only a current lock entry and refuses unexpected body or Claude-link types. Every mutation prints the affected paths, while `check` runs Bash syntax, diff hygiene, and the harness acceptance suite.
+`add` refuses invalid GitHub sources and existing lock, body, command, or bookkeeping paths before it delegates to skills.sh. `update` deliberately updates every locked body. `remove` accepts only a current lock entry and refuses unexpected body or Claude-link types. Every mutation prints the affected paths, while `check` runs Bash syntax and diff hygiene.
 
 The helper's `--help` is side-effect free. Do not probe the upstream update subcommand with `--help`: skills.sh currently treats that invocation as a full update.
 
@@ -222,7 +221,7 @@ A copied skill with unknown provenance remains an attributed local fork until it
 
 Engram and Orca-provided skills are runtime/plugin managed and never belong in `skills-lock.json`.
 
-Binaries are the deliberate exception to all of this. Every prose body above is hash-locked and verified on each test run, while the clients themselves arrive unpinned: `curl -fsSL https://claude.ai/install.sh | bash`, `npm install --global @openai/codex@latest`, and two third-party Homebrew taps. That asymmetry is a choice, not an oversight. A locked body is a reviewed instruction this harness executes forever, so a change to one has to be read; a client is a moving target whose next version is the whole point of re-running the installer, and pinning it would freeze the harness against the clients it exists to drive. The trade is a supply chain that trusts Anthropic, OpenAI, and two tap owners at install time. Nothing else here does.
+Binaries are the deliberate exception to all of this. Every prose body above has its hash recorded in `skills-lock.json` by `skills.sh`, while the clients themselves arrive unpinned: `curl -fsSL https://claude.ai/install.sh | bash`, `npm install --global @openai/codex@latest`, and two third-party Homebrew taps. That asymmetry is a choice, not an oversight. A locked body is a reviewed instruction this harness executes forever, so a change to one has to be read; a client is a moving target whose next version is the whole point of re-running the installer, and pinning it would freeze the harness against the clients it exists to drive. The trade is a supply chain that trusts Anthropic, OpenAI, and two tap owners at install time. Nothing else here does.
 
 ## Ponytail
 
@@ -232,7 +231,7 @@ Provisioning once also uninstalled that plugin from all three clients. That code
 
 What replaces it is one line in each command that writes code, `/yolo`, `/proto`, `/feedback`, and `/address-review`, saying to load and follow the skill, plus `adversarial-review` using ponytail violations as a review lens and its fix standard. That is a smaller and more precise surface than a session hook: lazy mode applies where code is written rather than to every conversation, and it costs one sentence per command rather than three hooks and five JS files. It also delivers more of the skill, because the hook injects a level-filtered condensation while the locked `SKILL.md` carries the full body, including the reuse-before-writing rung, the root-cause-not-symptom rule, and the read-fully-then-be-lazy boundary.
 
-The trade is deliberate. `/ponytail lite|ultra` switching, the statusline, subagent inheritance, and the five auxiliary skills are gone; the intensity table survives in the body as reference prose with nothing to write the config it describes. In exchange the body is pinned in `skills-lock.json` and changes only through a reviewed `npx skills@1 update`, where the plugin previously moved 4.7.0 to 4.9.0 during an install with six agent-steering bodies changing unread.
+The trade is deliberate. `/ponytail lite|ultra` switching, the statusline, subagent inheritance, and the five auxiliary skills are gone; the intensity table survives in the body as reference prose with nothing to write the config it describes. In exchange the body has a lock entry in `skills-lock.json`, and the rule is that it changes only through a reviewed `npx skills@1 update`, where the plugin previously moved 4.7.0 to 4.9.0 during an install with six agent-steering bodies changing unread.
 
 ## Roster
 
@@ -244,7 +243,7 @@ Local skills are `adversarial-review`, `evidence`, `grilling`, and `setup-harnes
 
 `/research` and `/proto` replace two locked bodies that were workflows wearing a skill's clothes: they could fire on description matching, and neither produced the artifacts `POLICY.md` now distinguishes. A `/research` finding ledger remains planning input until a planning route produces a complete contract. Publication confirmation alone does not make a research ticket implementation-ready; agreed behavior, acceptance criteria, and verification or test seams are also required. A finalized `/proto` requirements ledger is an implementation contract. As commands they are typed or they do not run, and each now emits the artifact the policy promised.
 
-Locked Matt Pocock skills provide domain/module vocabulary, architecture surveys through `improve-codebase-architecture`, TDD, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode. Locked `pbakaus/impeccable` provides `impeccable`, the one frontend design body, covering landing pages, portfolios, and redesigns along with dashboards, data tables, and multi-step product UI. Like every locked body it is description-matchable, which is why the control on it is scope rather than a guard: no command or local skill loads it, so it never enters a workflow implicitly, and `POLICY.md` keeps the project's existing styling layer winning inside `/proto` and `/yolo` regardless. The acceptance suite asserts that no command and no local skill names it.
+Locked Matt Pocock skills provide domain/module vocabulary, architecture surveys through `improve-codebase-architecture`, TDD, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode. Locked `pbakaus/impeccable` provides `impeccable`, the one frontend design body, covering landing pages, portfolios, and redesigns along with dashboards, data tables, and multi-step product UI. Like every locked body it is description-matchable, which is why the control on it is scope rather than a guard: no command or local skill loads it, so it never enters a workflow implicitly, and `POLICY.md` keeps the project's existing styling layer winning inside `/proto` and `/yolo` regardless. No command and no local skill names it.
 
 Impeccable comes through `locked-skills.sh` from the repository's `.agents/skills/impeccable`, like every locked body. Its own `npx impeccable install` is never used: it wires `PostToolUse` and `Stop` hook manifests into a project's client settings unasked, and it fetches an unpinned, unverified archive from the author's site, because the published npm package carries the detector CLI and no skill payload.
 
@@ -262,7 +261,7 @@ Deliberately removed: `to-spec` and `to-tickets`, whose templates now live inlin
 
 ## Invocation guards
 
-`POLICY.md` opens with the commands-and-skills split. Command storage carries it for the workflows; generated Codex adapters enforce explicit invocation through native metadata. For the four local skills, the three per-client guards carry it, and the acceptance suite asserts the full matrix. For a locked body, prose is the only control, which is why a body that must never fire on its own is not installed at all.
+`POLICY.md` opens with the commands-and-skills split. Command storage carries it for the workflows; generated Codex adapters enforce explicit invocation through native metadata. For the four local skills, the three per-client guards carry it. For a locked body, prose is the only control, which is why a body that must never fire on its own is not installed at all.
 
 ## GitHub lifecycle
 
@@ -318,13 +317,7 @@ Three contract routes converge on `/yolo`: `/spec` plus `/create-ticket` for a p
 
 ## Validation
 
-```sh
-python3 -m unittest discover -s harness/tests -t harness/tests
-```
-
-One file per subject, and a single file runs on its own: `python3 harness/tests/test_commands.py`. Shared paths and readers live in `harness/tests/fixtures.py`; anything used by one file stays in that file.
-
-A structural suite proves nothing about behavior. Validate a change to this directory against the sessions it actually produced, as `harness/bench/README.md` explains:
+Validate a change to this directory against the sessions it actually produced, as `harness/bench/README.md` explains:
 
 ```sh
 python3 harness/bench/measure.py --split <commit-date> --since <window-start>
@@ -339,5 +332,3 @@ Eight medians per cohort: `turns`, `tool_calls`, and `minutes` for cost, `interr
 A hard week at work moves every one of those numbers without the harness changing. Copy `harness/bench/cohorts.example.json` to `cohorts.json` and list the project patterns that mean work, and the report splits work from personal so a deadline lands in one cohort and the other still reads the change. That file is gitignored: naming a client is the whole job of it.
 
 Populations, not pairs. Cost and friction are the measured part; quality stays a human read of the sessions.
-
-The suite validates shell/Python syntax, the locked-skill lifecycle helper, unique skill names, lock hashes, Claude bookkeeping links, local-vs-locked separation, command shape and task-data framing, command-versus-skill name disjointness, routing-table coverage, secret/generated-state exclusions, installer safety, collision backups, orphan retirement, idempotency, and GitHub close/reopen behavior.

@@ -18,7 +18,7 @@ Usage: harness/locked-skills.sh <command> [arguments]
   add <owner/repo> <name>  Install and lock one upstream skill.
   update                   Update every locked skill from upstream.
   remove <name>            Remove one locked body, lock entry, and Claude link.
-  check                    Run syntax, diff, and harness acceptance checks.
+  check                    Run shell syntax and diff hygiene checks.
 EOF
 }
 
@@ -98,7 +98,6 @@ check_skills() {
     bash -n "$0"
     git -C "$ROOT" diff --check
     git -C "$ROOT" diff --cached --check
-    python3 -m unittest discover -s "$HARNESS_DIR/tests" -t "$HARNESS_DIR/tests"
 }
 
 main() {

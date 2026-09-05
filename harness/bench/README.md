@@ -15,7 +15,7 @@ python3 harness/bench/measure.py --split <commit-date> --since <window-start>
 | `--split` | Required. Commit date of the change under test, `YYYY-MM-DD`. Sessions before it are `before`, on or after it `after`. |
 | `--since` | Ignore sessions older than this. Cuts off a period whose harness bears no resemblance to today's. |
 | `--client` | Limit to `claude`, `codex`, or `opencode`. Repeatable. |
-| `--home` | Session-store root. Defaults to the current home; the tests point it at a fixture. |
+| `--home` | Session-store root. Defaults to the current home; point it at any directory laid out like a home to read a captured or another machine's session stores. |
 | `--rows` | One JSON object per session instead of the report, honouring `--since`, for the distribution behind a median. |
 
 ## Metrics
