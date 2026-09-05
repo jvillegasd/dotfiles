@@ -36,7 +36,7 @@ Stop when the design either survives, in which case say so and name what would s
 
 ## Mode: self-grill
 
-No human in the loop. Use this when a workflow needs its own approach pressure-tested and serial human grilling would be the bottleneck: `/yolo` on a load-bearing ambiguity that survives a repository search, and `/triage` before it escalates.
+No human in the loop. Use this when a workflow needs its own approach pressure-tested and serial human grilling would be the bottleneck: `/ship` on a load-bearing ambiguity that survives a repository search, and `/triage` before it escalates.
 
 1. **List the assumptions** the approach depends on, ranked by consequence.
 2. **Resolve what you can**, in this order: search the repository for precedent; check history for whether this was tried before; load and follow the `evidence` skill for any claim about runtime behavior, impact, or frequency. Most open questions die here, because they were answerable and nobody looked.

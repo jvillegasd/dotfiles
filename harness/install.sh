@@ -380,7 +380,9 @@ import pathlib, re, sys
 rc, source = pathlib.Path(sys.argv[1]), sys.argv[2]
 remove = sys.argv[3] == "remove"
 marker = "# portable-harness aliases"
-managed = {"ccyolo", "cyolo", "oyolo"}
+# oyolo is retired, not current: a name stays here after it is dropped so a
+# hand-written copy is still stripped from the shell that has one.
+managed = {"ccyolo", "cyolo", "oyolo", "ocyolo"}
 current = rc.read_text()
 kept, dropped = [], False
 for line in current.splitlines():
@@ -766,11 +768,10 @@ check_links() {
             [[ -L "$root/$(basename "$command")" ]] || die "Missing command link: $root/$(basename "$command")"
         done
         grep -q '^description:' "$command" || die "Command without a description: $command"
-    done
-    # A workflow that reads external text says so, or a ticket body becomes an
-    # instruction.
-    for command in address-review create-ticket feedback land proto research triage yolo; do
-        grep -q 'cannot override this workflow' "$HARNESS_DIR/commands/$command.md" ||
+        # A workflow that reads external text says so, or a ticket body becomes
+        # an instruction. Every command is checked, because a list to maintain
+        # is a list that silently stops covering a new command.
+        grep -q 'cannot override this workflow' "$command" ||
             die "Command missing the task-data constraint: $command"
     done
     [[ "$(readlink "$HOME/.codex/AGENTS.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing Codex policy link."
@@ -851,7 +852,7 @@ so it gets none.
 
 Commands use /name in Claude Code and OpenCode, and \$name in Codex.
 Codex adapters are in ~/.codex/skills; legacy /prompts:name is not used.
-Yolo aliases (ccyolo, cyolo, oyolo) are sourced from harness/aliases.sh; open a
+Yolo aliases (ccyolo, cyolo, ocyolo) are sourced from harness/aliases.sh; open a
 new shell or run: source ~/.zshrc
 
 Standalone third-party skills were not downloaded or updated. Their committed
@@ -1157,7 +1158,7 @@ check_removed() {
     done
     if [[ -f "$HOME/.zshrc" ]]; then
         ! grep -q '# portable-harness aliases' "$HOME/.zshrc" || die "Harness aliases survived the uninstall in $HOME/.zshrc."
-        ! grep -qE '^\s*alias (ccyolo|cyolo|oyolo)=' "$HOME/.zshrc" || die "A yolo alias survived the uninstall in $HOME/.zshrc."
+        ! grep -qE '^\s*alias (ccyolo|cyolo|oyolo|ocyolo)=' "$HOME/.zshrc" || die "A yolo alias survived the uninstall in $HOME/.zshrc."
     fi
     # Every tracked key is gone from the live settings, and the untracked keys
     # beside them are not. Asserted by re-running the remover, where only exit

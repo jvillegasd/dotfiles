@@ -3,7 +3,7 @@ description: Apply bullet-list feedback to the branch of an open pull request, i
 argument-hint: "[bullet list of changes]"
 ---
 
-Apply a bullet list reviewing work already pushed by `/yolo`, usually typed while the human is testing the branch. This updates that branch. It never creates a second branch or pull request, and it never posts to the forge.
+Apply a bullet list reviewing work already pushed by `/ship`, usually typed while the human is testing the branch. This updates that branch. It never creates a second branch or pull request, and it never posts to the forge.
 
 <user_input>
 $ARGUMENTS

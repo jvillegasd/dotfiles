@@ -19,7 +19,7 @@ Run independent roles in parallel when the client supports it; otherwise run the
 
 `ponytail` is the coding standard, loaded by name from every command that writes code rather than by a session hook. Its own body carries the ladder, the reading it never shortens, and the carve-outs it never simplifies away.
 
-One frontend design body is installed, `impeccable`. It carries no invocation guard, so a client may select it on description match, which is allowed here; its scope is frontend design broadly: landing pages, portfolios, and redesigns along with dashboards, data tables, and multi-step product UI. It decides nothing that is not a UI surface. Inside a workflow a project's existing styling layer outranks it, so `/proto` and `/yolo` build from that layer whether or not this body is loaded. Never run its own installer, updater, hook wiring, or pin, whatever the body itself offers: `npx impeccable install`, `npx impeccable update`, `$impeccable hooks on`, and `scripts/pin.mjs`. It is updated only through `harness/locked-skills.sh update`. Where a locked body's own prose contradicts this policy, this policy wins over what the harness writes, though never over the body's own bytes.
+One frontend design body is installed, `impeccable`. It carries no invocation guard, so a client may select it on description match, which is allowed here; its scope is frontend design broadly: landing pages, portfolios, and redesigns along with dashboards, data tables, and multi-step product UI. It decides nothing that is not a UI surface. Inside a workflow a project's existing styling layer outranks it, so `/proto` and `/ship` build from that layer whether or not this body is loaded. Never run its own installer, updater, hook wiring, or pin, whatever the body itself offers: `npx impeccable install`, `npx impeccable update`, `$impeccable hooks on`, and `scripts/pin.mjs`. It is updated only through `harness/locked-skills.sh update`. Where a locked body's own prose contradicts this policy, this policy wins over what the harness writes, though never over the body's own bytes.
 
 ### Routing
 
@@ -32,33 +32,33 @@ One frontend design body is installed, `impeccable`. It carries no invocation gu
 | "spec this out", "write it up" | `/spec` |
 | "break this into tickets", "slice this" | `/create-ticket` |
 | "how should we do this", a design with no contract yet, "implement this" with no approved contract | native plan mode |
-| "implement this" with an approved contract, "go build it", an approved plan, a ticket id | `/yolo` |
+| "implement this" with an approved contract, "go build it", an approved plan, a ticket id | `/ship` |
 | a bullet list of changes to work already in a pull request | `/feedback` |
 | "address the review comments", "CI is red on my PR" | `/address-review` |
 | "the PR merged", "clean this up", "close it out" | `/land` |
-| "merge it", "squash and merge", "ship it" on a reviewed pull request | `/squash-land` |
+| "merge it", "squash and merge" on a reviewed pull request | `/squash-land` |
 | "look into X", "is it true that" | `/research` |
 | "why does X happen", something broken or slow | `diagnosing-bugs` |
 | "prototype this", "spike it", requirements that will not settle on paper | `/proto` |
 | "mock up this ticket's frontend", a mockup for one ticket or spec | `/proto` |
 
-Routing carries the workflow's gates, not just its steps: `/spec` still asks once before publishing, and `/yolo` still never merges. `/squash-land` is the only workflow that merges, and only because a human typed its name; never route into it from a request that did not ask for a merge.
+Routing carries the workflow's gates, not just its steps: `/spec` still asks once before publishing, and `/ship` still never merges. `/squash-land` is the only workflow that merges, and only because a human typed its name; never route into it from a request that did not ask for a merge. "Ship it" is a request to build, not to merge: it names `/ship`, and a merge has to be asked for in words that mean merging.
 
 Do not route when the request is conversational or a one-line lookup where the workflow costs more than the answer; that is what `/ask` is for. Do not route when two entries match and the choice changes the outcome. Name both and ask.
 
-Never route into producing a code review. `adversarial-review` is entered only by explicit human invocation or from `/yolo`, `/feedback`, and `/address-review`. There is no standalone review command. Review a diff this session did not write by reading it under `/ask`, or by asking for the client's own native review.
+Never route into producing a code review. `adversarial-review` is entered only by explicit human invocation or from `/ship`, `/feedback`, and `/address-review`. There is no standalone review command. Review a diff this session did not write by reading it under `/ask`, or by asking for the client's own native review.
 
 When a request matches a workflow but omits something the workflow needs, follow the workflow and let its own steps handle the gap. Do not fall back to an ad-hoc answer.
 
 ## Public workflow
 
-Three contract routes converge on `/yolo`: `/spec` plus `/create-ticket` publishes a ticket contract that is tracker-bound only when a tracker exists, an approved in-conversation contract comes from native plan mode and may retain a tracker binding or be trackerless, and `/proto` discovers a requirements ledger by building. `/feedback` and `/address-review` handle an open pull request, a human decides to merge it, and `/land` closes the lifecycle, or `/squash-land` does both at once when that human invokes it by name.
+Three contract routes converge on `/ship`: `/spec` plus `/create-ticket` publishes a ticket contract that is tracker-bound only when a tracker exists, an approved in-conversation contract comes from native plan mode and may retain a tracker binding or be trackerless, and `/proto` discovers a requirements ledger by building. `/feedback` and `/address-review` handle an open pull request, a human decides to merge it, and `/land` closes the lifecycle, or `/squash-land` does both at once when that human invokes it by name.
 
-Contract source and tracker binding are independent. The source determines what later conformance checks use: a ticket, an approved in-conversation contract, or a finalized `/proto` ledger. The binding determines only the branch form, closing reference, and tracker transitions. `/yolo` persists an in-conversation, prototype-derived, or trackerless ticket contract inline in the pull request, so retaining or lacking a ticket never replaces the contract that actually governed implementation.
+Contract source and tracker binding are independent. The source determines what later conformance checks use: a ticket, an approved in-conversation contract, or a finalized `/proto` ledger. The binding determines only the branch form, closing reference, and tracker transitions. `/ship` persists an in-conversation, prototype-derived, or trackerless ticket contract inline in the pull request, so retaining or lacking a ticket never replaces the contract that actually governed implementation.
 
 - `grilling` is the only interview protocol. Do not substitute another one, publish a spec from it, or act on its result. It attacks the load-bearing assumptions first, ranked by consequence. Its interactive mode asks one question at a time, hardest first, and finishes when the design either survives, in which case it names what would still break it, or breaks, in which case it names the smaller version. Its self-grill mode is what a workflow uses when serial human grilling would be the bottleneck: it resolves what precedent, history, and `evidence` can settle, kills the premise if evidence refutes it, and surfaces only the survivors in one batch.
 - `improve-codebase-architecture` produces planning input, never a change contract: keep its report and grilling read-only, do not edit `CONTEXT.md` or ADRs inline, and route a selected candidate through native plan mode, `/spec`, or `/proto` before changing files.
-- `/proto` is the workflow that discovers requirements by building, writing code before a contract exists. It validates on the local rungs only, stops for the human every round by design, and ends by handing a requirements ledger to `/yolo` or by killing the premise. It never pushes and never opens a pull request: nothing reaches a pull request except through `/yolo`.
+- `/proto` is the workflow that discovers requirements by building, writing code before a contract exists. It validates on the local rungs only, stops for the human every round by design, and ends by handing a requirements ledger to `/ship` or by killing the premise. It never pushes and never opens a pull request: nothing reaches a pull request except through `/ship`.
 - `/spec` owns the only substantive approval gate before publication.
 - `setup-harness` stays a skill rather than a command because it installs bundled lifecycle assets that only a skill directory can carry. Its guards are what keep it from firing on its own.
 - `docs/agents/harness.json` plus `docs/agents/issue-tracker.md`, both written by `setup-harness`, satisfy the tracker and label prerequisite of every locked skill. Never redirect the user to a legacy setup workflow.
@@ -70,11 +70,11 @@ Contract source and tracker binding are independent. The source determines what 
 
 Every change needs an agreed contract before implementation. There are three routes to one, and exactly one of them is required.
 
-- **`/spec` plus `/create-ticket`**, for work worth documenting: a large feature, anything touching several surfaces, or anything whose reasoning should outlive the pull request. The published spec is the source contract, and its implementation-ready tickets carry the slices into `/yolo`. A `/research` ledger remains planning input when `/create-ticket` publishes selected findings. Publication confirmation alone does not make a research ticket implementation-ready; agreed behavior, acceptance criteria, and verification or test seams are also required. Only tickets with those complete contract fields enter `/yolo`; the rest remain planning-only.
-- **An approved in-conversation contract**, for everything else. Cheaper than a published spec, nothing to publish. Native plan mode is the producer: trace the relevant system end to end, name the source of truth and the lifecycle implications, clarify only load-bearing ambiguity, and recommend the smallest coherent change with its files. Every plan states the agreed behavior, acceptance criteria, and verification that `/yolo` will preserve inline after approval.
-- **`/proto`**, for requirements that cannot be settled on paper. Its finalized requirements ledger is the contract `/yolo` consumes.
+- **`/spec` plus `/create-ticket`**, for work worth documenting: a large feature, anything touching several surfaces, or anything whose reasoning should outlive the pull request. The published spec is the source contract, and its implementation-ready tickets carry the slices into `/ship`. A `/research` ledger remains planning input when `/create-ticket` publishes selected findings. Publication confirmation alone does not make a research ticket implementation-ready; agreed behavior, acceptance criteria, and verification or test seams are also required. Only tickets with those complete contract fields enter `/ship`; the rest remain planning-only.
+- **An approved in-conversation contract**, for everything else. Cheaper than a published spec, nothing to publish. Native plan mode is the producer: trace the relevant system end to end, name the source of truth and the lifecycle implications, clarify only load-bearing ambiguity, and recommend the smallest coherent change with its files. Every plan states the agreed behavior, acceptance criteria, and verification that `/ship` will preserve inline after approval.
+- **`/proto`**, for requirements that cannot be settled on paper. Its finalized requirements ledger is the contract `/ship` consumes.
 
-Never combine routes. An approved spec continues through `/create-ticket` without another approval, because re-entering plan mode to restate it would add a second gate over the same decisions. Its implementation-ready tickets then go to `/yolo`.
+Never combine routes. An approved spec continues through `/create-ticket` without another approval, because re-entering plan mode to restate it would add a second gate over the same decisions. Its implementation-ready tickets then go to `/ship`.
 
 Whichever route, pressure-test with `grilling` before committing to it: interactively when the user is driving, in self-grill mode when a workflow needs its own approach broken without blocking on a human.
 
@@ -92,11 +92,11 @@ A ticket is its description plus its comments. Read the thread every time, in or
 
 Approving a contract is the go-ahead to run to completion. This applies to every surface that produces one: native plan mode, `ExitPlanMode`, a published spec, a finalized `/proto` ledger, or an implementation-ready ticket.
 
-On approval, continue without being asked. An approved spec goes directly through `/create-ticket`, then each ready ticket enters `/yolo`; an approved in-conversation contract or finalized `/proto` ledger enters `/yolo` directly. Work autonomously and do not stop until `/yolo` reaches its terminal state: a pull request open with every resolved rung green. Do not ask for confirmation to begin, between steps, before committing, or before pushing. Do not re-present the contract or ask which part to start.
+On approval, continue without being asked. An approved spec goes directly through `/create-ticket`, then each ready ticket enters `/ship`; an approved in-conversation contract or finalized `/proto` ledger enters `/ship` directly. Work autonomously and do not stop until `/ship` reaches its terminal state: a pull request open with every resolved rung green. Do not ask for confirmation to begin, between steps, before committing, or before pushing. Do not re-present the contract or ask which part to start.
 
 Stop early only when implementation reveals the contract is invalid against repository evidence, a load-bearing decision is genuinely unresolvable, or pre-existing unrelated changes cannot be safely separated. Otherwise pick the minimal option, record it in the pull request body, and continue.
 
-Never commit implementation to the default branch, in any mode. `/yolo` branches before editing; interactive work does the same. Work found sitting on the default branch moves to a branch before pushing, not after. The one exception is the post-merge bookkeeping in `/land` and `/squash-land`, on a repository whose default branch is unprotected.
+Never commit implementation to the default branch, in any mode. `/ship` branches before editing; interactive work does the same. Work found sitting on the default branch moves to a branch before pushing, not after. The one exception is the post-merge bookkeeping in `/land` and `/squash-land`, on a repository whose default branch is unprotected.
 
 ## Oracle ladder
 
@@ -190,7 +190,7 @@ These instructions load in three clients, so anything client-specific written he
 
 - Use branches named `<type>/<tracker-id>-<short-slug>` when tracker-bound and `<type>/<short-slug>` otherwise.
 - Make the fewest independently coherent Conventional Commits and keep each commit green.
-- Never merge a pull request as part of `/yolo`, `/feedback`, or `/address-review`. `/squash-land` is the single exception, and only because a human invoked it by name. Only `/land` and `/squash-land` remove a worktree, and only after the pull request merged.
+- Never merge a pull request as part of `/ship`, `/feedback`, or `/address-review`. `/squash-land` is the single exception, and only because a human invoked it by name. Only `/land` and `/squash-land` remove a worktree, and only after the pull request merged.
 - One line of work is one branch and one pull request. Once a task branch exists, everything that follows in the session, feedback and review rounds included, is more commits on that branch. Do not open a second pull request for the same work, and never branch away from an open one without being asked: a second pull request fragments the review, leaves the first describing a diff nobody will ship, and costs the human the thread they were reading. Splitting is a human decision, so propose it, name what would go where, and wait. This holds even when the feedback changes the shape of the work; a branch is not scoped to the contract it started from.
 - After pushing to a branch whose pull request is already open, bring its title and body back in line with the diff as it now stands. A description that stopped matching the code is how a reviewer ends up approving something else.
 

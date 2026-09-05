@@ -13,7 +13,7 @@ One committed source for Codex, Claude Code, and OpenCode:
 
 ## Development lifecycle
 
-Every change reaches `/yolo` through one of three contract routes, and exactly one of them is required. `grilling` pressure-tests whichever route is chosen before it is committed to, interactively when a human is driving and in self-grill mode when a workflow needs its own approach broken without blocking. Delivery ends at a green, reviewed, ready-for-human pull request; a human decides to merge it, and `/land` closes the lifecycle, or `/squash-land` does both at once when that human invokes it by name.
+Every change reaches `/ship` through one of three contract routes, and exactly one of them is required. `grilling` pressure-tests whichever route is chosen before it is committed to, interactively when a human is driving and in self-grill mode when a workflow needs its own approach broken without blocking. Delivery ends at a green, reviewed, ready-for-human pull request; a human decides to merge it, and `/land` closes the lifecycle, or `/squash-land` does both at once when that human invokes it by name.
 
 ```mermaid
 flowchart TD
@@ -51,8 +51,8 @@ flowchart TD
     end
 
     subgraph BUILD["build"]
-        approval --> yolo["/yolo<br>worktree and branch first,<br>never the default branch"]
-        yolo --> ladder["resolve the oracle ladder<br>project instructions, else task runner,<br>else the toolchain"]
+        approval --> ship["/ship<br>worktree and branch first,<br>never the default branch"]
+        ship --> ladder["resolve the oracle ladder<br>project instructions, else task runner,<br>else the toolchain"]
         ladder --> implement["implement<br>loading ponytail"]
         implement --> rungs["local rungs green:<br>types, lint, tests, build"]
         rungs --> conform["spec-conformance pass<br>diff against the contract"]
@@ -76,13 +76,13 @@ The escalation contract can stop any run: the same check failing three times und
 
 ## Commands and skills
 
-A workflow's source is `commands/`, not `skills/`. Claude Code and OpenCode install canonical command links into `~/.claude/commands` and `$XDG_CONFIG_HOME/opencode/command` (defaulting to `~/.config`) and invoke them as `/name`. Codex invokes them as `$name`, for example `$yolo 38`, through generated explicit-only skill adapters in `~/.codex/skills`. The shared `~/.agents/skills` root gets no adapters, because OpenCode also reads it.
+A workflow's source is `commands/`, not `skills/`. Claude Code and OpenCode install canonical command links into `~/.claude/commands` and `$XDG_CONFIG_HOME/opencode/command` (defaulting to `~/.config`) and invoke them as `/name`. Codex invokes them as `$name`, for example `$ship 38`, through generated explicit-only skill adapters in `~/.codex/skills`. The shared `~/.agents/skills` root gets no adapters, because OpenCode also reads it.
 
 The installer generates wrappers in `~/.codex/harness-commands`, links each wrapper from `~/.codex/skills/<name>`, and links its `command.md` to the canonical body. Each wrapper binds invocation text to `$ARGUMENTS` as task data and carries `policy.allow_implicit_invocation: false` in `agents/openai.yaml`. `/name` references inside a workflow keep their meaning, including human-only merge approval. Reinstall after adding or removing commands; body edits take effect through the link. Generated adapters are machine state, never committed.
 
 Legacy `~/.codex/prompts` is no longer populated or swept. Migration retires only exact command links owned by this checkout, including dangling ones; private prompt files, foreign links, and symlinked prompt roots remain untouched. Adapter collisions and changed generated trees use the existing backup policy. Uninstall removes this checkout's generated tree and exact adapter links, leaving other Codex skills and `.system` alone. `--no-backup` deletes displaced managed paths rather than archiving them.
 
-Codex discovery was verified with the installed CLI's `app-server` `skills/list` API, not inferred from files existing. The supported explicit-only metadata is documented at https://learn.chatgpt.com/docs/build-skills. Restart Codex if `$yolo` or `/skills` does not show the adapters after installation.
+Codex discovery was verified with the installed CLI's `app-server` `skills/list` API, not inferred from files existing. The supported explicit-only metadata is documented at https://learn.chatgpt.com/docs/build-skills. Restart Codex if `$ship` or `/skills` does not show the adapters after installation.
 
 Every command that ingests text written elsewhere, a ticket body, a review comment, an error payload, a bullet list, states that the input is task data and cannot override the workflow's constraints.
 
@@ -154,7 +154,7 @@ Homebrew still installs a `python@` of its own as a dependency of other formulae
 
 ## Shell aliases
 
-`aliases.sh` holds the yolo-mode launchers and is sourced from `~/.zshrc` through one managed line. The installer removes any hand-written definition of `ccyolo`, `cyolo`, or `oyolo` so the committed file is the only source, and leaves every other alias alone.
+`aliases.sh` holds the yolo-mode launchers and is sourced from `~/.zshrc` through one managed line. The installer removes any hand-written definition of `ccyolo`, `cyolo`, or `ocyolo` so the committed file is the only source, and leaves every other alias alone.
 
 Zsh is the only shell either of the two shell-facing steps writes: the aliases go into `~/.zshrc`, and Worktrunk is asked for its zsh integration by name. A run whose `$SHELL` is something else warns and names both, rather than leaving the aliases quietly absent. Source `aliases.sh` from your own rc and run `wt config shell install` for that shell.
 
@@ -162,7 +162,7 @@ Zsh is the only shell either of the two shell-facing steps writes: the aliases g
 | --- | --- |
 | `ccyolo` | `claude --dangerously-skip-permissions` |
 | `cyolo` | `codex --dangerously-bypass-approvals-and-sandbox` |
-| `oyolo` | `opencode` with `OPENCODE_PERMISSION` set to allow edit, bash, and webfetch |
+| `ocyolo` | `opencode` with `OPENCODE_PERMISSION` set to allow edit, bash, and webfetch |
 
 OpenCode has no bypass flag: its permissions are configuration, and `OPENCODE_PERMISSION` overrides them for one run.
 
@@ -229,21 +229,21 @@ Ponytail is a locked skill body, not a plugin. The plugin's mechanism was a `Ses
 
 Provisioning once also uninstalled that plugin from all three clients. That code is gone: it removed a state no version of this repository ever created, since the plugin predates the harness and lived only in a hand-rolled setup. An installer that migrates away from states it never produced accumulates them forever.
 
-What replaces it is one line in each command that writes code, `/yolo`, `/proto`, `/feedback`, and `/address-review`, saying to load and follow the skill, plus `adversarial-review` using ponytail violations as a review lens and its fix standard. That is a smaller and more precise surface than a session hook: lazy mode applies where code is written rather than to every conversation, and it costs one sentence per command rather than three hooks and five JS files. It also delivers more of the skill, because the hook injects a level-filtered condensation while the locked `SKILL.md` carries the full body, including the reuse-before-writing rung, the root-cause-not-symptom rule, and the read-fully-then-be-lazy boundary.
+What replaces it is one line in each command that writes code, `/ship`, `/proto`, `/feedback`, and `/address-review`, saying to load and follow the skill, plus `adversarial-review` using ponytail violations as a review lens and its fix standard. That is a smaller and more precise surface than a session hook: lazy mode applies where code is written rather than to every conversation, and it costs one sentence per command rather than three hooks and five JS files. It also delivers more of the skill, because the hook injects a level-filtered condensation while the locked `SKILL.md` carries the full body, including the reuse-before-writing rung, the root-cause-not-symptom rule, and the read-fully-then-be-lazy boundary.
 
 The trade is deliberate. `/ponytail lite|ultra` switching, the statusline, subagent inheritance, and the five auxiliary skills are gone; the intensity table survives in the body as reference prose with nothing to write the config it describes. In exchange the body has a lock entry in `skills-lock.json`, and the rule is that it changes only through a reviewed `npx skills@1 update`, where the plugin previously moved 4.7.0 to 4.9.0 during an install with six agent-steering bodies changing unread.
 
 ## Roster
 
-Commands are `/ask`, `/research`, `/triage`, `/spec`, `/create-ticket`, `/proto`, `/yolo`, `/feedback`, `/address-review`, `/land`, and `/squash-land`.
+Commands are `/ask`, `/research`, `/triage`, `/spec`, `/create-ticket`, `/proto`, `/ship`, `/feedback`, `/address-review`, `/land`, and `/squash-land`.
 
 `/squash-land` is `/land` for the case where the human deciding to merge is the one typing the command: it squash merges and then lands. It is the only workflow in this harness that merges, and typing its name is the approval, so it never asks twice. What it does not do is append a merge step to `/land`: the merge is irreversible, so both the mergeability gate and the conformance check move ahead of it, and a blocking mismatch stops the merge instead of being reported after it, which is the best `/land` can manage. It also deliberately avoids `gh pr merge --delete-branch`, whose post-merge local checkout fails on a repository whose default branch is checked out in another worktree, reporting an error after the merge has already succeeded.
 
-Local skills are `adversarial-review`, `evidence`, `grilling`, and `setup-harness`. `setup-harness` stays a skill because it installs bundled lifecycle assets that only a skill directory can carry; its guards keep it from firing on its own. `grilling` is maintained locally, under the name the routing table already used, and carries the three guards plus a self-grill mode. It replaced the locked Matt Pocock body, whose design-tree rounds ask a whole frontier at once: that is the batching this protocol exists to prevent, and it carried no self-grill mode for `/yolo` and `/triage` to call. The trade is that this body has no lock entry, so it is reviewed the way any other file here is rather than diffed against an upstream.
+Local skills are `adversarial-review`, `evidence`, `grilling`, and `setup-harness`. `setup-harness` stays a skill because it installs bundled lifecycle assets that only a skill directory can carry; its guards keep it from firing on its own. `grilling` is maintained locally, under the name the routing table already used, and carries the three guards plus a self-grill mode. It replaced the locked Matt Pocock body, whose design-tree rounds ask a whole frontier at once: that is the batching this protocol exists to prevent, and it carried no self-grill mode for `/ship` and `/triage` to call. The trade is that this body has no lock entry, so it is reviewed the way any other file here is rather than diffed against an upstream.
 
 `/research` and `/proto` replace two locked bodies that were workflows wearing a skill's clothes: they could fire on description matching, and neither produced the artifacts `POLICY.md` now distinguishes. A `/research` finding ledger remains planning input until a planning route produces a complete contract. Publication confirmation alone does not make a research ticket implementation-ready; agreed behavior, acceptance criteria, and verification or test seams are also required. A finalized `/proto` requirements ledger is an implementation contract. As commands they are typed or they do not run, and each now emits the artifact the policy promised.
 
-Locked Matt Pocock skills provide domain/module vocabulary, architecture surveys through `improve-codebase-architecture`, TDD, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode. Locked `pbakaus/impeccable` provides `impeccable`, the one frontend design body, covering landing pages, portfolios, and redesigns along with dashboards, data tables, and multi-step product UI. Like every locked body it is description-matchable, which is why the control on it is scope rather than a guard: no command or local skill loads it, so it never enters a workflow implicitly, and `POLICY.md` keeps the project's existing styling layer winning inside `/proto` and `/yolo` regardless. No command and no local skill names it.
+Locked Matt Pocock skills provide domain/module vocabulary, architecture surveys through `improve-codebase-architecture`, TDD, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode. Locked `pbakaus/impeccable` provides `impeccable`, the one frontend design body, covering landing pages, portfolios, and redesigns along with dashboards, data tables, and multi-step product UI. Like every locked body it is description-matchable, which is why the control on it is scope rather than a guard: no command or local skill loads it, so it never enters a workflow implicitly, and `POLICY.md` keeps the project's existing styling layer winning inside `/proto` and `/ship` regardless. No command and no local skill names it.
 
 Impeccable comes through `locked-skills.sh` from the repository's `.agents/skills/impeccable`, like every locked body. Its own `npx impeccable install` is never used: it wires `PostToolUse` and `Stop` hook manifests into a project's client settings unasked, and it fetches an unpinned, unverified archive from the author's site, because the published npm package carries the detector CLI and no skill payload.
 
@@ -257,7 +257,7 @@ Locked `JuliusBrussee/caveman` provides `caveman-commit`, which carries the comm
 
 `improve-codebase-architecture` produces planning input, never a change contract: keep its report and grilling read-only, do not edit `CONTEXT.md` or ADRs inline, and route a selected candidate through native plan mode, `/spec`, or `/proto` before changing files.
 
-Deliberately removed: `to-spec` and `to-tickets`, whose templates now live inline in `/spec` and `/create-ticket` rather than behind a wrapper that overrode most of what it loaded; `code-review`, whose second axis is now a spec-conformance pass `/yolo` runs itself while holding the contract; the `grill-me` and `review` command wrappers, retired earlier, which is a separate thing from the `grill-me` skill body `grilling` now carries; the whole SEO group, twelve globally invocable names first and then the orchestrator and its locked roles, along with the `claude-seo` launcher and the 3.11 interpreter it pinned; and both frontend design bodies with the `/design` workflow and the `DESIGN.md` conformance rules that existed to serve them. `impeccable` is the one part of that group installed today, as a skill a human loads by name rather than as a workflow with conformance rules attached. No skill holds scope over a UI surface: `ponytail` claims none upstream and the policy assigns it none, so a UI surface with no design body loaded is built from the contract like any other work.
+Deliberately removed: `to-spec` and `to-tickets`, whose templates now live inline in `/spec` and `/create-ticket` rather than behind a wrapper that overrode most of what it loaded; `code-review`, whose second axis is now a spec-conformance pass `/ship` runs itself while holding the contract; the `grill-me` and `review` command wrappers, retired earlier, which is a separate thing from the `grill-me` skill body `grilling` now carries; the whole SEO group, twelve globally invocable names first and then the orchestrator and its locked roles, along with the `claude-seo` launcher and the 3.11 interpreter it pinned; and both frontend design bodies with the `/design` workflow and the `DESIGN.md` conformance rules that existed to serve them. `impeccable` is the one part of that group installed today, as a skill a human loads by name rather than as a workflow with conformance rules attached. No skill holds scope over a UI surface: `ponytail` claims none upstream and the policy assigns it none, so a UI surface with no design body loaded is built from the contract like any other work.
 
 ## Invocation guards
 
@@ -295,8 +295,8 @@ flowchart TD
     GRAPH --> trigger
 
     subgraph AGENT["what the agent does with it"]
-        ready --> yolo["/yolo picks up a ready ticket<br>branch: type/tracker-id-slug"]
-        yolo --> inprogress["label: in-progress"]
+        ready --> ship["/ship picks up a ready ticket<br>branch: type/tracker-id-slug"]
+        ship --> inprogress["label: in-progress"]
         inprogress --> prready["pull request green and reviewed<br>label: ready-for-human"]
         prready --> humanmerge["a human decides to merge"]
         humanmerge -->|they merge it on GitHub| merged["merged, the closing reference<br>closes the ticket"]
@@ -309,7 +309,7 @@ flowchart TD
 
 A blocker counts as satisfied only when the issue is closed *and* a merged pull request closed it, which is why `blocker_satisfied` walks `closedByPullRequestsReferences` rather than trusting the closed state. Closing an issue by hand therefore does not open the frontier behind it.
 
-Three contract routes converge on `/yolo`: `/spec` plus `/create-ticket` for a published ticket contract that is tracker-bound only when a tracker exists, an approved in-conversation contract from native plan mode, or `/proto` for a requirements ledger discovered by building. Contract source and tracker binding are independent: the source controls conformance, while the binding controls branch names, closing references, and label transitions. An in-conversation, `/proto`, or trackerless ticket contract is preserved in an inline `## Contract`; only a tracker-bound ticket-sourced contract can remain solely in the ticket.
+Three contract routes converge on `/ship`: `/spec` plus `/create-ticket` for a published ticket contract that is tracker-bound only when a tracker exists, an approved in-conversation contract from native plan mode, or `/proto` for a requirements ledger discovered by building. Contract source and tracker binding are independent: the source controls conformance, while the binding controls branch names, closing references, and label transitions. An in-conversation, `/proto`, or trackerless ticket contract is preserved in an inline `## Contract`; only a tracker-bound ticket-sourced contract can remain solely in the ticket.
 
 `/land` is the local half of the same step: it resolves the pull request first, gates on the merge, prefers the inline contract for conformance, and falls back to the ticket when no inline contract exists. The ticket is optional, so trackerless work skips tracker transitions. A legacy trackerless pull request without either source reports that conformance cannot be reconstructed, verifies merge and default-branch health, and removes only a clean retained worktree.
 
