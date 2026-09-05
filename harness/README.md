@@ -248,7 +248,7 @@ The lock covers the body's bytes, not its runtime egress. Several of its scripts
 
 At 4.8 MB across 168 files it is the largest thing in `skills/` by a wide margin, against about 80 KB for every other body combined, roughly half of it a bundled font index and a browser detector. `locked-skills.sh update` re-churns all of it.
 
-Locked `JuliusBrussee/caveman` provides `caveman-commit`, which carries the worked examples behind the commit rules `POLICY.md` states: subject shape, what never goes in a body, and how a breaking change or a linked issue is written. Only `skills/` is taken, which that repository licenses MIT; its compression engine is BSL and is not vendored here. Where the two disagree the policy wins, as it does for any locked body: the skill allows a 72-character subject as a hard cap, and `POLICY.md` allows 50.
+Locked `JuliusBrussee/caveman` provides `caveman-commit`, which carries the commit rules and their worked examples: subject shape, what never goes in a body, and how a breaking change or a linked issue is written. `POLICY.md` delegates to it rather than restating the rules in full. Only `skills/` is taken, which that repository licenses MIT; its compression engine is BSL and is not vendored here. Where the two disagree the policy wins, as it does for any locked body: the skill allows a 72-character subject as a hard cap, and `POLICY.md` allows 50.
 
 `improve-codebase-architecture` produces planning input, never a change contract: keep its report and grilling read-only, do not edit `CONTEXT.md` or ADRs inline, and route a selected candidate through native plan mode, `/spec`, or `/proto` before changing files.
 

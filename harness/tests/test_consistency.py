@@ -151,15 +151,15 @@ class ConsistencyTests(unittest.TestCase):
     def test_the_commit_body_wrap_belongs_to_the_locked_body(self) -> None:
         # The no-hard-wrap rule claimed commit bodies while the locked body the
         # policy delegates commit writing to wraps them at 72. The policy drops
-        # the claim rather than carving an exception, so both halves are pinned:
-        # the wrap rule no longer reaches a commit body, and the commit rule
-        # says which body does. Asserting the absence alone would stay green
-        # with the delegation deleted, leaving the wrap governed by nothing.
+        # the claim rather than restating the skill's rule: a restatement that
+        # agrees with the body it delegates to buys nothing and adds a second
+        # place to drift. That leaves the wrap stated in exactly one place, so
+        # both ends are pinned here: the rule no longer reaches a commit body,
+        # and the skill still says what the policy now relies on it to say.
         policy = POLICY.read_text()
         wrap_rule = [line for line in policy.splitlines() if line.startswith("- Never hard-wrap prose")]
         self.assertEqual(len(wrap_rule), 1)
         self.assertNotIn("commit bodies", wrap_rule[0])
-        self.assertIn("That skill wraps the body at 72 characters", policy)
         self.assertIn("Wrap at 72 chars", (SKILLS / "caveman-commit" / "SKILL.md").read_text())
 
     def test_every_other_pull_request_workflow_refuses_to_merge(self) -> None:
