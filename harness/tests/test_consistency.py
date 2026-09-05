@@ -33,9 +33,8 @@ README = (ROOT / "harness" / "README.md")
 
 
 class ConsistencyTests(unittest.TestCase):
-    def test_a_workflow_is_never_also_a_skill(self) -> None:
-        # A workflow is never also a skill, and no skill outranks a command by
-        # answering to the same name.
+    def test_canonical_workflows_are_not_shared_skills(self) -> None:
+        # Generated Codex adapters must not become shared knowledge skills.
         self.assertTrue(set(COMMAND_NAMES).isdisjoint(
             path.name for path in SKILLS.iterdir() if path.is_dir()
         ))
