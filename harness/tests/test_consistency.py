@@ -162,6 +162,41 @@ class ConsistencyTests(unittest.TestCase):
         self.assertNotIn("commit bodies", wrap_rule[0])
         self.assertIn("Wrap at 72 chars", (SKILLS / "caveman-commit" / "SKILL.md").read_text())
 
+    def test_the_coding_standard_belongs_to_the_locked_body(self) -> None:
+        # The policy named `ponytail` and then restated its ladder and its carve-outs, the duplication cut from the commit rule for the same reason. Both ends are pinned so neither can go while the other passes: the policy delegates without restating, and the body still carries what the policy now leans on.
+        policy = POLICY.read_text()
+        # The whole line, not a substring of it: an appended "none of that binds work here" negates the delegation while any assertIn on it still passes.
+        standard = [line for line in policy.splitlines() if "`ponytail`" in line and "coding standard" in line]
+        self.assertEqual(standard, [
+            "`ponytail` is the coding standard, loaded by name from every command that writes code rather than by a session hook. "
+            "Its own body carries the ladder, the reading it never shortens, and the carve-outs it never simplifies away."
+        ])
+        # Over the whole policy, not the delegating line: a restatement that moves one paragraph down is the same duplication in a place the line-scoped check cannot see.
+        for restated in (
+            "YAGNI", "root cause over symptom", "no unrequested abstractions",
+            "reuse what the codebase already has", "stdlib and native before a dependency",
+            "trust boundary",
+        ):
+            self.assertNotIn(restated, policy, restated)
+        # Each half of the delegation against the section that is supposed to carry it, so a phrase surviving elsewhere in the body, or inside a sentence that says the opposite, does not stand in for the rule.
+        body = (SKILLS / "ponytail" / "SKILL.md").read_text()
+        ladder = body.split("## The ladder", 1)[1].split("\n## ", 1)[0]
+        for rung in (
+            "Stop at the first rung that holds:", "Does this need to exist at all?",
+            "Already in this codebase?", "Stdlib does it?",
+            "Native platform feature covers it?", "Never add a new one",
+            "root cause, not symptom",
+        ):
+            self.assertIn(rung, ladder, rung)
+        self.assertIn("No unrequested abstractions", body.split("## Rules", 1)[1].split("\n## ", 1)[0])
+        not_lazy = body.split("## When NOT to be lazy", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("never the reading", not_lazy)
+        for carve in (
+            "Never simplify away", "validation at trust boundaries", "prevents data loss",
+            "security measures", "accessibility basics", "explicitly requested",
+        ):
+            self.assertIn(carve, not_lazy, carve)
+
     def test_every_other_pull_request_workflow_refuses_to_merge(self) -> None:
         # /squash-land is the one workflow that merges, and only because a
         # human typed its name. Every other pull-request workflow still refuses.
