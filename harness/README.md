@@ -265,7 +265,7 @@ Deliberately removed: `to-spec` and `to-tickets`, whose templates now live inlin
 
 ## GitHub lifecycle
 
-`setup-harness` writes `docs/agents/harness.json`, creates the four configured labels, writes the Matt-skill tracker compatibility file, and copies the workflow and reconciler bundled in its skill directory. The workflow becomes active when that human-reviewed change reaches the default branch. GitHub native sub-issue and dependency relationships remain the source of truth. A blocker satisfies the ready frontier only when a merged pull request closed it; the parent closes only after every child has that same merge evidence. Closing or reopening a child always reconciles both states.
+In GitHub mode, `setup-harness` writes `docs/agents/harness.json`, creates the four configured labels, writes the Matt-skill tracker compatibility file, and copies the workflow and reconciler bundled in its skill directory. In local markdown mode it writes the first two of those and nothing else: no labels, no workflow, no reconciler, because the lifecycle state is committed `Status:` and `Blocked by:` lines that no issue event can drive. The workflow becomes active when that human-reviewed change reaches the default branch. GitHub native sub-issue and dependency relationships remain the source of truth. A blocker satisfies the ready frontier only when a merged pull request closed it; the parent closes only after every child has that same merge evidence. Closing or reopening a child always reconciles both states.
 
 ```mermaid
 flowchart TD
