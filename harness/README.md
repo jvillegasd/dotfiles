@@ -140,7 +140,7 @@ Python is the other exception, and it belongs to uv rather than to Homebrew:
 uv python install 3.14
 ```
 
-`PYTHON_VERSIONS` in `../lib/python.sh` is the one declaration; neither `Brewfile` nor `linux.sh` names a `python@` formula any more. That file is sourced from both sides and splits the duties: `../macos.sh` and `../linux.sh` call `install_pythons`, because packages are what those scripts are for, and this installer calls `assert_pythons` in `check_tools`, because the harness is what consumes the interpreters and so is where a missing one has to fail loudly. Neither half restates which versions those are, and there is no second `PYTHON_VERSIONS=(` in the tree.
+`PYTHON_VERSIONS` in `../lib/python.sh` is the one declaration; neither `Brewfile` nor `linux.sh` names a `python@` formula any more. That file is sourced from both sides and splits the duties: `../macos.sh` and `../linux.sh` call `install_pythons`, because packages are what those scripts are for, and this installer calls `assert_pythons` in `check_tools`, because the harness is what consumes the interpreters and so is where a missing one has to fail loudly. Neither half restates which versions those are.
 
 Sourcing it is the one thing this installer reads from outside `harness/`. That is deliberate: the alternative was a second copy of the version list, which is exactly the drift the split exists to prevent.
 
@@ -221,7 +221,7 @@ A copied skill with unknown provenance remains an attributed local fork until it
 
 Engram and Orca-provided skills are runtime/plugin managed and never belong in `skills-lock.json`.
 
-Binaries are the deliberate exception to all of this. Every prose body above is hash-locked, written by `skills.sh` when this helper invokes it and never re-verified here, while the clients themselves arrive unpinned: `curl -fsSL https://claude.ai/install.sh | bash`, `npm install --global @openai/codex@latest`, and two third-party Homebrew taps. That asymmetry is a choice, not an oversight. A locked body is a reviewed instruction this harness executes forever, so a change to one has to be read; a client is a moving target whose next version is the whole point of re-running the installer, and pinning it would freeze the harness against the clients it exists to drive. The trade is a supply chain that trusts Anthropic, OpenAI, and two tap owners at install time. Nothing else here does.
+Binaries are the deliberate exception to all of this. Every prose body above has its hash recorded in `skills-lock.json` by `skills.sh`, while the clients themselves arrive unpinned: `curl -fsSL https://claude.ai/install.sh | bash`, `npm install --global @openai/codex@latest`, and two third-party Homebrew taps. That asymmetry is a choice, not an oversight. A locked body is a reviewed instruction this harness executes forever, so a change to one has to be read; a client is a moving target whose next version is the whole point of re-running the installer, and pinning it would freeze the harness against the clients it exists to drive. The trade is a supply chain that trusts Anthropic, OpenAI, and two tap owners at install time. Nothing else here does.
 
 ## Ponytail
 
@@ -231,7 +231,7 @@ Provisioning once also uninstalled that plugin from all three clients. That code
 
 What replaces it is one line in each command that writes code, `/yolo`, `/proto`, `/feedback`, and `/address-review`, saying to load and follow the skill, plus `adversarial-review` using ponytail violations as a review lens and its fix standard. That is a smaller and more precise surface than a session hook: lazy mode applies where code is written rather than to every conversation, and it costs one sentence per command rather than three hooks and five JS files. It also delivers more of the skill, because the hook injects a level-filtered condensation while the locked `SKILL.md` carries the full body, including the reuse-before-writing rung, the root-cause-not-symptom rule, and the read-fully-then-be-lazy boundary.
 
-The trade is deliberate. `/ponytail lite|ultra` switching, the statusline, subagent inheritance, and the five auxiliary skills are gone; the intensity table survives in the body as reference prose with nothing to write the config it describes. In exchange the body is pinned in `skills-lock.json` and changes only through a reviewed `npx skills@1 update`, where the plugin previously moved 4.7.0 to 4.9.0 during an install with six agent-steering bodies changing unread.
+The trade is deliberate. `/ponytail lite|ultra` switching, the statusline, subagent inheritance, and the five auxiliary skills are gone; the intensity table survives in the body as reference prose with nothing to write the config it describes. In exchange the body has a lock entry in `skills-lock.json`, and the rule is that it changes only through a reviewed `npx skills@1 update`, where the plugin previously moved 4.7.0 to 4.9.0 during an install with six agent-steering bodies changing unread.
 
 ## Roster
 
@@ -316,8 +316,6 @@ Three contract routes converge on `/yolo`: `/spec` plus `/create-ticket` for a p
 `/squash-land` reaches the same local half by the other door, for the case where the human deciding to merge is the one typing the command. It runs the mergeability gate and the conformance check before the irreversible step, squash merges, and then lands exactly as above: tracker reconciled when bound, worktree retired. The reconciler sees no difference, because the closing reference closes the ticket either way.
 
 ## Validation
-
-`harness/locked-skills.sh check` is the only machine-checked surface left, and `check_skills` is short enough to read for its exact scope. Everything else here is held by review alone: the lock hashes in `skills-lock.json` are written by `skills.sh` and re-verified by nothing, and the installer's link ownership, the command and skill contracts, the invocation-guard matrix, and the single `PYTHON_VERSIONS` declaration have no enforcer at all. Read the diff for them.
 
 Validate a change to this directory against the sessions it actually produced, as `harness/bench/README.md` explains:
 

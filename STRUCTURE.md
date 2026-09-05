@@ -62,7 +62,7 @@ harness/
 └── bench/                      # session-population comparison for harness changes, with its own README
 ```
 
-A locked directory is named after the upstream body's own frontmatter `name`, not after its repository or its path there. Nothing inside one is editable: an edit there is clobbered by the next `skills update`, with the lockfile rewritten to record the loss as correct.
+Nothing inside a locked directory is editable: an edit there is clobbered by the next `skills update`, with the lockfile rewritten to record the loss as correct.
 
 Global mutable client configs are reconciled during installation but are not tracked wholesale: `harness/clients/` declares the keys the harness owns, and every other key in `~/.claude/settings.json` and `~/.codex/config.toml` belongs to the machine and to the tools that write there. The harness writes last, after `engram setup`, so a tracked key wins over whatever else wrote it: an in-session `/model` or `/config` change is reverted by the next install, which is what tracking a preference means.
 
