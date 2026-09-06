@@ -69,9 +69,9 @@ For GitHub:
 
 For local markdown:
 
-Nothing creates labels in this mode, so the four mapped values are only the vocabulary the `Status:` line uses.
+Nothing creates labels in this mode, so the vocabulary the `Status:` line uses is the four mapped values plus the literal `done`.
 
-1. Write `docs/agents/issue-tracker.md` as the compatibility contract for locked Matt skills. It has to stand alone, because those skills read it and have no reason to load a harness skill: identify local markdown, state that it needs no CLI and no network, and give the root path, the file layout, the `Status:` line, and the ticket id form. Point at the `local-tracker` skill for everything a locked skill never does, meaning the transition-to-commit mapping and the frontier scan. Do not tell the user to run a second setup skill.
+1. Write `docs/agents/issue-tracker.md` as the compatibility contract for locked Matt skills. It has to stand alone, because those skills read it and have no reason to load a harness skill: identify local markdown, state that it needs no CLI and no network, give the root path, and reproduce the `local-tracker` skill's Layout, State, Identity, and Frontier sections so the file carries the directory layout, the `Status:` line, the `Blocked by:` edges, the ticket id form, and the frontier rule in full rather than by reference. That skill is the source of truth and this file is a restatement of it, so a rule changes there first and is regenerated here; otherwise every already-written copy goes silently stale. Point at it for the rest, starting with the mapping from a lifecycle transition to the commit that records it. Do not tell the user to run a second setup skill.
 2. Copy no `.github/` workflow and no reconcile script, and state that this is deliberate rather than missing. The lifecycle state is committed lines in the working tree, so no issue event exists for a workflow to react to.
 3. Preserve unrelated documentation and configuration.
 
