@@ -96,7 +96,7 @@ On approval, continue without being asked. An approved spec goes directly throug
 
 Stop early only when implementation reveals the contract is invalid against repository evidence, a load-bearing decision is genuinely unresolvable, or pre-existing unrelated changes cannot be safely separated. Otherwise pick the minimal option, record it in the pull request body, and continue.
 
-Never commit implementation to the default branch, in any mode. `/ship` branches before editing; interactive work does the same. Work found sitting on the default branch moves to a branch before pushing, not after. The one exception is the post-merge bookkeeping in `/land` and `/squash-land`, on a repository whose default branch is unprotected.
+Never commit implementation to the default branch, in any mode. `/ship` branches before editing; interactive work does the same. Work found sitting on the default branch moves to a branch before pushing, not after. The exceptions are bookkeeping and never implementation, and each requires an unprotected default branch: the post-merge reconciliation in `/land` and `/squash-land`, and tracker state where the tracker is committed files rather than a service, which is what makes publishing a spec, slicing tickets, claiming one, and closing it visible to the next run at all. The `local-tracker` skill specifies those commits; nothing else may add to this list. Where the default branch is protected, a bookkeeping write escalates under the escalation contract rather than being routed through a pull request.
 
 ## Oracle ladder
 

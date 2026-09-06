@@ -38,11 +38,13 @@ Blocked by: 01, 03
 
 `spec.md` is the parent. It carries `Status: in-progress` from publication and goes `done` only once every file in its `issues/` directory is `done`. A ticket still carrying no `Status:` line blocks parent closure and is reported as blocking it, the same way GitHub mode refuses to close a parent whose child lacks merge evidence.
 
-A planning-only ticket, one lacking `Acceptance criteria` or `Test seams and checks`, carries no `Status:` line at all. That absence keeps it out of the frontier and out of the parent's closure test, matching the GitHub branch leaving such a ticket unlabelled. Whatever later supplies its missing contract fields, native plan mode or `/spec`, adds the first `Status:` line in the same change.
+A planning-only ticket, one lacking `Acceptance criteria` or `Test seams and checks`, carries no `Status:` line at all. That absence keeps it out of the frontier and out of the parent's closure test, matching the GitHub branch leaving such a ticket unlabelled. `/create-ticket` promotes it in place once its contract fields are filled, and that promotion is what writes its first `Status:` line.
 
 ## Identity
 
 The ticket id is `<feature-slug>-<NN>`, because `<NN>` alone repeats across features. That id is what a branch name's `<tracker-id>` uses. Nothing parses the id back out of a branch name, so the hyphens inside it cost nothing.
+
+An id resolves to exactly one file, `<spec_home>/<feature-slug>/issues/<NN>-*.md`. That is how `/triage` reads a ticket it was given by id and how `/proto` names a branch from one.
 
 A ticket's closing reference is its repository-relative path, named under a `Closes` line in the pull request body as prose. Never write `Closes #<NN>`, which resolves against GitHub issue numbers unrelated to this ticket. Because no API links the two, `/land` resolves a ticket to its pull request by searching pull request bodies for the ticket path, and resolves a pull request to its ticket by reading that same line.
 
@@ -56,7 +58,7 @@ Duplicate detection has no issue listing to run. Grep `<spec_home>` for the spec
 
 A tracker is useful because everyone sees the same state. A file only has that property once it is on the default branch, and `/ship` builds its worktree from `origin/<default>`, so a ticket that lives only on a feature branch is invisible to the next run and absent from the tree that has to edit it.
 
-So every operation below is a commit on the default branch, fetched and fast-forwarded first, then pushed. These are bookkeeping commits, never implementation. This mode depends on the policy's default-branch bookkeeping exception covering them; that clause today names only the post-merge bookkeeping in `/land` and `/squash-land`, and widening it to tracker bookkeeping is a policy change this mode requires and does not itself make.
+So every operation below is a commit on the default branch, fetched and fast-forwarded first, then pushed. These are bookkeeping commits, never implementation, which is the second exception the policy's default-branch rule names. That exception is what this list is: publish, slice, claim, and close, and nothing else may be added to it.
 
 Never reach the default branch by checking it out. A command that has created a worktree is standing on the feature branch, where `git checkout <default>` exits 128. Resolve the default branch's own worktree with `git worktree list`, take the entry whose branch is `<default>`, and run every tracker edit, commit, and push with `git -C <that path>`.
 
