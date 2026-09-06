@@ -14,8 +14,6 @@ README.md                       # User-facing docs
 STRUCTURE.md                    # This file
 harness/                        # Canonical policy, skills, installer
 skills-lock.json                # Reviewed third-party skill hashes/provenance
-docs/agents/                    # This repo's own lifecycle config, from setup-harness
-.github/                        # Agent-lifecycle workflow and its reconcile script
 .agents/skills                  # → harness/skills
 .claude/skills/                 # Claude bookkeeping links to .agents/skills
 nvim/                           # → ~/.config/nvim
@@ -56,8 +54,9 @@ harness/
 ├── commands/                   # canonical workflows; /name in Claude/OpenCode, $name in Codex
 ├── skills/
 │   ├── <locked>/               # pristine skills.sh-managed upstream bodies
-│   ├── setup-harness/          # config + GitHub lifecycle templates
+│   ├── setup-harness/          # config + GitHub lifecycle templates; local markdown copies none
 │   ├── grilling/               # the one interview protocol, interactive and self-grill
+│   ├── local-tracker/          # tracker operations when the tracker is committed files
 │   └── adversarial-review|evidence/  # protocols the delivery commands load
 └── bench/                      # session-population comparison for harness changes, with its own README
 ```
@@ -66,13 +65,9 @@ Nothing inside a locked directory is editable: an edit there is clobbered by the
 
 Global mutable client configs are reconciled during installation but are not tracked wholesale: `harness/clients/` declares the keys the harness owns, and every other key in `~/.claude/settings.json` and `~/.codex/config.toml` belongs to the machine and to the tools that write there. The harness writes last, after `engram setup`, so a tracked key wins over whatever else wrote it: an in-session `/model` or `/config` change is reverted by the next install, which is what tracking a preference means.
 
-Per-project lifecycle configuration lives under `docs/agents/` only
-after `setup-harness` is explicitly invoked in that project. This repository is
-one of those projects: `docs/agents/harness.json` and
-`docs/agents/issue-tracker.md` describe its own GitHub tracker binding, and
-`.github/` carries the lifecycle workflow that reconciles it. Those files are
-this repo's configuration, not templates. The templates that `setup-harness`
-copies into any project stay in `harness/skills/setup-harness/`.
+Per-project lifecycle configuration lives under `docs/agents/` only after `setup-harness` is explicitly invoked in that project, and what it writes there is that project's configuration, not a template. The templates `setup-harness` copies into any project stay in `harness/skills/setup-harness/`. This repository currently has none of it checked in.
+
+In local markdown mode `setup-harness` configures no tracker service, so specs and tickets are committed files under the configured `spec_home`, `docs/specs` by default, one directory per feature holding `spec.md` beside `issues/<NN>-<slug>.md`. That is the point of the mode: the contract is versioned with the code that satisfies it, which a `.scratch` path outside version control would give up.
 
 The rest of this document describes the `nvim/` subtree — the Neovim config.
 
