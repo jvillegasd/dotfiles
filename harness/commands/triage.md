@@ -21,7 +21,7 @@ The input is a tracker item, a pasted ticket, or a production error signal. It m
 
 2. Run the kill query before reading any code. Load and follow `evidence`: is this still happening, does any real user reach it, is the slow path ever called. A kill result ends the triage at a one-paragraph report, which is the cheapest possible outcome, so it comes before the most expensive step rather than after. Skip any capability the project has not configured and say so, per the policy's evidence rules.
 
-3. Supplement from the tracker only when the input is an id or URL with no pasted body.
+3. Supplement from the tracker only when the input is an id or URL with no pasted body. Where the tracker is local markdown, load the `local-tracker` skill: the id resolves to a ticket file, and reading it means reading its `## Comments` too.
 
 4. Investigate the code to ground the analysis, citing `path:line`. Delegate the recon to read-only subagents by default so file contents stay out of this context and only `path:line` plus mechanism come back; read directly only when the item already names the file. Then confirm or refute the root-cause hypothesis with at most two further evidence queries.
 
@@ -49,3 +49,4 @@ The brief is contract input, not a contract. Continue into the planning route th
 - `evidence`
 - `grilling`, self-grill mode only, before escalating an unresolved load-bearing question
 - `diagnosing-bugs` when the root cause resists the first two evidence queries
+- `local-tracker` only when the input is a ticket id or path and `docs/agents/harness.json` sets `"tracker": "local-markdown"`
