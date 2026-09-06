@@ -49,4 +49,4 @@ The brief is contract input, not a contract. Continue into the planning route th
 - `evidence`
 - `grilling`, self-grill mode only, before escalating an unresolved load-bearing question
 - `diagnosing-bugs` when the root cause resists the first two evidence queries
-- `local-tracker` only when the input is a ticket id and `docs/agents/harness.json` sets `"tracker": "local-markdown"`
+- `local-tracker` only when the input is a ticket id or path and `docs/agents/harness.json` sets `"tracker": "local-markdown"`
