@@ -49,7 +49,7 @@ Load and follow the `ponytail` skill for every code change.
 
 7. Keep the pull request body's `Assumptions`, `Refuted evidence`, and `Rejected review findings` sections current with anything this pass decided or rejected. When an approved clarification changes agreed behavior, acceptance criteria, or verification and a complete contract resolved in step 1, update the inline `## Contract` before landing. Never reconstruct a contract from review threads in legacy mode; retain the unavailable-conformance report unless the human explicitly approves a complete reconstruction.
 
-8. Repeat until feedback, required CI, and all applicable review passes are green. In legacy mode the conformance pass remains explicitly unavailable rather than green. Apply the escalation contract's rabbit-hole detector unchanged. Then keep the pull request ready and, when ticket-bound, keep the ticket mapped `ready_for_human`; skip the ticket transition for trackerless work.
+8. Repeat until feedback, required CI, and all applicable review passes are green. In legacy mode the conformance pass remains explicitly unavailable rather than green. Apply the escalation contract's rabbit-hole detector unchanged. Then keep the pull request ready and, when ticket-bound, keep the ticket mapped `ready_for_human`, following `local-tracker` where the tracker is local markdown; skip the ticket transition for trackerless work.
 
 Never merge the pull request or remove its worktree. Never force-push or rebase a shared branch without explicit approval, and never resolve a conflict by dropping changes.
 
@@ -59,4 +59,5 @@ Never merge the pull request or remove its worktree. Never force-push or rebase 
 - `tdd`
 - `diagnosing-bugs`
 - `adversarial-review`
+- `local-tracker` only when ticket-bound and `docs/agents/harness.json` sets `"tracker": "local-markdown"`
 - `resolving-merge-conflicts` only when already conflicted

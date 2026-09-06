@@ -29,7 +29,7 @@ Write `docs/agents/harness.json` with this stable shape:
 
 `tracker` and `spec_home` name the configured mode. The harness writes two. Present both by name and ask, always, including in a repository with no remote. A remote reveals where the code is hosted, never where the user wants contracts kept, so nothing about it settles this choice. Any other tracker follows the last section. `domain_layout` may use project-specific values. Wherever a command writes `<spec_home>`, it means this file's `spec_home` value.
 
-Local markdown keeps the same shape, changing only the two mode values:
+Local markdown keeps the same shape, changing only the two mode values. `docs/specs` is the default to propose for `spec_home`; confirm it alongside the mode rather than writing it unasked, since a project with its own docs convention will want that path instead:
 
 ```json
 {
