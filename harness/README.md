@@ -13,7 +13,7 @@ One committed source for Codex, Claude Code, and OpenCode:
 
 ## Development lifecycle
 
-Every change reaches `/ship` through one of three contract routes, and exactly one of them is required. `grilling` pressure-tests whichever route is chosen before it is committed to, interactively when a human is driving and in self-grill mode when a workflow needs its own approach broken without blocking. Delivery ends at a green, reviewed, ready-for-human pull request; a human decides to merge it, and `/land` closes the lifecycle, or `/squash-land` does both at once when that human invokes it by name.
+Every change reaches `/ship` through one of three contract routes, and exactly one of them is required. `grilling` pressure-tests whichever route is chosen before it is committed to, interactively when a human is driving and in self-grill mode when a workflow needs its own approach broken without blocking. Delivery ends at a green, reviewed, ready-for-human pull request; a human decides to merge it, and `/land` closes the lifecycle, merging it first when that human invoked it with a bare `merge`.
 
 ```mermaid
 flowchart TD
@@ -66,8 +66,10 @@ flowchart TD
         feedback --> merge{"a human decides to merge"}
         addressreview --> merge
         checks --> merge
-        merge -->|someone else merged it| land["/land<br>verify conformance, reconcile the tracker,<br>retire the worktree"]
-        merge -->|they merge it themselves| squashland["/squash-land<br>gates and conformance first,<br>then squash merge, then land"]
+        merge -->|someone else merged it| land["/land merged lane<br>verify conformance, where a mismatch<br>can only be reported"]
+        merge -->|they type /land n merge| land2["/land open lane<br>gates and conformance first,<br>then squash merge, then repair dependents"]
+        land --> landtail["reconcile the tracker,<br>retire the worktree"]
+        land2 --> landtail
         merge -->|they close it unmerged| abandon["/abandon<br>name what is discarded, one confirmation,<br>release the claim, retire the worktree"]
         proto -.->|premise refuted: kill it, record why| abandon
     end
@@ -236,11 +238,11 @@ The trade is deliberate. `/ponytail lite|ultra` switching, the statusline, subag
 
 ## Roster
 
-Commands are `/ask`, `/research`, `/triage`, `/spec`, `/create-ticket`, `/proto`, `/ship`, `/feedback`, `/address-review`, `/land`, `/squash-land`, and `/abandon`.
+Commands are `/ask`, `/research`, `/triage`, `/spec`, `/create-ticket`, `/proto`, `/ship`, `/feedback`, `/address-review`, `/land`, and `/abandon`.
 
-`/squash-land` is `/land` for the case where the human deciding to merge is the one typing the command: it squash merges and then lands. It is the only workflow in this harness that merges, and typing its name is the approval, so it never asks twice. What it does not do is append a merge step to `/land`: the merge is irreversible, so both the mergeability gate and the conformance check move ahead of it, and a blocking mismatch stops the merge instead of being reported after it, which is the best `/land` can manage. It also deliberately avoids `gh pr merge --delete-branch`, whose post-merge local checkout fails on a repository whose default branch is checked out in another worktree, reporting an error after the merge has already succeeded.
+`/land` has two lanes, and the pull request's state plus one word picks between them, which is why it is one command rather than the two it used to be. Already merged by someone else, only the local half is left. Still open, not a draft, and invoked with a bare `merge`, and the human is the one deciding to merge it, so it squash merges first: it is the only workflow in this harness that merges, and that word is the approval, so it never asks twice. The word rather than the name carries it because a command body can read its own arguments and cannot read who invoked it, so routing into `/land` reaches the merged lane and an open pull request stops there asking to be re-invoked. What the open lane does not do is append a merge step to the end. The merge is irreversible, so both the mergeability gate and the conformance check move ahead of it, and a blocking mismatch stops the merge instead of being reported after it, which is the best the merged lane can manage. Two details survive from the same reasoning. It deliberately avoids `gh pr merge --delete-branch`, whose post-merge local checkout fails on a repository whose default branch is checked out in another worktree, reporting an error after the merge has already succeeded. And with no argument it resolves the head branch of the worktree it is running in, falling back to a search over merged pull requests only, because an open pull request found by search is a guess and `merge` was not pointed at a guess.
 
-`/abandon` is the other exit from the same lifecycle, for work that will not land: a pull request closed unmerged, or a claim left behind by a run that died. Both landing commands stop on anything but a merged pull request, and no tracker automation recovers a ticket stranded at `in-progress`, since the GitHub reconciler skips any issue already carrying an active label and fires only on close or reopen. That left the worktree and the claim with no owner in either tracker mode. It is a command rather than a branch inside `/land` for two reasons: `/proto` calls it to kill a prototype, so it has a second caller, and it carries an irreversible step `/land` has no reason to hold. Being the only workflow that throws away unmerged work, it reports every commit and uncommitted change as a list and takes one confirmation on that list. Refusing a dirty worktree the way `/land` does would defeat it, so the read-before-discard is the guard instead.
+`/abandon` is the other exit from the same lifecycle, for work that will not land: a pull request closed unmerged, or a claim left behind by a run that died. `/land` covers a merged pull request, and an open non-draft one it was told to merge, and stops on anything else, and no tracker automation recovers a ticket stranded at `in-progress`, since the GitHub reconciler skips any issue already carrying an active label and fires only on close or reopen. That left the worktree and the claim with no owner in either tracker mode. It is a command rather than a branch inside `/land` for two reasons: `/proto` calls it to kill a prototype, so it has a second caller, and it carries an irreversible step `/land` has no reason to hold. Being the only workflow that throws away unmerged work, it reports every commit and uncommitted change as a list and takes one confirmation on that list. Refusing a dirty worktree the way `/land` does would defeat it, so the read-before-discard is the guard instead.
 
 Local skills are `adversarial-review`, `evidence`, `grilling`, `grill-with-docs`, `local-tracker`, and `setup-harness`, each carrying the three guards. `local-tracker` holds what a tracker operation means when the tracker is committed markdown files, so the delivery commands gain one pointer each instead of a files-mode branch apiece. `setup-harness` stays a skill because it installs bundled lifecycle assets that only a skill directory can carry; its guards keep it from firing on its own. `grilling` is maintained locally, under the name the routing table already used, and carries the three guards plus a self-grill mode. It replaced the locked Matt Pocock body, whose design-tree rounds ask a whole frontier at once: that is the batching this protocol exists to prevent, and it carried no self-grill mode for `/ship` and `/triage` to call. The trade is that this body has no lock entry, so it is reviewed the way any other file here is rather than diffed against an upstream. `grill-with-docs` composes that same interview with `domain-modeling`, so a decision reaches `CONTEXT.md` or an ADR while the session is still live; it is the only harness surface that writes either, because `/spec` loads `domain-modeling` only to reconcile vocabulary a greenfield project does not yet have.
 
@@ -305,10 +307,12 @@ flowchart TD
         inprogress --> prready["pull request green and reviewed<br>label: ready-for-human"]
         prready --> humanmerge["a human decides to merge"]
         humanmerge -->|they merge it on GitHub| merged["merged, the closing reference<br>closes the ticket"]
-        humanmerge -->|they type /squash-land| squashland["/squash-land<br>gates and conformance first,<br>then squash merge, then land"]
-        squashland --> merged
+        humanmerge -->|they type /land n merge| landopen["/land open lane:<br>gates and conformance first,<br>then squash merge"]
+        landopen --> mergedself["merged by this run, the closing<br>reference closes the ticket"]
+        mergedself --> trigger
         merged --> trigger
-        merged -->|merged by someone else| land["/land reconciles the tracker<br>and retires the worktree"]
+        merged -->|merged by someone else| land["/land merged lane: reconciles the tracker<br>and retires the worktree"]
+        mergedself -->|the same run continues| land
         humanmerge -->|they close it unmerged| abandonlabel["/abandon releases the claim by hand:<br>the reconciler skips an active label<br>and fires only on close or reopen"]
         inprogress -->|the run died| abandonlabel
         abandonlabel -->|every blocker still satisfied| ready
@@ -320,9 +324,9 @@ A blocker counts as satisfied only when the issue is closed *and* a merged pull 
 
 Three contract routes converge on `/ship`: `/spec` plus `/create-ticket` for a published ticket contract that is tracker-bound only when a tracker exists, an approved in-conversation contract from native plan mode, or `/proto` for a requirements ledger discovered by building. Contract source and tracker binding are independent: the source controls conformance, while the binding controls branch names, closing references, and label transitions. An in-conversation, `/proto`, or trackerless ticket contract is preserved in an inline `## Contract`; only a tracker-bound ticket-sourced contract can remain solely in the ticket.
 
-`/land` is the local half of the same step: it resolves the pull request first, gates on the merge, prefers the inline contract for conformance, and falls back to the ticket when no inline contract exists. The ticket is optional, so trackerless work skips tracker transitions. A legacy trackerless pull request without either source reports that conformance cannot be reconstructed, verifies merge and default-branch health, and removes only a clean retained worktree.
+`/land` is the local half of the same step: it resolves the pull request first and lets that state, and the presence of `merge`, pick the lane, prefers the inline contract for conformance, and falls back to the ticket when no inline contract exists. The ticket is optional, so trackerless work skips tracker transitions. A legacy trackerless pull request without either source reports that conformance cannot be reconstructed, verifies merge and default-branch health, and removes only a clean retained worktree.
 
-`/squash-land` reaches the same local half by the other door, for the case where the human deciding to merge is the one typing the command. It runs the mergeability gate and the conformance check before the irreversible step, squash merges, and then lands exactly as above: tracker reconciled when bound, worktree retired. The reconciler sees no difference, because the closing reference closes the ticket either way.
+The open lane is the other door into that same local half, for the case where the human deciding to merge is the one typing the command. It runs the mergeability gate and the conformance check before the irreversible step, squash merges, repairs whatever was stacked on the branch, and then finishes on the same tail: tracker reconciled when bound, worktree retired. The conformance check runs once either way, before the merge here and after it there. The reconciler sees no difference, because the closing reference closes the ticket either way.
 
 ## Validation
 
