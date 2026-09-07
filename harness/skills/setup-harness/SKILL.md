@@ -27,7 +27,7 @@ Write `docs/agents/harness.json` with this stable shape:
 }
 ```
 
-`tracker` and `spec_home` name the configured mode. The harness writes two. Present both by name and ask, always, including in a repository with no remote. A remote reveals where the code is hosted, never where the user wants contracts kept, so nothing about it settles this choice. Any other tracker follows the last section. `domain_layout` may use project-specific values. Wherever a command writes `<spec_home>`, it means this file's `spec_home` value.
+`tracker` and `spec_home` name the configured mode. The harness writes two. Present both by name and ask, always, including in a repository with no remote. A remote reveals where the code is hosted, never where the user wants contracts kept, so nothing about it settles this choice. One fact does narrow it: local markdown needs an unprotected default branch, so run `gh api repos/{owner}/{repo}/branches/<default> --jq .protected` first and present GitHub alone when the answer is true, saying why. Off GitHub the check cannot run, so present both and state the requirement. Any other tracker follows the last section. `domain_layout` may use project-specific values. Wherever a command writes `<spec_home>`, it means this file's `spec_home` value.
 
 Local markdown keeps the same shape, changing only the two mode values. `docs/specs` is the default to propose for `spec_home`; confirm it alongside the mode rather than writing it unasked, since a project with its own docs convention will want that path instead:
 
@@ -70,6 +70,8 @@ For GitHub:
 For local markdown:
 
 Nothing creates labels in this mode, so the vocabulary the `Status:` line uses is the four mapped values plus the literal `done`.
+
+The unprotected default branch this mode was offered on is a precondition, not a preference: every tracker operation here is a bookkeeping commit pushed there, as the `local-tracker` skill's own list of transitions sets out, so protection turned on later breaks the mode from the next `/create-ticket` onward rather than at some distant edge. Say so once while writing the file.
 
 1. Write `docs/agents/issue-tracker.md` as the compatibility contract for locked Matt skills. It has to stand alone, because those skills read it and have no reason to load a harness skill: identify local markdown, state that it needs no CLI and no network, give the root path, and reproduce the `local-tracker` skill's Layout, State, Identity, and Frontier sections so the file carries the directory layout, the `Status:` line, the `Blocked by:` edges, the ticket id form, and the frontier rule in full rather than by reference. That skill is the source of truth and this file is a restatement of it, so a rule changes there first and is regenerated here; otherwise every already-written copy goes silently stale. Point at it for the rest, starting with the mapping from a lifecycle transition to the commit that records it. Do not tell the user to run a second setup skill.
 2. Copy no `.github/` workflow and no reconcile script, and state that this is deliberate rather than missing. The lifecycle state is committed lines in the working tree, so no issue event exists for a workflow to react to.
