@@ -62,7 +62,7 @@ So every operation below is a commit on the default branch, fetched and fast-for
 
 Never reach the default branch by checking it out. A command that has created a worktree is standing on the feature branch, where `git checkout <default>` exits 128. Resolve the default branch's own worktree with `git worktree list`, take the entry whose branch is `<default>`, and run every tracker edit, commit, and push with `git -C <that path>`.
 
-Where the default branch is protected, stop and escalate, as the policy's default-branch rule requires.
+Where the default branch is protected, stop and escalate, as the policy's default-branch rule requires. Check rather than assume, and check before writing anything: `gh api repos/{owner}/{repo}/branches/<default> --jq .protected`. Left to the push to discover, the rejection arrives after the edit and the commit are already made, and in `/land`'s case after the pull request has merged, which leaves a bookkeeping commit sitting on the default branch with nowhere to go and a ticket that still reads as claimed.
 
 - **`/spec` publishes.** Write `spec.md` with `Status:` set to mapped `in_progress`. Commit as `docs(tracker): publish <feature-slug>`.
 - **`/create-ticket` publishes.** Write every ticket file with its `Status:` and `Blocked by:` lines already correct: mapped `blocked` while blockers remain, otherwise mapped `ready_for_agent`. Commit as `docs(tracker): slice <feature-slug>`. This has to land before any `/ship` run, which is the whole reason publication is not deferred to a branch.
