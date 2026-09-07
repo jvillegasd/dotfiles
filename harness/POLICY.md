@@ -38,6 +38,7 @@ One frontend design body is installed, `impeccable`. It carries no invocation gu
 | "address the review comments", "CI is red on my PR" | `/address-review` |
 | "the PR merged", "clean this up", "close it out" | `/land` |
 | "merge it", "squash and merge" on a reviewed pull request | `/squash-land` |
+| "abandon this", "this spike is dead", "the PR was closed without merging", "release the ticket" | `/abandon` |
 | "look into X", "is it true that" | `/research` |
 | "why does X happen", something broken or slow | `diagnosing-bugs` |
 | "prototype this", "spike it", requirements that will not settle on paper | `/proto` |
@@ -53,7 +54,7 @@ When a request matches a workflow but omits something the workflow needs, follow
 
 ## Public workflow
 
-Three contract routes converge on `/ship`: `/spec` plus `/create-ticket` publishes a ticket contract that is tracker-bound only when a tracker exists, an approved in-conversation contract comes from native plan mode and may retain a tracker binding or be trackerless, and `/proto` discovers a requirements ledger by building. `/feedback` and `/address-review` handle an open pull request, a human decides to merge it, and `/land` closes the lifecycle, or `/squash-land` does both at once when that human invokes it by name.
+Three contract routes converge on `/ship`: `/spec` plus `/create-ticket` publishes a ticket contract that is tracker-bound only when a tracker exists, an approved in-conversation contract comes from native plan mode and may retain a tracker binding or be trackerless, and `/proto` discovers a requirements ledger by building. `/feedback` and `/address-review` handle an open pull request, a human decides to merge it, and `/land` closes the lifecycle, or `/squash-land` does both at once when that human invokes it by name. Where the work will not land at all, `/abandon` closes the same lifecycle by releasing the claim and retiring the worktree.
 
 Contract source and tracker binding are independent. The source determines what later conformance checks use: a ticket, an approved in-conversation contract, or a finalized `/proto` ledger. The binding determines only the branch form, closing reference, and tracker transitions. `/ship` persists an in-conversation, prototype-derived, or trackerless ticket contract inline in the pull request, so retaining or lacking a ticket never replaces the contract that actually governed implementation.
 
@@ -66,6 +67,7 @@ Contract source and tracker binding are independent. The source determines what 
 - GitHub lifecycle labels are `blocked`, `ready-for-agent`, `in-progress`, and `ready-for-human`, or the mappings recorded in `docs/agents/harness.json`.
 - Delivery ends at a green, reviewed, ready-for-human pull request. A human decides to merge it. `/land` then resolves the pull request first, prefers its inline contract for conformance, falls back to the ticket when no inline contract exists, reconciles the tracker when one is bound, and removes the worktree.
 - `/squash-land` is `/land` for the case where the human deciding to merge is the one typing the command. It squash merges first and then lands, and it moves every gate that could stop the merge ahead of it, so a conformance mismatch stops the merge rather than being reported after it. Typing the command is the merge approval; it never asks twice. The decision to merge is still the human's, which is what keeps this from being a workflow that merges on its own.
+- `/abandon` is the exit for work that will not land: a pull request closed unmerged, or a claim left behind by a run that died. Both `/land` and `/squash-land` stop on anything but a merged pull request, and no tracker automation moves a ticket off mapped `in_progress`, so without this the worktree and the claim have no owner. It refuses an open pull request and routes a merged one to `/land`. It is the only workflow that discards unmerged work, so it names every commit and uncommitted change first and takes one confirmation on that list; discarding is its purpose, so a dirty worktree is something it reports rather than a reason to refuse. `/proto` calls it to kill a prototype.
 
 ## Planning
 
@@ -191,7 +193,7 @@ These instructions load in three clients, so anything client-specific written he
 
 - Use branches named `<type>/<tracker-id>-<short-slug>` when tracker-bound and `<type>/<short-slug>` otherwise.
 - Make the fewest independently coherent Conventional Commits and keep each commit green.
-- Never merge a pull request as part of `/ship`, `/feedback`, or `/address-review`. `/squash-land` is the single exception, and only because a human invoked it by name. Only `/land` and `/squash-land` remove a worktree, and only after the pull request merged.
+- Never merge a pull request as part of `/ship`, `/feedback`, or `/address-review`. `/squash-land` is the single exception, and only because a human invoked it by name. Four workflows remove a worktree and nothing else does: `/land` and `/squash-land` only after the pull request merged, `/abandon` only after reporting what is discarded and taking one confirmation on that list, and `/ship` only the worktree it just created, when its claim step finds another run took the ticket first.
 - One line of work is one branch and one pull request. Once a task branch exists, everything that follows in the session, feedback and review rounds included, is more commits on that branch. Do not open a second pull request for the same work, and never branch away from an open one without being asked: a second pull request fragments the review, leaves the first describing a diff nobody will ship, and costs the human the thread they were reading. Splitting is a human decision, so propose it, name what would go where, and wait. This holds even when the feedback changes the shape of the work; a branch is not scoped to the contract it started from.
 - After pushing to a branch whose pull request is already open, bring its title and body back in line with the diff as it now stands. A description that stopped matching the code is how a reviewer ends up approving something else.
 
