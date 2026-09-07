@@ -56,7 +56,7 @@ flowchart TD
         implement --> rungs["local rungs green:<br>types, lint, tests, build"]
         rungs --> conform["spec-conformance pass<br>diff against the contract"]
         conform --> review["adversarial-review<br>blind reviewers, told the diff is wrong"]
-        review --> commit["commit"] --> push["push"] --> pr["open the pull request<br>inline contract, assumptions,<br>refuted evidence, rejected findings"]
+        review --> commit["commit"] --> push["push"] --> pr["open the pull request<br>capped body: what changed, contract,<br>checks, assumptions, refuted, rejected"]
         pr --> checks(["remote required checks green<br>terminal state"])
     end
 

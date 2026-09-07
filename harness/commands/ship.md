@@ -25,7 +25,7 @@ If no contract resolves, enter native plan mode and let its approval re-enter `/
 
 A `/research` finding ledger and a `/triage` plan brief are planning inputs, never implementation contracts. Carry their grounded evidence and verification concerns into native planning or `/spec` without re-investigating them, but do not implement until a plan is approved or a ticket is published.
 
-Contract source and tracker binding are independent. The source determines the durable conformance record; the binding determines only branch naming, closing references, and label transitions. A tracker-bound ticket-sourced contract can remain in the ticket. An approved in-conversation contract, a finalized `/proto` ledger, or a ticket-sourced but trackerless contract must be preserved in the pull request's inline `## Contract` whether tracker-bound or trackerless.
+Contract source and tracker binding are independent. The source determines the durable conformance record; the binding determines only branch naming, closing references, and label transitions. A tracker-bound ticket-sourced contract can remain in the ticket. An approved in-conversation contract, a finalized `/proto` ledger, or a ticket-sourced but trackerless contract must be preserved in the pull request's inline `## Contract`.
 
 For an approved in-conversation contract, derive the branch slug from it. Keep ticket metadata and label transitions when it retained a tracker binding, and skip them only when trackerless. Escalate to `/spec` only if implementation reveals that the approved contract omitted a surface whose change requires a durable published contract.
 
@@ -58,18 +58,53 @@ Inspect `git status --short` before creating anything. A worktree holding pre-ex
 
    Repair every finding and repeat both passes until each is clean.
 
-4. Push, then create or update a draft pull request with a Conventional Commit title. When tracker-bound, include the ticket's closing reference. When the contract came from an approved in-conversation contract or a finalized `/proto` ledger, or when a ticket-sourced contract is trackerless, also include an inline `## Contract` section with the agreed behavior, acceptance criteria, and verification, whether tracker-bound or trackerless, so `/land` can reconstruct conformance later. Only a tracker-bound ticket-sourced contract may rely on the ticket alone. Every body also states what changed, why, and the checks run, plus three sections. Each of the three is a list, one line per entry, omitted when it has no entries:
-   - `Assumptions`: each decision made without asking, its rejected alternative, and the one fact that would flip it.
-   - `Refuted evidence`: each claim the evidence contradicted, and what changed as a result.
-   - `Rejected review findings`: each review finding not fixed, and why.
+4. Push, then create or update a draft pull request with a Conventional Commit title. Write the body to this skeleton, in this order, and add nothing it does not name:
 
-5. Watch required remote checks. Repair owned failures, rerun local rungs, commit, push, and review again. Apply the escalation contract's do-not-escalate list before counting an attempt, and stop on any rabbit-hole trip. Where a repair changed what the pull request does, bring its title and body back in line with the diff before moving on.
+   ```
+   Closes <issue reference, or the ticket path under local-tracker>
+
+   <opening: what changed and why, at most 50 words>
+
+   ## What changed
+   - <one line per changed surface, at most 50 words: what moved, not the reasoning for it>
+
+   ## Contract
+   - Agreed behavior: <one line>
+   - Acceptance criteria:
+     - <one criterion per line>
+   - Verification: <one line>
+
+   ## Checks
+   - <ladder rung>: <its result, or skipped or not yet run and why, at most 50 words>
+
+   ## Assumptions
+   - <decision made without asking, at most 50 words>; rejected <alternative>. Flips if <fact>.
+
+   ## Refuted evidence
+   - <claim the evidence contradicted, at most 50 words>; <what changed as a result>.
+
+   ## Rejected review findings
+   - <finding not fixed, at most 50 words>; <why>.
+   ```
+
+   The `Closes` line is prose above the opening rather than a section, and is written only when tracker-bound. `## Contract` is omitted only when a tracker-bound ticket-sourced contract leaves the contract in its ticket; every other source records it here so `/land` can reconstruct conformance. It transcribes the agreed behavior, acceptance criteria, and verification from the contract source and carries nothing else, so it is never where prose goes to escape the count. The last three sections are omitted when they have no entries.
+
+   Two counts bound what this workflow writes. Every entry outside `## Contract` is one list line of at most 50 words, the opening included; a transcribed criterion keeps its source wording whatever its length. Everything outside `## Contract` comes to at most 500 words. Draft the body to a file outside the worktree, under `$TMPDIR` or `/tmp`, and count it there; on any later edit count the live body instead, because the body no longer lives in a file this run owns. A stray draft inside the worktree would trip this workflow's own pre-flight on the next run.
+
+   ````
+   awk '/^ *```/{f=!f} /^## /&&!f{c=($0=="## Contract")} !c' "$TMPDIR/pr-body.md" | wc -w
+   gh pr view --json body -q .body | awk '/^ *```/{f=!f} /^## /&&!f{c=($0=="## Contract")} !c' | wc -w
+   ````
+
+   Over the cap, condense entries; move nothing into or out of `## Contract`. Leave a human's own additions to the body alone even when they carry the count past 500: the cap governs what this workflow writes, never what it finds.
+
+5. Watch required remote checks. Repair owned failures, rerun local rungs, commit, push, and review again. Apply the escalation contract's do-not-escalate list before counting an attempt, and stop on any rabbit-hole trip. Where a repair changed what the pull request does, or a rung's result changed, bring its title, body, and `## Checks` back in line with the diff before moving on.
 
    Watch the merge state alongside them: `gh pr view --json mergeable,mergeStateStatus`. A conflicting pull request is a failure to fix on the same footing as a red check, not a result to report. Rebase onto the base, resolve, and `git push --force-with-lease`; the task branch this run created is not shared. Resolve a mechanical conflict autonomously (adjacent-line collisions, a regenerated lockfile, import order). Escalate a semantic conflict, where both sides changed the same logic: resolving one silently would redesign someone else's concurrent change.
 
    Do not wait for review threads. A pull request just opened has none, and any that appear arrive after this run has finished. `/address-review` owns them.
 
-6. When required checks and both review passes are green, mark the pull request ready. When tracker-bound, also change the ticket from mapped `in_progress` to mapped `ready_for_human`; skip label transitions for trackerless work.
+6. When required checks and both review passes are green, mark the pull request ready and refresh `## Checks` with the remote rung's result. When tracker-bound, also change the ticket from mapped `in_progress` to mapped `ready_for_human`; skip label transitions for trackerless work.
 
 Return the pull request, checks, review result, and retained worktree path. Never merge the pull request or remove the worktree; `/land` owns what happens after a human merges.
 

@@ -88,7 +88,7 @@ For each finding, exactly one of:
 
 - Fix it, with the smallest change that resolves it, per `ponytail`.
 - Reject it, with a specific reason recorded in the pull request body under
-  `Rejected review findings`. A rejection you cannot justify in one line is a
+  `## Rejected review findings`. A rejection you cannot justify in one line is a
   fix you are avoiding.
 - Escalate it, per the escalation contract, when it is a product decision.
 
