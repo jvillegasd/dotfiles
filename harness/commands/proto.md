@@ -20,9 +20,10 @@ Load and follow the `ponytail` skill. Prototype code is still the laziest code t
 ## Setup, once
 
 1. Establish a safe branch before editing, the same rule as `/ship`: never the default branch, even for throwaway code. Derive `<type>/<tracker-id>-<short-slug>` when the input is bound to a ticket and `<type>/<short-slug>` for a plain description. Never fabricate a tracker ID. Under local markdown the id form is the one `local-tracker` gives; a bare `NN` is not an id and repeats across features. Create the worktree with Worktrunk (`wt switch --create <branch> --base origin/<default> --no-cd --format=json --yes`), or the runtime-provided Orca CLI guide inside Orca.
-2. Resolve the local rungs of the oracle ladder only: type check, lint, and the tests for the touched surface. Record them per the policy. The remote rungs do not exist in this workflow.
-3. Build every UI slice from the project's existing styling layer rather than a fresh palette. A prototype is not the place to invent a second design system.
-4. Open the requirements ledger in the conversation: the initial requirements as understood, each marked assumed or confirmed.
+2. When tracker-bound, claim the ticket: change it from mapped `ready_for_agent` to mapped `in_progress`, the same transition `/ship` makes at its worktree step. Skip this for a plain description. Where the tracker is local markdown, load the `local-tracker` skill: the transition is a bookkeeping commit on the default branch. The loop below stops for the human every round and can span days, so an unclaimed ticket stays advertised on the ready frontier for all of it, and a second run that takes it leaves this prototype with a diff `/ship` will refuse to accept.
+3. Resolve the local rungs of the oracle ladder only: type check, lint, and the tests for the touched surface. Record them per the policy. The remote rungs do not exist in this workflow.
+4. Build every UI slice from the project's existing styling layer rather than a fresh palette. A prototype is not the place to invent a second design system.
+5. Open the requirements ledger in the conversation: the initial requirements as understood, each marked assumed or confirmed.
 
 ## The loop
 
@@ -39,7 +40,7 @@ Each iteration:
 Exactly one of:
 
 - **Promote.** The shape is right. Finalize the ledger with the agreed behavior, acceptance criteria, and verification or test seams, plus each decision made with its rejected alternative and everything left deliberately prototype-quality that `/ship` must harden. Hand off the branch and the ledger. `/ship` takes the ledger as its contract, squashes the WIP checkpoints, and runs its full pipeline over the accumulated diff. Nothing is weakened by the cheap iterations, because both of `/ship`'s review passes cover the final diff regardless of how it was built.
-- **Kill.** The prototype disproved the premise. That is a success. Record what died and the evidence that killed it, delete the branch, and offer `/spec` or `/create-ticket` for whatever replaces it.
+- **Kill.** The prototype disproved the premise. That is a success. Record what died and the evidence that killed it, then route to `/abandon`, which names the discarded work, releases the claim step 2 took, and retires the branch and its worktree. Do not delete the branch here: a branch a worktree has checked out cannot be deleted, and a claimed ticket left behind is off the ready frontier with nothing to move it back. Then offer `/spec` or `/create-ticket` for whatever replaces it.
 
 Never push, never open a pull request, never merge from here. If the human asks to ship straight from this workflow, route to `/ship` with the ledger instead: nothing reaches a pull request except through `/ship`.
 

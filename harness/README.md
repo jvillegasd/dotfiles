@@ -34,7 +34,6 @@ flowchart TD
 
         proto_in["requirements that<br>will not settle on paper"] --> proto["/proto<br>build a slice, local rungs green,<br>a human tries it, fold feedback in"]
         proto --> protoledger["requirements ledger"]
-        proto -.->|premise refuted: kill it, record why| proto
 
         else_in["everything else"] --> plan["native plan mode"]
         brief --> plan
@@ -69,6 +68,8 @@ flowchart TD
         checks --> merge
         merge -->|someone else merged it| land["/land<br>verify conformance, reconcile the tracker,<br>retire the worktree"]
         merge -->|they merge it themselves| squashland["/squash-land<br>gates and conformance first,<br>then squash merge, then land"]
+        merge -->|they close it unmerged| abandon["/abandon<br>name what is discarded, one confirmation,<br>release the claim, retire the worktree"]
+        proto -.->|premise refuted: kill it, record why| abandon
     end
 ```
 
@@ -235,9 +236,11 @@ The trade is deliberate. `/ponytail lite|ultra` switching, the statusline, subag
 
 ## Roster
 
-Commands are `/ask`, `/research`, `/triage`, `/spec`, `/create-ticket`, `/proto`, `/ship`, `/feedback`, `/address-review`, `/land`, and `/squash-land`.
+Commands are `/ask`, `/research`, `/triage`, `/spec`, `/create-ticket`, `/proto`, `/ship`, `/feedback`, `/address-review`, `/land`, `/squash-land`, and `/abandon`.
 
 `/squash-land` is `/land` for the case where the human deciding to merge is the one typing the command: it squash merges and then lands. It is the only workflow in this harness that merges, and typing its name is the approval, so it never asks twice. What it does not do is append a merge step to `/land`: the merge is irreversible, so both the mergeability gate and the conformance check move ahead of it, and a blocking mismatch stops the merge instead of being reported after it, which is the best `/land` can manage. It also deliberately avoids `gh pr merge --delete-branch`, whose post-merge local checkout fails on a repository whose default branch is checked out in another worktree, reporting an error after the merge has already succeeded.
+
+`/abandon` is the other exit from the same lifecycle, for work that will not land: a pull request closed unmerged, or a claim left behind by a run that died. Both landing commands stop on anything but a merged pull request, and no tracker automation recovers a ticket stranded at `in-progress`, since the GitHub reconciler skips any issue already carrying an active label and fires only on close or reopen. That left the worktree and the claim with no owner in either tracker mode. It is a command rather than a branch inside `/land` for two reasons: `/proto` calls it to kill a prototype, so it has a second caller, and it carries an irreversible step `/land` has no reason to hold. Being the only workflow that throws away unmerged work, it reports every commit and uncommitted change as a list and takes one confirmation on that list. Refusing a dirty worktree the way `/land` does would defeat it, so the read-before-discard is the guard instead.
 
 Local skills are `adversarial-review`, `evidence`, `grilling`, `grill-with-docs`, `local-tracker`, and `setup-harness`, each carrying the three guards. `local-tracker` holds what a tracker operation means when the tracker is committed markdown files, so the delivery commands gain one pointer each instead of a files-mode branch apiece. `setup-harness` stays a skill because it installs bundled lifecycle assets that only a skill directory can carry; its guards keep it from firing on its own. `grilling` is maintained locally, under the name the routing table already used, and carries the three guards plus a self-grill mode. It replaced the locked Matt Pocock body, whose design-tree rounds ask a whole frontier at once: that is the batching this protocol exists to prevent, and it carried no self-grill mode for `/ship` and `/triage` to call. The trade is that this body has no lock entry, so it is reviewed the way any other file here is rather than diffed against an upstream. `grill-with-docs` composes that same interview with `domain-modeling`, so a decision reaches `CONTEXT.md` or an ADR while the session is still live; it is the only harness surface that writes either, because `/spec` loads `domain-modeling` only to reconcile vocabulary a greenfield project does not yet have.
 
@@ -306,6 +309,10 @@ flowchart TD
         squashland --> merged
         merged --> trigger
         merged -->|merged by someone else| land["/land reconciles the tracker<br>and retires the worktree"]
+        humanmerge -->|they close it unmerged| abandonlabel["/abandon releases the claim by hand:<br>the reconciler skips an active label<br>and fires only on close or reopen"]
+        inprogress -->|the run died| abandonlabel
+        abandonlabel -->|every blocker still satisfied| ready
+        abandonlabel -->|a blocker reopened meanwhile| blocked
     end
 ```
 
