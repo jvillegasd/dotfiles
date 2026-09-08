@@ -106,6 +106,36 @@ class FrontierPromotionTest(unittest.TestCase):
         R.reconcile_frontier(api, 1, self.labels)
         self.assertEqual(api.updated, [])
 
+    def test_released_pair_keeps_ready_over_ready_for_human(self):
+        api = FakeAPI(
+            {1: issue(1, labels=(self.labels["ready_for_agent"], self.labels["ready_for_human"]))}
+        )
+        R.reconcile_frontier(api, 1, self.labels)
+        self.assertEqual(api.updated, [(1, {"labels": [self.labels["ready_for_agent"]]})])
+
+    def test_released_pair_keeps_ready_over_in_progress(self):
+        api = FakeAPI(
+            {1: issue(1, labels=(self.labels["ready_for_agent"], self.labels["in_progress"]))}
+        )
+        R.reconcile_frontier(api, 1, self.labels)
+        self.assertEqual(api.updated, [(1, {"labels": [self.labels["ready_for_agent"]]})])
+
+    def test_released_pair_keeps_blocked_over_ready_for_human(self):
+        api = FakeAPI(
+            {1: issue(1, labels=(self.labels["blocked"], self.labels["ready_for_human"])), 2: issue(2)},
+            blocked_by={1: [2]},
+        )
+        R.reconcile_frontier(api, 1, self.labels)
+        self.assertEqual(api.updated, [(1, {"labels": [self.labels["blocked"]]})])
+
+    def test_released_pair_keeps_blocked_over_in_progress(self):
+        api = FakeAPI(
+            {1: issue(1, labels=(self.labels["blocked"], self.labels["in_progress"])), 2: issue(2)},
+            blocked_by={1: [2]},
+        )
+        R.reconcile_frontier(api, 1, self.labels)
+        self.assertEqual(api.updated, [(1, {"labels": [self.labels["blocked"]]})])
+
     def test_deployed_copy_matches_harness_copy(self):
         root = _HARNESS.parent
         deployed_copy = root / ".github/scripts/reconcile-agent-lifecycle.py"
