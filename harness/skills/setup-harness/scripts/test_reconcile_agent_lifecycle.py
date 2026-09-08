@@ -105,6 +105,12 @@ class FrontierPromotionTest(unittest.TestCase):
         R.reconcile_frontier(api, 1, self.labels)
         self.assertEqual(api.updated, [])
 
+    def test_deployed_copy_matches_harness_copy(self):
+        root = Path(__file__).resolve().parents[4]
+        harness_copy = Path(__file__).with_name("reconcile-agent-lifecycle.py").read_bytes()
+        deployed_copy = root / ".github/scripts/reconcile-agent-lifecycle.py"
+        self.assertEqual(harness_copy, deployed_copy.read_bytes())
+
 
 if __name__ == "__main__":
     unittest.main()
