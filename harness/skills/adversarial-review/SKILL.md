@@ -14,33 +14,32 @@ the implementer's context from the reviewer so the diff has to defend itself.
 ## Invocation
 
 Launch reviewers as read-only subagents, in parallel, each with a fresh
-context. Never pass the conversation, the plan, your rationale, or a prior
-round. Anchoring a reviewer on why you thought the code was right is what makes
-the review useless.
+context. Never pass the conversation, the contract, the requirements, your
+rationale, or a prior round. Anchoring a reviewer on why you thought the code
+was right is what makes the review useless.
 
 Scale to blast radius:
 
 - One reviewer when the diff is under roughly 50 changed lines, in a single
   file, and touches no data, auth, concurrency, migration, or public-contract
-  surface. Use Reviewer B and hand it the requirements too: on a small diff a
-  missed requirement is usually visible in the diff itself, while a bug is not.
+  surface. Use Reviewer B only.
 - Two reviewers otherwise.
 - Never three. A third mostly re-finds what the first two found.
 
-## Reviewer A: does it do the job
+## Reviewer A: what does it miss
 
-Give it the diff and the requirements. Nothing else.
+Give it only the diff. No contract, no requirements, no context, no ticket.
 
-> Assume this diff fails to do what the requirements say. Find where.
+> Assume this diff is missing something. Find what.
 
-Lenses: an unmet requirement; scope creep past what was asked; an edge case
-handled wrongly; a missing failure path; an error swallowed silently; a
-migration without a rollback; an auth or data-boundary change; a broken public
-contract; a check that would still pass if the logic it covers were deleted.
+Lenses: an edge case handled wrongly; a missing failure path; an error
+swallowed silently; a migration without a rollback; an auth or data-boundary
+change; a broken public contract; a check that would still pass if the logic it
+covers were deleted.
 
 ## Reviewer B: is it wrong
 
-Give it only the diff. No requirements, no context, no ticket.
+Give it only the diff. No contract, no requirements, no context, no ticket.
 
 > Assume this diff is wrong. Find the bug.
 
@@ -51,7 +50,7 @@ a dependency for a few lines, or config for a constant; anything whose
 correctness depends on information not visible in the diff.
 
 On a UI diff, add one more lens: a palette, token system, or state set the
-contract never asked for is unrequested surface area.
+change did not need is unrequested surface area.
 
 On added or modified lines, add one more lens: a comment restating the line it sits on, or a docstring longer than what it documents.
 
