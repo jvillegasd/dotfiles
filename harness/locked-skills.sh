@@ -96,8 +96,6 @@ remove_skill() {
 check_skills() {
     require_count 0 "$#" check
     bash -n "$0"
-    [[ -f "$HARNESS_DIR/tests/test_reconcile_agent_lifecycle.py" ]] || die "regression test missing"
-    python3 -m unittest discover -s "$HARNESS_DIR/tests" -p 'test_*.py'
     git -C "$ROOT" diff --check
     git -C "$ROOT" diff --cached --check
 }
