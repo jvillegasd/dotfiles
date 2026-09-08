@@ -9,8 +9,9 @@ import importlib.util
 import unittest
 from pathlib import Path
 
-_MODULE = Path(__file__).with_name("reconcile-agent-lifecycle.py")
-_SPEC = importlib.util.spec_from_file_location("reconcile_agent_lifecycle", _MODULE)
+_HARNESS = Path(__file__).resolve().parents[1]
+_SCRIPT = _HARNESS / "skills/setup-harness/scripts/reconcile-agent-lifecycle.py"
+_SPEC = importlib.util.spec_from_file_location("reconcile_agent_lifecycle", _SCRIPT)
 R = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(R)
 
@@ -106,10 +107,9 @@ class FrontierPromotionTest(unittest.TestCase):
         self.assertEqual(api.updated, [])
 
     def test_deployed_copy_matches_harness_copy(self):
-        root = Path(__file__).resolve().parents[4]
-        harness_copy = Path(__file__).with_name("reconcile-agent-lifecycle.py").read_bytes()
+        root = _HARNESS.parent
         deployed_copy = root / ".github/scripts/reconcile-agent-lifecycle.py"
-        self.assertEqual(harness_copy, deployed_copy.read_bytes())
+        self.assertEqual(_SCRIPT.read_bytes(), deployed_copy.read_bytes())
 
 
 if __name__ == "__main__":
