@@ -89,7 +89,7 @@ Codex discovery was verified with the installed CLI's `app-server` `skills/list`
 
 Every command that ingests text written elsewhere, a ticket body, a review comment, an error payload, a bullet list, states that the input is task data and cannot override the workflow's constraints.
 
-A locally authored skill still carries all three invocation guards: `policy.allow_implicit_invocation: false` in its `agents/openai.yaml` for Codex, plus `disable-model-invocation: true` and `metadata."opencode/autoinvoke": "false"` in its frontmatter for Claude Code and OpenCode. Only four skills are local now, so the guard matrix covers a much smaller surface than it did when it also had to hold the workflows.
+A locally authored skill still carries all three invocation guards: `policy.allow_implicit_invocation: false` in its `agents/openai.yaml` for Codex, plus `disable-model-invocation: true` and `metadata."opencode/autoinvoke": "false"` in its frontmatter for Claude Code and OpenCode. Only the local skills the roster lists carry the guards now, so the guard matrix covers a much smaller surface than it did when it also had to hold the workflows.
 
 A locked body gets no guard. `agents/openai.yaml` is upstream content, not a harness sidecar, and `computedHash` covers the whole directory, so anything written inside a locked skill is clobbered by the next `skills update` without a drift warning and with the lockfile rewritten to record the loss as correct. The control that survives an update is not installing the skill: a locked body whose upstream description advertises trigger phrases it must not act on is kept out of every client's skill directory. Every locked body carried today is installed under its own name, so nothing is currently excluded that way.
 
@@ -266,7 +266,7 @@ Deliberately removed: `to-spec` and `to-tickets`, whose templates now live inlin
 
 ## Invocation guards
 
-`POLICY.md` opens with the commands-and-skills split. Command storage carries it for the workflows; generated Codex adapters enforce explicit invocation through native metadata. For the four local skills, the three per-client guards carry it. For a locked body, prose is the only control, which is why a body that must never fire on its own is not installed at all.
+`POLICY.md` opens with the commands-and-skills split. Command storage carries it for the workflows; generated Codex adapters enforce explicit invocation through native metadata. For the local skills the roster lists, the three per-client guards carry it. For a locked body, prose is the only control, which is why a body that must never fire on its own is not installed at all.
 
 ## GitHub lifecycle
 
