@@ -59,7 +59,8 @@ harness/
 │   ├── grill-with-docs/        # that interview plus domain-modeling, for decisions that must persist
 │   ├── local-tracker/          # tracker operations when the tracker is committed files
 │   └── adversarial-review|evidence/  # protocols the delivery commands load
-└── bench/                      # session-population comparison for harness changes, with its own README
+├── bench/                      # session-population comparison for harness changes, with its own README
+└── tests/                      # runnable regression checks, run with python3 -m unittest discover
 ```
 
 Nothing inside a locked directory is editable: an edit there is clobbered by the next `skills update`, with the lockfile rewritten to record the loss as correct.

@@ -155,6 +155,8 @@ def reconcile_frontier(
 
     current = label_names(issue)
     active = {labels["in_progress"], labels["ready_for_human"]}
+    if not current & set(labels.values()):
+        return
     desired = current - {labels["blocked"], labels["ready_for_agent"]}
     blockers = api.related(number, "blocked_by")
     if any(not api.blocker_satisfied(blocker) for blocker in blockers):
