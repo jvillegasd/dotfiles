@@ -1,19 +1,23 @@
 # Harness AI
 
-One committed source for Codex, Claude Code, and OpenCode:
+One committed source for Codex, Claude Code, and OpenCode.
 
-- `POLICY.md` is linked to each client's global instruction path. It carries the routing table, the oracle ladder, and the escalation contract.
-- `commands/` holds the workflows. Humans invoke them as `/name` in Claude Code and OpenCode, or `$name` in Codex.
-- `skills/` holds protocol, vocabulary, and locked third-party bodies.
-- `install.sh` installs current clients/integrations, preserves mutable client state, and reconciles policy, command, and skill links individually.
-- `locked-skills.sh` adds, updates, removes, and validates reviewed third-party skill locks.
-- `bench/measure.py` compares the real session population before and after a harness change, reading all three clients' own session stores. Its manual is `bench/README.md`.
-- `statusline/` holds one file per provider: `claude.sh` renders Claude Code's line, `codex.sh` reconciles Codex's built-in one to match.
-- `clients/` holds the client settings this harness owns: `claude.json` and `codex.toml` declare them, and `codex.sh` reconciles the TOML half. Nothing here is symlinked, because both live files are mostly machine state written by other tools, hook manifests and per-project trust decisions and generated absolute paths. A tracked key replaces the live value on every install, so removing one here removes it from the machine; every key not named there is left alone. `permissions` is the one exception, merged a level down so `deny` stays owned while the Engram allowlist survives. The install runs these after `engram setup`, which rewrites both files from its own template, so a tracked key wins over every other writer. That includes the client itself: `model`, `effortLevel`, `theme`, and `remoteControlAtStartup` are what `/model`, `/config`, and the Remote Control prompts write back at runtime, so an in-session change to one of them survives until the next install and no longer.
+| Path | Holds |
+| --- | --- |
+| `POLICY.md` | The routing table, oracle ladder, and escalation contract. Linked to each client's global instruction path. |
+| `commands/` | The workflows. `/name` in Claude Code and OpenCode, `$name` in Codex. |
+| `skills/` | Protocol, vocabulary, and locked third-party bodies. |
+| `install.sh` | Installs clients and integrations, reconciles links, preserves mutable client state. |
+| `locked-skills.sh` | Adds, updates, removes, and validates third-party skill locks. |
+| `bench/measure.py` | Compares the session population before and after a change. Manual in `bench/README.md`. |
+| `statusline/` | One file per provider that has a status line. |
+| `clients/` | The client settings this harness owns: `claude.json` and `codex.toml` declare them, `codex.sh` reconciles the TOML half. |
+
+`clients/` declares rather than symlinks, because both live files are mostly machine state: hook manifests, per-project trust decisions, generated absolute paths. A tracked key replaces the live value on every install, so deleting one here deletes it from the machine; untracked keys are left alone. `permissions` merges a level down, so `deny` stays owned while the Engram allowlist survives. These run after `engram setup`, which rewrites both files from its own template, so being last is what makes a tracked key win over every other writer, the client included: `model`, `effortLevel`, `theme`, and `remoteControlAtStartup` are what `/model`, `/config`, and Remote Control write back at runtime, so an in-session change survives only until the next install.
 
 ## Development lifecycle
 
-Every change reaches `/ship` through one of three contract routes, and exactly one of them is required. `grilling` pressure-tests whichever route is chosen before it is committed to, interactively when a human is driving and in self-grill mode when a workflow needs its own approach broken without blocking. Delivery ends at a green, reviewed, ready-for-human pull request; a human decides to merge it, and `/land` closes the lifecycle, merging it first when that human explicitly invokes `/land`.
+Every change reaches `/ship` through one of three contract routes, and exactly one is required. `grilling` pressure-tests the chosen route first, interactively when a human drives and in self-grill mode when a workflow needs its own approach broken without blocking. Delivery ends at a green, reviewed, ready-for-human pull request; a human decides to merge it, and `/land` closes the lifecycle, merging it first when that human explicitly invokes `/land`.
 
 ```mermaid
 flowchart TD
@@ -80,23 +84,19 @@ flowchart TD
     end
 ```
 
-The escalation contract can stop any run: the same check failing three times under three different fixes, two attempts that produced no new information, three unchanged external failures, a diff far past the size the contract implied, evidence contradicting the premise, a second review round raising a new blocking finding, or a first touch of a migration, CI config, lockfile, shared contract, infrastructure, or auth surface the request never named. The counters live in `git config` rather than in the conversation, so a restart or a compaction cannot reset them.
+The escalation contract can stop any run: the same check failing three times under three different fixes, two attempts that produced no new information, three unchanged external failures, a diff far past the size the contract implied, evidence contradicting the premise, a second review round raising a new blocking finding, or a first touch of a migration, CI config, lockfile, shared contract, infrastructure, or auth surface the request never named. The counters live in `git config` rather than the conversation, so a restart or a compaction cannot reset them.
 
 ## Commands and skills
 
-A workflow's source is `commands/`, not `skills/`. Claude Code and OpenCode install canonical command links into `~/.claude/commands` and `$XDG_CONFIG_HOME/opencode/command` (defaulting to `~/.config`) and invoke them as `/name`. Codex invokes them as `$name`, for example `$ship 38`, through generated explicit-only skill adapters in `~/.codex/skills`. The shared `~/.agents/skills` root gets no adapters, because OpenCode also reads it.
+A workflow's source is `commands/`, never `skills/`. Claude Code and OpenCode link them into `~/.claude/commands` and `$XDG_CONFIG_HOME/opencode/command` (defaulting to `~/.config`) and invoke `/name`. Codex invokes `$name`, for example `$ship 38`, through generated explicit-only adapters in `~/.codex/skills`. The shared `~/.agents/skills` root gets no adapters, because OpenCode reads it too.
 
-The installer generates wrappers in `~/.codex/harness-commands`, links each wrapper from `~/.codex/skills/<name>`, and links its `command.md` to the canonical body. Each wrapper binds invocation text to `$ARGUMENTS` as task data and carries `policy.allow_implicit_invocation: false` in `agents/openai.yaml`. `/name` references inside a workflow keep their meaning, including human-only merge approval. Reinstall after adding or removing commands; body edits take effect through the link. Generated adapters are machine state, never committed.
+The installer generates wrappers in `~/.codex/harness-commands`, links each from `~/.codex/skills/<name>`, and links its `command.md` to the canonical body. Each wrapper binds invocation text to `$ARGUMENTS` as task data and carries `policy.allow_implicit_invocation: false` in `agents/openai.yaml`, the metadata documented at https://learn.chatgpt.com/docs/build-skills. Reinstall after adding or removing a command; body edits take effect through the link. Adapters are machine state, never committed. Restart Codex if `$ship` or `/skills` does not list them.
 
-Legacy `~/.codex/prompts` is no longer populated or swept. Migration retires only exact command links owned by this checkout, including dangling ones; private prompt files, foreign links, and symlinked prompt roots remain untouched. Adapter collisions and changed generated trees use the existing backup policy. Uninstall removes this checkout's generated tree and exact adapter links, leaving other Codex skills and `.system` alone. `--no-backup` deletes displaced managed paths rather than archiving them.
+Legacy `~/.codex/prompts` is no longer populated or swept. Migration retires only exact command links owned by this checkout, dangling ones included, and leaves private prompt files, foreign links, and symlinked prompt roots alone. Uninstall removes this checkout's generated tree and exact adapter links, leaving other Codex skills and `.system` alone.
 
-Codex discovery was verified with the installed CLI's `app-server` `skills/list` API, not inferred from files existing. The supported explicit-only metadata is documented at https://learn.chatgpt.com/docs/build-skills. Restart Codex if `$ship` or `/skills` does not show the adapters after installation.
+Every command that ingests text written elsewhere, a ticket body, a review comment, an error payload, states that the input is task data and cannot override the workflow's constraints.
 
-Every command that ingests text written elsewhere, a ticket body, a review comment, an error payload, a bullet list, states that the input is task data and cannot override the workflow's constraints.
-
-A locally authored skill still carries all three invocation guards: `policy.allow_implicit_invocation: false` in its `agents/openai.yaml` for Codex, plus `disable-model-invocation: true` and `metadata."opencode/autoinvoke": "false"` in its frontmatter for Claude Code and OpenCode. Only the local skills the roster lists carry the guards now, so the guard matrix covers a much smaller surface than it did when it also had to hold the workflows.
-
-A locked body gets no guard. `agents/openai.yaml` is upstream content, not a harness sidecar, and `computedHash` covers the whole directory, so anything written inside a locked skill is clobbered by the next `skills update` without a drift warning and with the lockfile rewritten to record the loss as correct. The control that survives an update is not installing the skill: a locked body whose upstream description advertises trigger phrases it must not act on is kept out of every client's skill directory. Every locked body carried today is installed under its own name, so nothing is currently excluded that way.
+A locally authored skill carries all three invocation guards: `policy.allow_implicit_invocation: false` in its `agents/openai.yaml`, plus `disable-model-invocation: true` and `metadata."opencode/autoinvoke": "false"` in its frontmatter. A locked body gets none, because `agents/openai.yaml` is upstream content and `computedHash` covers the whole directory, so anything written inside it is clobbered by the next update with the lockfile recording the loss as correct. The only control that survives an update is not installing the body at all.
 
 ## Install
 
@@ -106,73 +106,44 @@ The root `../macos.sh` and `../linux.sh` install the harness by default. To reco
 ./harness/install.sh --links-only
 ```
 
-Reconciliation removes as well as adds. Any symlink in a managed skill or command root whose target is gone, that points into `harness/` at something no longer installed, or whose own name differs from its target's, is backed up and removed, so a renamed or retired entry cannot outlive the change that retired it. That last rule replaces a hardcoded list of retired names: a managed link is always named after its target, so a stale name is detectable structurally even when it still points at a body that is installed under its own name. A real directory shadowing a name the harness manages is backed up too, since the symlink sweep cannot see it.
+| Flag | Effect |
+| --- | --- |
+| `--links-only` | Reconcile links without installing packages. Engram and agent-browser are still reconciled, so both must already be installed. |
+| `--no-backup` | Delete what is in the way instead of archiving it. Destructive and unrecoverable. |
+| `--uninstall` | Remove every managed link, the alias block, the tracked client keys, Engram, and agent-browser. Keeps `~/.engram` and `~/.agent-browser`. |
+| `--clear-backups` | Delete every archive under `~/.dotfiles-backups/harness/`. Runs on its own. |
 
-One known defect is deliberately left in place here: the dangling branch removes a dangling symlink whoever wrote it, because a target that resolves to nothing cannot be tested for ownership. Two attempts to infer ownership from the link text failed in opposite directions, an absolute-path test a moved checkout defeats and a path-shape test that claims other checkouts, so the fix is a different ownership model rather than a third predicate, and it is tracked separately.
+Reconciliation removes as well as adds. A symlink in a managed root is backed up and removed when its target is gone, points into `harness/` at something no longer installed, or carries a name differing from its target's, so a retired entry cannot outlive the change that retired it. A real directory shadowing a managed name is backed up too, since the sweep cannot see it. One defect is left in place and tracked separately: the dangling branch removes a dangling symlink whoever wrote it, because a target resolving to nothing cannot be tested for ownership.
 
-Every managed root is a real directory the harness owns, so its links and your private entries sit side by side. A symlink standing in for one is moved aside first, under a `.previous-link` suffix, and its target is left untouched: linking into someone else's directory would put managed entries somewhere this installer never sweeps, and would then aim the sweep at that directory's own entries. The OpenCode skills root is the one root normalized but never created, since OpenCode reads `~/.agents/skills` and a second copy would double-list.
+Managed roots are real directories, so harness links and your private entries sit side by side; a symlink standing in for one is moved aside under `.previous-link`. The OpenCode skills root is normalized but never created, since OpenCode reads `~/.agents/skills`. OpenCode's own three paths follow `XDG_CONFIG_HOME` when set, the same default `../lib/common.sh` resolves. Anything in the way is moved to a timestamped directory under `~/.dotfiles-backups/harness/`, or deleted with `--no-backup`, which the root installer forwards. Each removal is logged.
 
-OpenCode's three paths follow `XDG_CONFIG_HOME` when it is set, the same default `../lib/common.sh` resolves for the configs the root scripts place. Hardcoding `~/.config` here installed two thirds of the harness on such a machine and then asserted against the same wrong path, so it said it installed all of it.
+Both run modes verify what they wrote. `check_links` asserts every skill, command, policy, and status line link on every run; `check_tools` adds the client, plugin, and interpreter assertions only a full run can satisfy. Its OpenCode assertion reads `opencode debug config` through a temporary file rather than a pipe: that command stops at the 64 KiB pipe capacity whenever stdout is not a regular file, and this config passed 64 KiB once the harness's own command templates went into it, so the piped form failed on a JSON parse error instead of on the assertion. Both run after Engram, which rewrites `config.toml` and `settings.json`.
 
-Both run modes verify what they wrote. `check_links` asserts every skill, command, policy, and status line link on every run; `check_tools` adds the client, plugin, and interpreter assertions that only a full run can satisfy. Its OpenCode assertion reads `opencode debug config` through a temporary file rather than a pipe: that command stops at the 64 KiB pipe capacity whenever its stdout is not a regular file, `| cat` included, and this config passed 64 KiB once the harness's own command templates went into it, so the piped form failed on a JSON parse error partway through the document instead of on the assertion it carries. A links-only run previously verified nothing at all, which made the mode that exists for reconciling links the one mode that never confirmed a link landed. Both run last, after Engram: `engram setup` rewrites `config.toml` and `settings.json`, which `check_links` asserts, so verifying ahead of it would check a state Engram then overwrites.
+### MCP servers
 
-Anything in the way of a managed path is moved to a timestamped directory under `~/.dotfiles-backups/harness/` rather than overwritten. `--no-backup` deletes it instead, in both this installer and the root one, which forwards the flag:
+Engram is core, not optional: the policy assumes memory survives a session. `install_engram` runs one `engram setup <agent>` per client, as engram's own `docs/AGENT-SETUP.md` (https://github.com/Gentleman-Programming/engram) documents, and is idempotent. Both run modes reconcile it unconditionally rather than probing, because probing sees presence but never whether the pinned absolute binary path still resolves; setup rewrites the pin every time. The claude-code command is answered yes to allowlist Engram's tools; the other two take a closed stdin. The allowlist stays untracked, since a tracked copy of a tool set Engram owns goes stale silently.
 
-```sh
-./harness/install.sh --links-only --no-backup
-```
+agent-browser (https://github.com/vercel-labs/agent-browser) ships no per-client registrar, so `install_agent_browser` writes the three registrations itself: `claude mcp add --scope user` and `codex mcp add`, plus a JSON edit to `opencode.json` for the client whose `opencode mcp add` is interactive. It runs from `reconcile_clients`, after `engram setup`, which would otherwise drop it. `check_tools` asserts both servers per client, so a run that clobbered Engram's entry fails.
 
-It is destructive and unrecoverable: a private skill or a hand-edited config sitting at a managed path is gone, not archived. Each removal is still logged, so the run says what it took. Reach for it when the archives are noise, for example a repeated development install, not on a machine whose `~/.claude` or `~/.agents` you have not already reconciled.
+Registration is global. Only two clients could be per project anyway, since Codex reads only `~/.codex/config.toml`, verified with `codex doctor`, and a browser driver is a general tool like `gh` rather than a dependency of one repository. Each registration is removed and re-added, so a re-run is idempotent and the pinned path is never stale. The profile is the default, meaning no `--tools` flag, so only `core` loads. Widening to `network`, `state`, `debug`, `tabs`, `react`, `mobile`, or `all` is a one-word edit there, and each would cost context in every session of all three clients.
 
-Engram is core, not optional: the policy assumes memory survives a session. `install_engram` runs one `engram setup <agent>` per client, exactly as https://github.com/Gentleman-Programming/engram documents in `docs/AGENT-SETUP.md`, so both run modes reach it. Setup is idempotent, verified against engram 1.20.0 by running each agent's setup repeatedly in a throwaway `HOME` and checksumming the tree: every run exits 0, `[mcp_servers.engram]` stays single, and the tree is byte-identical from the second run on, the only delta being key and section reordering as the config is re-serialized.
+The formula is homebrew-core. It publishes no x86_64 macOS bottle, so an Intel Mac builds from source, and on Linux the install takes `--with-deps`, which is mandatory there and rejected elsewhere. Its caveat is run rather than printed: `agent-browser install` downloads Chrome for Testing, without which every browser call fails mid-session. The uninstall removes all three registrations and the formula, and leaves `~/.agent-browser` alone: it holds the browser download and whatever profiles the CLI saved beside it, and this installer does not delete another tool's data directory. The summary measures the directory and reports it.
 
-A links-only run therefore reconciles Engram unconditionally rather than probing first. Probing was both longer and weaker: it could only see whether the plugin and MCP were present, never whether the absolute binary path each client pins still resolves, so a stale pin after a Homebrew prefix change passed the check. Running setup rewrites the pin every time.
+### Packages
 
-```sh
-engram setup claude-code < /dev/null
-engram setup codex       < /dev/null
-engram setup opencode    < /dev/null
-```
+Homebrew carries every tool on both platforms, because three of them (OpenCode, Engram, Worktrunk) ship only as taps. Codex is the exception: its formula is a macOS cask, so Linux takes `@openai/codex` from npm. Claude Code comes from Anthropic's native latest channel. The installer never starts an interactive client or authenticates for you.
 
-Measured on a clean HOME, each command installs the full plugin, marketplace entry and all, so nothing here drives a client's plugin CLI by hand. The claude-code command asks whether to add engram's tools to the settings allowlist, so all three read from `/dev/null`: this installer never blocks on a prompt, and declining leaves the tools working under Claude Code's own permission handling. That command also writes `~/.claude/mcp/engram.json` pinned to the absolute path of the current binary, which is why `install_packages` upgrades engram before this runs: the pin is rewritten after the upgrade rather than left stale by it.
-
-Setting up Codex also writes `[mcp_servers.engram]` in `config.toml`, which outranks the server the plugin declares in its `.mcp.json`. Nothing is lost by that: engram 1.20.0 writes `args = ["mcp", "--tools=agent"]` and the stable `/opt/homebrew/bin/engram` path, so the entry that wins carries the same agent tool profile the plugin asks for. Verified with `codex mcp list`. Upstream's configuration is kept as shipped.
-
-agent-browser (https://github.com/vercel-labs/agent-browser) is the second MCP server the harness owns, and the first that ships no per-client registrar, so `install_agent_browser` writes the three registrations itself: `claude mcp add --scope user` and `codex mcp add` for the two clients with a usable CLI, and a JSON edit to `opencode.json` for the one whose `opencode mcp add` is interactive and cannot be answered by an installer. It runs from `reconcile_clients`, after `engram setup`, for the reason every other reconciler there does: Engram rewrites `opencode.json` and `config.toml` from its own template, and a registration written ahead of it would be dropped without a word. `check_tools` asserts both servers per client rather than only the new one, because a run that clobbered Engram's entry would otherwise pass.
-
-The registration is global rather than per project, and only two of the three clients could have done it per project anyway: Claude Code has a `project` scope that writes a committed `.mcp.json`, and OpenCode merges a project-root `opencode.json` over the global one, but Codex reads only `~/.codex/config.toml` and has no project scope to match them with. Verified with `codex doctor`, which reports that one config file as its only source. A browser driver is a general tool like `gh` rather than a dependency of one repository, so the scope all three clients share is the correct one here.
-
-Each registration is removed and re-added rather than added when absent. That is what makes a re-run idempotent in all three clients without asking any of them what they already hold, and it rewrites the pinned absolute binary path every time, which is the same argument the Engram paragraphs above make against probing. The tool profile is the default, meaning no `--tools` flag, so only `core` loads: `network`, `state`, `debug`, `tabs`, `react`, `mobile`, and `all` are what widening would add to every session of all three clients, and none of them is loaded today. Widening it is a one-word edit in `install_agent_browser`. Claude Code carries agent-browser alongside its own built-in browser tools by design: Codex and OpenCode have no other browser surface, and dropping the one client that does would cost the three-client symmetry.
-
-The formula is homebrew-core rather than a tap, so it joins the unqualified list in `install_packages`. It publishes no x86_64 macOS bottle, so an Intel Mac builds it from source. On Linux the install takes `--with-deps`, which is mandatory there and rejected elsewhere. Its caveat is run rather than printed: `agent-browser install` downloads Chrome from Chrome for Testing, and without it the server registers but every browser call fails mid-session. The uninstall removes all three registrations and the formula, and leaves `~/.agent-browser` alone: it holds the browser download and whatever profiles the CLI saved beside it, and this installer does not delete another tool's data directory. The summary measures the directory and reports it, so reclaiming the space stays the user's call.
-
-The full installer uses Homebrew for Codex, OpenCode, GitHub CLI, Engram, agent-browser, UV, and Worktrunk; Anthropic's native latest channel for Claude Code; and official client setup commands for Engram. It never starts an interactive client or authenticates for you.
-
-It runs on macOS and on Linux. Homebrew carries every tool on both, because three of them (OpenCode, Engram, and Worktrunk) ship only as taps, and packaging those a second way for Linux would mean three more update paths to keep honest. Codex is the single exception: its Homebrew formula is a macOS cask, so a Linux box takes `@openai/codex` from npm, which is the channel OpenAI publishes for exactly that case.
-
-Python is the other exception, and it belongs to uv rather than to Homebrew:
+Python belongs to uv rather than Homebrew:
 
 ```sh
 uv python install 3.14
 ```
 
-`PYTHON_VERSIONS` in `../lib/python.sh` is the one declaration; neither `Brewfile` nor `linux.sh` names a `python@` formula any more. That file is sourced from both sides and splits the duties: `../macos.sh` and `../linux.sh` call `install_pythons`, because packages are what those scripts are for, and this installer calls `assert_pythons` in `check_tools`, because the harness is what consumes the interpreters and so is where a missing one has to fail loudly. Neither half restates which versions those are.
-
-Sourcing it is the one thing this installer reads from outside `harness/`. That is deliberate: the alternative was a second copy of the version list, which is exactly the drift the split exists to prevent.
-
-uv resolves a managed version through its own registry rather than through `PATH`, so `uv run --python 3.14` finds it whatever pyenv or Homebrew have done to `python3`. That is also why `assert_pythons` asks `uv python find --managed-python` instead of testing `PATH`: a shadowing Homebrew `python3.14` would pass a `PATH` check while uv still had nothing to resolve. 3.11 was provisioned alongside it only for the SEO runtime's pin and went with it. `python-tk` is gone too, since uv's standalone builds already bundle tkinter.
-
-`uv` therefore has to arrive before the interpreters do. On macOS it comes from `Brewfile`, on Linux from `linux.sh`'s own formula list, in both cases during the package step that runs before `install_pythons`.
-
-What this deliberately does not do is claim the name `python3`. Each version also lands as `~/.local/bin/python3.14`, but that directory usually sits behind the pyenv shims on `PATH`, so bare `python3` keeps resolving wherever it already did. `uv python install --default` would take `python3` as well; it is experimental in uv 0.12, and taking over the interpreter every other project on the machine resolves is a bigger change than provisioning the harness needs. Run `uv python update-shell` by hand if you want uv's bin directory in front.
-
-Homebrew still installs a `python@` of its own as a dependency of other formulae. That copy is nobody's declared interpreter, and nothing here reads it on purpose.
+`PYTHON_VERSIONS` in `../lib/python.sh` is the one declaration, and sourcing it is the only thing this installer reads from outside `harness/`. The root scripts call `install_pythons`; `check_tools` calls `assert_pythons`, because the harness consumes the interpreters. That check asks `uv python find --managed-python` rather than testing `PATH`, since a shadowing Homebrew `python3.14` would pass while uv had nothing to resolve, and `uv` therefore arrives first, from `Brewfile` on macOS and `linux.sh` on Linux. Nothing here claims the name `python3`: each version also lands as `~/.local/bin/python3.14`, usually behind the pyenv shims. Run `uv python update-shell` to change that.
 
 ## Shell aliases
 
-`aliases.sh` holds the yolo-mode launchers and is sourced from `~/.zshrc` through one managed line. The installer removes any hand-written definition of `ccyolo`, `cyolo`, or `ocyolo` so the committed file is the only source, and leaves every other alias alone.
-
-Zsh is the only shell either of the two shell-facing steps writes: the aliases go into `~/.zshrc`, and Worktrunk is asked for its zsh integration by name. A run whose `$SHELL` is something else warns and names both, rather than leaving the aliases quietly absent. Source `aliases.sh` from your own rc and run `wt config shell install` for that shell.
+`aliases.sh` holds the yolo-mode launchers and is sourced from `~/.zshrc` through one managed line. The installer removes any hand-written `ccyolo`, `cyolo`, or `ocyolo` so the committed file is the only source, and leaves every other alias alone.
 
 | Alias | Runs |
 | --- | --- |
@@ -182,43 +153,39 @@ Zsh is the only shell either of the two shell-facing steps writes: the aliases g
 
 OpenCode has no bypass flag: its permissions are configuration, and `OPENCODE_PERMISSION` overrides them for one run.
 
+Zsh is the only shell either shell-facing step writes: the aliases go into `~/.zshrc`, and Worktrunk is asked for its zsh integration by name. A run whose `$SHELL` is something else warns and names both, rather than leaving the aliases quietly absent. Source `aliases.sh` from your own rc and run `wt config shell install` for that shell.
+
 ## Status line
 
-The three clients expose three different amounts of surface here, so one committed script cannot serve all of them. `statusline/` holds one file per provider that has a status line at all, named after it:
+The three clients expose three different amounts of surface, so one committed script cannot serve all of them.
 
-| Client | File | Mechanism | What it does |
-| --- | --- | --- | --- |
-| Claude Code | `statusline/claude.sh` | Runs an arbitrary command and renders its stdout | Linked to `~/.claude/statusline.sh`, with `statusLine` in `settings.json` pointed at that path |
-| Codex | `statusline/codex.sh` | Built in, and configured only by choosing from a fixed set of item ids | Writes `status_line` and `status_line_use_colors` into the `[tui]` table of `~/.codex/config.toml` |
-| OpenCode | none | None | Nothing |
+| Client | File | Mechanism |
+| --- | --- | --- |
+| Claude Code | `statusline/claude.sh` | A renderer run on every draw, linked to `~/.claude/statusline.sh` with `statusLine` pointed at it |
+| Codex | `statusline/codex.sh` | A reconciler run once, writing `status_line` and `status_line_use_colors` into `[tui]` in `~/.codex/config.toml` |
+| OpenCode | none | No status line field in its schema and no plugin hook, so there is nothing to render into |
 
-The two files are different kinds of thing, which is the whole point of the folder. `claude.sh` is a renderer Claude Code runs on every draw. `codex.sh` is a reconciler the installer runs once, because Codex draws its own line and takes item ids rather than a command. Whichever provider you are chasing, its file is the one named after it.
+`claude.sh` renders model, context-window percentage, directory and branch with a dirty marker, session duration, and reasoning effort, then the five-hour and weekly rate-limit bars, fetched from the OAuth usage endpoint and cached for sixty seconds in `/tmp/claude`.
 
-`claude.sh` renders the model, context-window percentage, directory and branch with a dirty marker, session duration, and reasoning effort on one line, then the five-hour and weekly rate-limit bars underneath, fetched from the OAuth usage endpoint and cached for sixty seconds in `/tmp/claude`.
-
-`codex.sh` owns the item ids, so the installer never names them. It prints the reconciled `config.toml` on stdout and exits 3 when the file already says this, which is what lets `install.sh` take its backup only on a real change rather than mint a fresh backup root every run. Run it by hand to see the diff it would make:
+`codex.sh` owns the item ids, so the installer never names them. It prints the reconciled config on stdout and exits 3 when the file already says this, which lets `install.sh` back up only on a real change. Run it by hand to see the diff it would make:
 
 ```sh
 ./harness/statusline/codex.sh ~/.codex/config.toml
 ```
 
-`status_line` takes an ordered list of built-in item ids, and the six chosen come closest to the Claude line:
+The two keys it owns, whose item ids are the closest match to the Claude line:
 
 ```toml
 [tui]
-status_line = ["model-with-reasoning", "context-used", "current-dir", "git-branch", "five-hour-limit", "weekly-limit"]
+status_line = ["model", "context-used", "project-name", "git-branch", "reasoning", "five-hour-limit", "weekly-limit"]
 status_line_use_colors = true
 ```
 
-Session duration is dropped, because Codex has no item for it. `/statusline` inside Codex edits the same two keys, so a later choice made there survives until the next install run reconciles it back.
-
-`config.toml` is hand-maintained and holds project trust decisions and hook trust hashes, so the reconciler rewrites only those two keys and leaves every other line byte for byte. Idempotence is textual: the reconciled file is a fixed point, so an unchanged run writes nothing and mints no backup. That also avoids `tomllib`, which needs Python 3.11 and so is absent from the system `python3` macOS ships.
-
-OpenCode has no file in `statusline/` at all. Its configuration schema at https://opencode.ai/config.json has no status line field, and `@opencode-ai/plugin` exposes no hook for one, so there is nothing to render into and nothing to reconcile. A third-party TUI plugin can draw one, but it would be reverse-engineering an unsupported surface that any OpenCode release can break, which is a worse trade than doing without. An empty `opencode.sh` would only make the absence look like an oversight.
+`model` and `reasoning` are separate items rather than the combined `model-with-reasoning`, so effort sits after the branch the way it does in `claude.sh`, and `project-name` is the basename `current-dir` would print in full. Session duration is dropped, because Codex has no item for it. `/statusline` inside Codex edits the same two keys, so a choice made there survives until the next install. The reconciler rewrites only those two keys and leaves every other line byte for byte, which also avoids `tomllib`: it needs Python 3.11, absent from the system `python3` macOS ships.
 
 ## Third-party skill updates
 
-`.agents/skills` points to `harness/skills`. `locked-skills.sh` keeps the skills.sh call, `skills-lock.json`, and Claude bookkeeping link in one reviewed workflow:
+`.agents/skills` points to `harness/skills`. `locked-skills.sh` keeps the skills.sh call, `skills-lock.json`, and the Claude bookkeeping link in one reviewed workflow:
 
 ```sh
 ./harness/locked-skills.sh add <owner/repo> <name>
@@ -227,65 +194,45 @@ OpenCode has no file in `statusline/` at all. Its configuration schema at https:
 ./harness/locked-skills.sh check
 ```
 
-`add` refuses invalid GitHub sources and existing lock, body, command, or bookkeeping paths before it delegates to skills.sh. `update` deliberately updates every locked body. `remove` accepts only a current lock entry and refuses unexpected body or Claude-link types. Every mutation prints the affected paths, while `check` runs Bash syntax and diff hygiene.
+`add` refuses invalid sources and existing paths before delegating. `update` updates every locked body. `remove` accepts only a current lock entry. Every mutation prints the affected paths; `check` runs syntax and diff hygiene. The helper's `--help` is side-effect free, but do not probe the upstream update subcommand with `--help`: skills.sh treats that as a full update.
 
-The helper's `--help` is side-effect free. Do not probe the upstream update subcommand with `--help`: skills.sh currently treats that invocation as a full update.
+Review every upstream body, security report, and diff, then commit only the approved change. Locked bodies stay pristine; behavior changes belong in a command or in `POLICY.md`. Provisioning never runs the helper or a lockfile restore. A copied skill with unknown provenance stays an attributed local fork until its upstream is identified. Engram and Orca-provided skills are runtime managed and never belong in `skills-lock.json`.
 
-Review every upstream body, security report, and diff, then commit only the approved change. Locked bodies stay pristine; behavior changes belong in a command or in `POLICY.md`. Provisioning never runs the helper, `skills add`, `skills update`, or a lockfile restore command.
-
-A copied skill with unknown provenance remains an attributed local fork until its exact upstream is identified.
-
-Engram and Orca-provided skills are runtime/plugin managed and never belong in `skills-lock.json`.
-
-Binaries are the deliberate exception to all of this. Every prose body above has its hash recorded in `skills-lock.json` by `skills.sh`, while the clients themselves arrive unpinned: `curl -fsSL https://claude.ai/install.sh | bash`, `npm install --global @openai/codex@latest`, and two third-party Homebrew taps. That asymmetry is a choice, not an oversight. A locked body is a reviewed instruction this harness executes forever, so a change to one has to be read; a client is a moving target whose next version is the whole point of re-running the installer, and pinning it would freeze the harness against the clients it exists to drive. The trade is a supply chain that trusts Anthropic, OpenAI, and two tap owners at install time. Nothing else here does.
-
-## Ponytail
-
-Ponytail is a locked skill body, not a plugin. The plugin's mechanism was a `SessionStart` hook that turned lazy mode on for every session in every repository, plus `SubagentStart` and `UserPromptSubmit` trackers, six skills, and a config file. The harness installs none of it, and `check_links` asserts the skill body is present.
-
-Provisioning once also uninstalled that plugin from all three clients. That code is gone: it removed a state no version of this repository ever created, since the plugin predates the harness and lived only in a hand-rolled setup. An installer that migrates away from states it never produced accumulates them forever.
-
-What replaces it is one line in each command that writes code, `/ship`, `/proto`, `/feedback`, and `/address-review`, saying to load and follow the skill, plus `adversarial-review` using ponytail violations as a review lens and its fix standard. That is a smaller and more precise surface than a session hook: lazy mode applies where code is written rather than to every conversation, and it costs one sentence per command rather than three hooks and five JS files. It also delivers more of the skill, because the hook injects a level-filtered condensation while the locked `SKILL.md` carries the full body, including the reuse-before-writing rung, the root-cause-not-symptom rule, and the read-fully-then-be-lazy boundary.
-
-The trade is deliberate. `/ponytail lite|ultra` switching, the statusline, subagent inheritance, and the five auxiliary skills are gone; the intensity table survives in the body as reference prose with nothing to write the config it describes. In exchange the body has a lock entry in `skills-lock.json`, and the rule is that it changes only through a reviewed `npx skills@1 update`, where the plugin previously moved 4.7.0 to 4.9.0 during an install with six agent-steering bodies changing unread.
+Binaries are the deliberate exception. Every prose body has its hash in `skills-lock.json`, while the clients arrive unpinned: `curl -fsSL https://claude.ai/install.sh | bash`, `npm install --global @openai/codex@latest`, and two Homebrew taps. A locked body is a reviewed instruction this harness executes forever, so a change to one has to be read; a client is a moving target whose next version is the point of re-running the installer. The trade is a supply chain that trusts Anthropic, OpenAI, and two tap owners at install time.
 
 ## Roster
 
 Commands are `/ask`, `/research`, `/triage`, `/spec`, `/create-ticket`, `/proto`, `/ship`, `/feedback`, `/address-review`, `/land`, and `/abandon`.
 
-`/land` has two lanes, selected by the pull request's state. Explicitly invoking `/land <n>` authorizes squash-merging an open non-draft pull request after its gates pass, then closing its lifecycle. An already-merged pull request runs only the remaining cleanup. No extra argument or second confirmation is required. Automatic routing and other workflows never invoke `/land`, even for cleanup; they tell the human to invoke it instead. The command stops if reached without explicit human invocation. Both the mergeability gate and the conformance check precede the merge, so a blocking mismatch prevents it; the merged lane can only report a mismatch. The command avoids `gh pr merge --delete-branch`, whose post-merge local checkout fails when the default branch is checked out in another worktree. With no argument it resolves the current worktree's head branch, falling back to a search over merged pull requests only: an open pull request found by search is not what the human authorized.
+`/land` has two lanes, selected by the pull request's state. Explicit `/land <n>` authorizes squash-merging an open non-draft pull request after its gates pass; an already-merged one runs only the remaining cleanup. No extra argument or second confirmation. Automatic routing and other workflows never invoke it. Both the mergeability gate and the conformance check precede the merge, so a blocking mismatch prevents it, where the merged lane can only report one. With no argument it resolves the current worktree's head branch, falling back to a search over merged pull requests only.
 
-`/abandon` is the other exit from the same lifecycle, for work that will not land: a pull request closed unmerged, or a claim left behind by a run that died. `/land` covers a merged pull request, and an open non-draft one it was told to merge, and stops on anything else, and no tracker automation recovers a ticket stranded at `in-progress`, since the GitHub reconciler skips any issue already carrying an active label and fires only on close or reopen. That left the worktree and the claim with no owner in either tracker mode. It is a command rather than a branch inside `/land` for two reasons: `/proto` calls it to kill a prototype, so it has a second caller, and it carries an irreversible step `/land` has no reason to hold. Being the only workflow that throws away unmerged work, it reports every commit and uncommitted change as a list and takes one confirmation on that list. Refusing a dirty worktree the way `/land` does would defeat it, so the read-before-discard is the guard instead. An abandoned attempt preserves required scope and dependencies for retry. Explicit cancellation includes parent scope and obsolete relationship changes in the same confirmation, preserves cancellation history, and reconciles the remaining scope without counting cancellation as merge evidence. It can finish tracker cleanup after the worktree is gone. A tracker without a documented cancellation representation stops before writes; local markdown currently supports release only.
+`/abandon` is the other exit, for work that will not land. No tracker automation recovers a ticket stranded at `in-progress`, since the reconciler skips an active label and fires only on close or reopen, so the worktree and the claim would have no owner. It is a command rather than a lane inside `/land` because `/proto` calls it to kill a prototype. Being the only workflow that discards unmerged work, it lists every commit and uncommitted change and takes one confirmation on that list. An abandoned attempt preserves scope and dependencies for retry; explicit cancellation reconciles parent scope and obsolete edges in the same confirmation, and never counts as merge evidence.
 
-Local skills are `adversarial-review`, `evidence`, `grilling`, `grill-with-docs`, `local-tracker`, and `setup-harness`, each carrying the three guards. `local-tracker` holds what a tracker operation means when the tracker is committed markdown files, so the delivery commands gain one pointer each instead of a files-mode branch apiece. `setup-harness` stays a skill because it installs bundled lifecycle assets that only a skill directory can carry; its guards keep it from firing on its own. `grilling` is maintained locally, under the name the routing table already used, and carries the three guards plus a self-grill mode. It replaced the locked Matt Pocock body, whose design-tree rounds ask a whole frontier at once: that is the batching this protocol exists to prevent, and it carried no self-grill mode for `/ship` and `/triage` to call. The trade is that this body has no lock entry, so it is reviewed the way any other file here is rather than diffed against an upstream. `grill-with-docs` composes that same interview with `domain-modeling`, so a decision reaches `CONTEXT.md` or an ADR while the session is still live; it is the only harness surface that writes either, because `/spec` loads `domain-modeling` only to reconcile vocabulary a greenfield project does not yet have.
+Local skills are `adversarial-review`, `evidence`, `grilling`, `grill-with-docs`, `local-tracker`, and `setup-harness`, each carrying the three guards. `local-tracker` holds what a tracker operation means when the tracker is committed markdown, so the delivery commands gain one pointer each instead of a files-mode branch apiece. `setup-harness` stays a skill because it installs bundled assets only a skill directory can carry. `grilling` is local rather than locked so it can carry a self-grill mode and ask one question at a time. `grill-with-docs` composes it with `domain-modeling`, and is the only surface that writes `CONTEXT.md` or an ADR. A `/research` ledger stays planning input until a route produces a complete contract; a finalized `/proto` ledger is itself a contract.
 
-`/research` and `/proto` replace two locked bodies that were workflows wearing a skill's clothes: they could fire on description matching, and neither produced the artifacts `POLICY.md` now distinguishes. A `/research` finding ledger remains planning input until a planning route produces a complete contract. Publication confirmation alone does not make a research ticket implementation-ready; agreed behavior, acceptance criteria, and verification or test seams are also required. A finalized `/proto` requirements ledger is an implementation contract. As commands they are typed or they do not run, and each now emits the artifact the policy promised.
+Locked Matt Pocock skills provide domain and module vocabulary, `improve-codebase-architecture`, TDD, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode. Locked `JuliusBrussee/caveman` provides `caveman-commit`; only `skills/` is taken, which that repository licenses MIT. Where a locked body and the policy disagree the policy wins: caveman allows a 72-character subject, `POLICY.md` allows 50.
 
-Locked Matt Pocock skills provide domain/module vocabulary, architecture surveys through `improve-codebase-architecture`, TDD, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode. Locked `pbakaus/impeccable` provides `impeccable`, the one frontend design body, covering landing pages, portfolios, and redesigns along with dashboards, data tables, and multi-step product UI. Like every locked body it is description-matchable, which is why the control on it is scope rather than a guard: no command or local skill loads it, so it never enters a workflow implicitly, and `POLICY.md` keeps the project's existing styling layer winning inside `/proto` and `/ship` regardless. No command and no local skill names it.
+`improve-codebase-architecture` produces planning input, never a change contract: keep its report read-only and route a candidate through native plan mode, `/spec`, or `/proto` before changing files.
 
-Impeccable comes through `locked-skills.sh` from the repository's `.agents/skills/impeccable`, like every locked body. Its own `npx impeccable install` is never used: it wires `PostToolUse` and `Stop` hook manifests into a project's client settings unasked, and it fetches an unpinned, unverified archive from the author's site, because the published npm package carries the detector CLI and no skill payload.
+### Impeccable
 
-The body carries that hook machinery whatever installed it, plus three further routes that would break the lock, and `POLICY.md` forbids all of them. `$impeccable hooks on` runs `scripts/hook-admin.mjs`, which writes the manifests. `scripts/context.mjs` polls the author's site for a newer version and offers `npx impeccable update`, which rewrites the locked directory out from under `skills-lock.json`. `scripts/pin.mjs` mints a `$<command>` shortcut as a real skill directory in whichever harness skills directory it finds under the project root, which here is the tracked `harness/skills` that `.agents/skills` points at; `install.sh` links such a name everywhere and neither of its sweeps reclaims it, since `reconcile_orphans` skips a real directory and `retire_shadowed_skills` backs up only names on the harness roster.
+Locked `pbakaus/impeccable` is the one frontend design body. It is description-matchable, so the control is scope rather than a guard: no command or local skill loads it, and `POLICY.md` keeps the project's existing styling layer winning inside `/proto` and `/ship`.
 
-The lock covers the body's bytes, not its runtime egress. Several of its scripts call the author's site for assets and generation, and its own documentation routes scans through the unpinned `npx impeccable detect`.
+It arrives only through `locked-skills.sh`. Four of its own routes are forbidden, because each writes outside the lock: `npx impeccable install` and `$impeccable hooks on` wire `PostToolUse` and `Stop` hooks into a project unasked, `npx impeccable update` rewrites the locked directory out from under `skills-lock.json`, and `scripts/pin.mjs` mints a `$<command>` shortcut as a real skill directory that `install.sh` would link everywhere and neither sweep would reclaim. The lock covers the body's bytes, not its runtime egress: several scripts call the author's site. At 4.8 MB across 168 files it is the largest thing in `skills/`, against about 99 KB for everything else combined.
 
-At 4.8 MB across 168 files it is the largest thing in `skills/` by a wide margin, against about 80 KB for every other body combined, roughly half of it a bundled font index and a browser detector. `locked-skills.sh update` re-churns all of it.
+### Ponytail
 
-Locked `JuliusBrussee/caveman` provides `caveman-commit`, which carries the commit rules and their worked examples: subject shape, what never goes in a body, and how a breaking change or a linked issue is written. `POLICY.md` delegates to it rather than restating the rules in full. Only `skills/` is taken, which that repository licenses MIT; its compression engine is BSL and is not vendored here. Where the two disagree the policy wins, as it does for any locked body: the skill allows a 72-character subject as a hard cap, and `POLICY.md` allows 50.
-
-`improve-codebase-architecture` produces planning input, never a change contract: keep its report and grilling read-only, do not edit `CONTEXT.md` or ADRs inline, and route a selected candidate through native plan mode, `/spec`, or `/proto` before changing files.
-
-Deliberately removed: `to-spec` and `to-tickets`, whose templates now live inline in `/spec` and `/create-ticket` rather than behind a wrapper that overrode most of what it loaded; `code-review`, whose second axis is now a spec-conformance pass `/ship` runs itself while holding the contract; the `grill-me` and `review` command wrappers, retired earlier, which is a separate thing from the `grill-me` skill body `grilling` now carries; the whole SEO group, twelve globally invocable names first and then the orchestrator and its locked roles, along with the `claude-seo` launcher and the 3.11 interpreter it pinned; and both frontend design bodies with the `/design` workflow and the `DESIGN.md` conformance rules that existed to serve them. `impeccable` is the one part of that group installed today, as a skill a human loads by name rather than as a workflow with conformance rules attached. No skill holds scope over a UI surface: `ponytail` claims none upstream and the policy assigns it none, so a UI surface with no design body loaded is built from the contract like any other work.
+Ponytail is a locked skill body, not a plugin. None of the plugin is installed, and `check_links` asserts the body is present. What replaces its `SessionStart` hook is one line in each command that writes code, `/ship`, `/proto`, `/feedback`, and `/address-review`, plus `adversarial-review` using ponytail violations as a review lens. Lazy mode then applies where code is written rather than to every conversation, and delivers the full `SKILL.md` instead of the hook's level-filtered condensation. The trade is that `/ponytail lite|ultra` switching and the auxiliary skills are gone, and in exchange the body changes only through a reviewed update, where the plugin once moved 4.7.0 to 4.9.0 mid-install with six agent-steering bodies changing unread.
 
 ## Invocation guards
 
-`POLICY.md` opens with the commands-and-skills split. Command storage carries it for the workflows; generated Codex adapters enforce explicit invocation through native metadata. For the local skills the roster lists, the three per-client guards carry it. For a locked body, prose is the only control, which is why a body that must never fire on its own is not installed at all.
+`POLICY.md` opens with the commands-and-skills split. Command storage carries it for the workflows, and generated Codex adapters enforce explicit invocation through native metadata. For the local skills the roster lists, the three per-client guards carry it. For a locked body prose is the only control, which is why a body that must never fire on its own is not installed at all.
 
 ## GitHub lifecycle
 
-In GitHub mode, `setup-harness` writes `docs/agents/harness.json`, creates the four configured labels, writes the Matt-skill tracker compatibility file, and copies the workflow and reconciler bundled in its skill directory. The workflow becomes active when that human-reviewed change reaches the default branch. GitHub native sub-issue and dependency relationships remain the source of truth. A blocker satisfies the ready frontier only when a merged pull request closed it; the parent closes only after every child has that same merge evidence. Closing or reopening a child always reconciles both states.
+In GitHub mode, `setup-harness` writes `docs/agents/harness.json`, creates the four labels, writes the tracker compatibility file, and copies the bundled workflow and reconciler. The workflow becomes active when that reviewed change reaches the default branch. GitHub native sub-issue and dependency relationships remain the source of truth. A blocker satisfies the frontier only when a merged pull request closed it, which is why `blocker_satisfied` walks `closedByPullRequestsReferences` rather than trusting the closed state; closing an issue by hand does not open the frontier behind it. The parent closes only after every child has that same evidence.
 
-The other configured mode is local markdown, where `setup-harness` writes the config and the compatibility file and nothing else: no labels, no workflow, no reconciler. Its lifecycle state is a `Status:` line and a `Blocked by:` line committed beside the code, so none of the automation below applies and none of it is installed. The `local-tracker` skill holds what each tracker operation means there, and the delivery commands load it by name when the config selects that mode.
+The other mode is local markdown, where `setup-harness` writes the config and compatibility file and nothing else: no labels, no workflow, no reconciler. Lifecycle state is a `Status:` line and a `Blocked by:` line committed beside the code, and the `local-tracker` skill holds what each operation means there.
 
 ```mermaid
 flowchart TD
@@ -335,28 +282,24 @@ flowchart TD
     end
 ```
 
-A blocker counts as satisfied only when the issue is closed *and* a merged pull request closed it, which is why `blocker_satisfied` walks `closedByPullRequestsReferences` rather than trusting the closed state. Closing an issue by hand therefore does not open the frontier behind it.
+Contract source and tracker binding are independent: the source controls conformance, the binding controls branch names, closing references, and label transitions. An in-conversation, `/proto`, or trackerless ticket contract is preserved in an inline `## Contract`; only a tracker-bound ticket-sourced contract can remain solely in its ticket.
 
-Three contract routes converge on `/ship`: `/spec` plus `/create-ticket` for a published ticket contract that is tracker-bound only when a tracker exists, an approved in-conversation contract from native plan mode, or `/proto` for a requirements ledger discovered by building. Contract source and tracker binding are independent: the source controls conformance, while the binding controls branch names, closing references, and label transitions. An in-conversation, `/proto`, or trackerless ticket contract is preserved in an inline `## Contract`; only a tracker-bound ticket-sourced contract can remain solely in the ticket.
-
-`/land` is the local half of the same step: it resolves the pull request first and lets that state pick the lane after explicit human invocation, prefers the inline contract for conformance, and falls back to the ticket when no inline contract exists. The ticket is optional, so trackerless work skips tracker transitions. A legacy trackerless pull request without either source reports that conformance cannot be reconstructed, verifies merge and default-branch health, and removes only a clean retained worktree.
-
-The open lane is the other door into that same local half, for the case where the human deciding to merge is the one typing the command. It runs the mergeability gate and the conformance check before the irreversible step, squash merges, repairs whatever was stacked on the branch, and then finishes on the same tail: tracker reconciled when bound, worktree retired. The conformance check runs once either way, before the merge here and after it there. The reconciler sees no difference, because the closing reference closes the ticket either way.
+`/land` resolves the pull request first and lets that state pick the lane, prefers the inline contract for conformance, and falls back to the ticket when none exists. Trackerless work skips tracker transitions. A legacy trackerless pull request with neither source reports that conformance cannot be reconstructed, verifies merge and default-branch health, and removes only a clean retained worktree.
 
 ## Validation
 
-Validate a change to this directory against the sessions it actually produced, as `harness/bench/README.md` explains:
+Validate a change to this directory against the sessions it produced, as `harness/bench/README.md` explains:
 
 ```sh
 python3 harness/bench/measure.py --split <commit-date> --since <window-start>
 ```
 
-Do not enable the Worktrunk Claude Code plugin. Its `UserPromptSubmit` hook rewrites the same per-branch slot `POLICY.md` uses for attempt and escalation counts, which would erase an escalation on the next prompt.
-
 It reads Claude Code JSONL transcripts, Codex rollout JSONL, and the OpenCode SQLite database, and reports each client separately; `--client` narrows it. A metric a client does not record, such as a declined tool call in Codex or OpenCode, prints as `-` rather than zero.
 
-Eight medians per cohort: `turns`, `tool_calls`, and `minutes` for cost, `interrupts`, `denials`, and `errors` for friction, and `commands` and `delegation` for the two things this policy actually claims to move, routing adoption and subagent use. A subagent gets a transcript of its own in both clients that delegate, and is counted as the parent's delegation rather than as a session of its own.
+Eight medians per cohort: `turns`, `tool_calls`, and `minutes` for cost, `interrupts`, `denials`, and `errors` for friction, and `commands` and `delegation` for routing adoption and subagent use. A subagent gets its own transcript in both clients that delegate, and counts as the parent's delegation rather than as a session.
 
-A hard week at work moves every one of those numbers without the harness changing. Copy `harness/bench/cohorts.example.json` to `cohorts.json` and list the project patterns that mean work, and the report splits work from personal so a deadline lands in one cohort and the other still reads the change. That file is gitignored: naming a client is the whole job of it.
+A hard week at work moves every one of those numbers without the harness changing. Copy `harness/bench/cohorts.example.json` to `cohorts.json` and list the project patterns that mean work, and the report splits work from personal. That file is gitignored.
 
 Populations, not pairs. Cost and friction are the measured part; quality stays a human read of the sessions.
+
+Do not enable the Worktrunk Claude Code plugin. Its `UserPromptSubmit` hook rewrites the same per-branch slot `POLICY.md` uses for attempt and escalation counts, which would erase an escalation on the next prompt.
