@@ -33,8 +33,8 @@ flowchart TD
         spec --> createticket["/create-ticket"]
         ledger --> createticket
         createticket --> ticket["implementation-ready tickets"]
-        createticket --> planning["planning-only ticket<br>no lifecycle label"]
-        planning -->|promoted by /create-ticket| ticket
+        createticket -->|research ticket,<br>contract fields missing| planning["planning-only ticket<br>no lifecycle label"]
+        planning -->|fields supplied,<br>/create-ticket promotes| ticket
 
         proto_in["requirements that<br>will not settle on paper"] --> proto["/proto<br>build a slice, local rungs green,<br>a human tries it, fold feedback in"]
         proto --> protoledger["requirements ledger"]
@@ -60,7 +60,7 @@ flowchart TD
         implement --> rungs["local rungs green:<br>types, lint, tests, build"]
         rungs --> commit["commit"] --> review["adversarial-review<br>blind reviewers, told the diff is wrong"]
         review --> conform["spec-conformance pass<br>diff against the contract"]
-        conform --> push["push"] --> pr["open the pull request<br>capped body: what changed, contract,<br>checks, assumptions, refuted, rejected"]
+        conform --> push["push"] --> pr["open the draft pull request<br>capped body: what changed, contract,<br>checks, assumptions, refuted, rejected"]
         pr --> checks(["remote required checks<br>and both review passes green"])
         checks -->|mark the draft ready| ready(["ready-for-human<br>terminal state"])
     end
@@ -316,7 +316,8 @@ flowchart TD
         landopen --> mergedself["merged by this run, the closing<br>reference closes the ticket"]
         mergedself --> trigger
         merged --> trigger
-        merged -->|merged by someone else| landtail["reconcile the tracker,<br>retire the worktree"]
+        merged -->|merged by someone else| landmerged["/land merged lane<br>verify conformance, report a mismatch"]
+        landmerged -->|conformance clean| landtail["reconcile the tracker,<br>retire the worktree"]
         mergedself -->|the same run continues| landtail
         humanmerge -->|they close it unmerged| abandonlabel["/abandon releases the claim by hand:<br>the reconciler skips an active label<br>and fires only on close or reopen"]
         inprogress -->|the run died| abandonlabel
