@@ -815,7 +815,7 @@ PY
 # assertion here needs a client or a package on PATH, which is exactly what
 # --links-only does not install.
 check_tools() {
-    local command
+    local command config
     for command in codex claude opencode gh python3 uv engram wt; do
         command -v "$command" >/dev/null || die "Missing required command: $command"
     done
@@ -825,8 +825,19 @@ check_tools() {
     # them, so this is where a missing one has to fail loudly.
     assert_pythons
 
-    opencode debug config |
-        python3 -c 'import json,sys; d=json.load(sys.stdin); p=d.get("plugin",[]); assert sum("engram" in x for x in p)==1; assert "engram" in d.get("mcp",{})'
+    # Through a file: `opencode debug config` stops at the 64 KiB pipe capacity
+    # whenever stdout is not a regular file, and this config passed 64 KiB, so
+    # the piped form died on a JSON parse error instead of on the assertion.
+    config="$(mktemp)"
+    opencode debug config > "$config"
+    python3 - "$config" <<'PY'
+import json, sys
+
+data = json.load(open(sys.argv[1]))
+assert sum("engram" in plugin for plugin in data.get("plugin", [])) == 1
+assert "engram" in data.get("mcp", {})
+PY
+    rm -f "$config"
     claude plugin validate "$HARNESS_DIR/skills" >/dev/null
     wt switch --help | grep -q -- '--no-cd'
 }
