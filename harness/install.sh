@@ -24,6 +24,10 @@ ENGRAM_FORMULA_KEPT=false
 # bare `engram` is ambiguous in that tap, and `brew uninstall engram` resolves
 # it to a cask and refuses with "Refusing to load cask ... from untrusted tap".
 ENGRAM_FORMULA="gentleman-programming/tap/engram"
+AGENT_BROWSER_FORMULA_KEPT=false
+# Unqualified because it is homebrew-core rather than a tap, so there is no
+# second formula of this name to disambiguate against.
+AGENT_BROWSER_FORMULA="agent-browser"
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*" >&2; }
@@ -241,9 +245,14 @@ install_packages() {
     log "Installing current AI clients and harness tools"
     brew tap anomalyco/tap
     brew tap gentleman-programming/tap
-    for formula in node gh uv worktrunk anomalyco/tap/opencode gentleman-programming/tap/engram; do
+    for formula in node gh uv worktrunk "$AGENT_BROWSER_FORMULA" anomalyco/tap/opencode gentleman-programming/tap/engram; do
         brew_latest_formula "$formula"
     done
+
+    # The formula's caveat, run rather than printed: without the download every
+    # browser call through the MCP fails mid-session. Idempotent.
+    log "Downloading Chrome for Testing for agent-browser"
+    agent-browser install
     if [[ "$platform" == Darwin ]]; then
         brew_latest_cask codex
     else
@@ -282,6 +291,37 @@ install_engram() {
     engram setup claude-code <<< y
     engram setup codex < /dev/null
     engram setup opencode < /dev/null
+}
+
+# agent-browser ships no per-client registrar, so the three registrations are
+# written here rather than delegated to a `setup` command. Remove then add, so
+# a re-run is idempotent and the pinned path is rewritten rather than left
+# stale. OpenCode takes a JSON edit because `opencode mcp add` is interactive.
+# The README carries the global scope choice and the default tool profile.
+install_agent_browser() {
+    local binary
+    log "Reconciling agent-browser"
+    binary="$(command -v agent-browser)" ||
+        die "agent-browser is missing; run without --links-only to install it."
+
+    claude mcp remove --scope user agent-browser >/dev/null 2>&1 || true
+    claude mcp add --scope user agent-browser -- "$binary" mcp >/dev/null
+    codex mcp remove agent-browser >/dev/null 2>&1 || true
+    codex mcp add agent-browser -- "$binary" mcp >/dev/null
+
+    python3 - "$CONFIG_HOME/opencode/opencode.json" "$binary" <<'PY'
+import json, pathlib, sys
+
+config, binary = pathlib.Path(sys.argv[1]), sys.argv[2]
+data = json.loads(config.read_text()) if config.exists() else {}
+data.setdefault("mcp", {})["agent-browser"] = {
+    "command": [binary, "mcp"],
+    "enabled": True,
+    "type": "local",
+}
+config.parent.mkdir(parents=True, exist_ok=True)
+config.write_text(json.dumps(data, indent=2) + "\n")
+PY
 }
 
 # Both of these write zsh and only zsh: the aliases go into ~/.zshrc, and
@@ -719,13 +759,14 @@ install_links() {
     backup_existing "$HOME/.local/bin/claude-seo"
 }
 
-# The three writers of a mutable client config, kept together because all three
-# have to run after `engram setup`. Engram rewrites settings.json and
-# config.toml from its own template: it overwrites keys this harness declares,
-# drops keys it does not know, and would silently undo a reconcile that ran
-# before it. The harness is the last writer, which is what makes the tracked
-# values the ones a client actually reads.
+# The four writers of a mutable client config, kept together because all four
+# have to run after `engram setup`. Engram rewrites settings.json, config.toml
+# and opencode.json from its own template: it overwrites keys this harness
+# declares, drops keys it does not know, and would silently undo a reconcile
+# that ran before it. The harness is the last writer, which is what makes the
+# tracked values the ones a client actually reads.
 reconcile_clients() {
+    install_agent_browser
     reconcile_claude_settings
     write_reconciled_codex "$HARNESS_DIR/clients/codex.sh" "the tracked Codex settings"
     write_reconciled_codex "$HARNESS_DIR/statusline/codex.sh" "the Codex status line"
@@ -816,7 +857,7 @@ PY
 # --links-only does not install.
 check_tools() {
     local command config
-    for command in codex claude opencode gh python3 uv engram wt; do
+    for command in codex claude opencode gh python3 uv engram wt agent-browser; do
         command -v "$command" >/dev/null || die "Missing required command: $command"
     done
     assert_plugin_count codex engram 1
@@ -824,6 +865,11 @@ check_tools() {
     # Installed by the root script, asserted here: the harness is what consumes
     # them, so this is where a missing one has to fail loudly.
     assert_pythons
+
+    # Both servers, not just the new one: install_agent_browser rewrites the
+    # files `engram setup` wrote, so a run that clobbered engram has to fail.
+    claude mcp get agent-browser >/dev/null
+    codex mcp get agent-browser >/dev/null
 
     # Through a file: `opencode debug config` stops at the 64 KiB pipe capacity
     # whenever stdout is not a regular file, and this config passed 64 KiB, so
@@ -835,7 +881,9 @@ import json, sys
 
 data = json.load(open(sys.argv[1]))
 assert sum("engram" in plugin for plugin in data.get("plugin", [])) == 1
-assert "engram" in data.get("mcp", {})
+servers = data.get("mcp", {})
+assert "engram" in servers
+assert "agent-browser" in servers
 PY
     rm -f "$config"
     claude plugin validate "$HARNESS_DIR/skills" >/dev/null
@@ -923,6 +971,50 @@ uninstall_engram() {
             warn "Could not uninstall the engram formula. Remove it with: brew uninstall $ENGRAM_FORMULA"
         }
     fi
+}
+
+# agent-browser, taken back off, in the order uninstall_engram uses and for the
+# same reason: the three registrations pin the absolute path of a binary this
+# function is about to delete, so they go while it still exists.
+#
+# Registrations before the formula, as in uninstall_engram: each one pins the
+# path of the binary about to be deleted. ~/.agent-browser stays, like
+# ~/.engram: agent-browser's `state` profile saves auth under that same root.
+uninstall_agent_browser() {
+    log "Removing agent-browser"
+    if command -v claude >/dev/null; then
+        claude mcp remove --scope user agent-browser >/dev/null 2>&1 || true
+    fi
+    if command -v codex >/dev/null; then
+        codex mcp remove agent-browser >/dev/null 2>&1 || true
+    fi
+    remove_agent_browser_config
+    if command -v brew >/dev/null && brew list --formula "$AGENT_BROWSER_FORMULA" >/dev/null 2>&1; then
+        brew uninstall "$AGENT_BROWSER_FORMULA" || {
+            AGENT_BROWSER_FORMULA_KEPT=true
+            warn "Could not uninstall the agent-browser formula. Remove it with: brew uninstall $AGENT_BROWSER_FORMULA"
+        }
+    fi
+}
+
+# The OpenCode half, which has no CLI to delegate to. An emptied `mcp` is
+# dropped rather than left as `{}`, the rule remove_engram_config states.
+remove_agent_browser_config() {
+    python3 - "$CONFIG_HOME/opencode/opencode.json" <<'PY'
+import json, pathlib, sys
+
+config = pathlib.Path(sys.argv[1])
+if not config.exists():
+    raise SystemExit(0)
+data = json.loads(config.read_text())
+servers = data.get("mcp") or {}
+servers.pop("agent-browser", None)
+if servers:
+    data["mcp"] = servers
+else:
+    data.pop("mcp", None)
+config.write_text(json.dumps(data, indent=2) + "\n")
+PY
 }
 
 # What the client CLIs do not own: the MCP server entries and the instruction
@@ -1197,6 +1289,29 @@ PY
             die "$script reports $status against $HOME/.codex/config.toml; expected 3, already removed."
     done
     check_engram_removed
+    check_agent_browser_removed
+}
+
+# Each surviving entry pins the path of a deleted binary. `mcp get` succeeding
+# is the failure, so its exit code is read rather than ignored.
+check_agent_browser_removed() {
+    if command -v claude >/dev/null; then
+        ! claude mcp get agent-browser >/dev/null 2>&1 ||
+            die "The agent-browser MCP survived the uninstall in Claude Code."
+    fi
+    if command -v codex >/dev/null; then
+        ! codex mcp get agent-browser >/dev/null 2>&1 ||
+            die "The agent-browser MCP survived the uninstall in Codex."
+    fi
+    if ! python3 - "$CONFIG_HOME/opencode/opencode.json" <<'PY'
+import json, pathlib, sys
+
+config = pathlib.Path(sys.argv[1])
+assert not config.exists() or "agent-browser" not in (json.loads(config.read_text()).get("mcp") or {})
+PY
+    then
+        die "The agent-browser MCP survived the uninstall in $CONFIG_HOME/opencode/opencode.json."
+    fi
 }
 
 # Engram leaves entries in three client configs and three loose files, and a
@@ -1254,6 +1369,7 @@ PY
 uninstall() {
     log "Removing the harness from this machine"
     uninstall_engram
+    uninstall_agent_browser
     uninstall_links
     uninstall_aliases
     remove_claude_settings
@@ -1270,15 +1386,23 @@ $(printf '\033[1;32m✓ Harness AI removed.\033[0m')
 
 Gone: every managed skill and command link, the three POLICY.md links, the
 Claude status line link, the ~/.zshrc alias block, the tracked keys in
-~/.claude/settings.json and ~/.codex/config.toml, and Engram: its plugin,
-marketplace, and MCP registration in all three clients, plus the formula.
+~/.claude/settings.json and ~/.codex/config.toml, Engram: its plugin,
+marketplace, and MCP registration in all three clients, plus the formula, and
+agent-browser: its MCP registration in all three clients, plus the formula.
 
 Kept: ~/.engram, which is your memory database rather than anything this
 installer wrote. Reinstalling finds it where it was. To take it with you:
 engram export <file>   (before uninstalling, while the binary still exists)
+
+Also kept: ~/.agent-browser, which is the Chrome for Testing download (around
+370 MB) and any cookies, saved auth, and sessions agent-browser stored beside
+it. Reinstalling reuses it. Delete it yourself to reclaim the space; a fresh
+machine gets the browser back from: agent-browser install
 $($ENGRAM_FORMULA_KEPT && printf '%s' "
 The engram formula could not be removed and is still installed; the warning
-above says so. Its configuration is gone either way.")
+above says so. Its configuration is gone either way.")$($AGENT_BROWSER_FORMULA_KEPT && printf '%s' "
+The agent-browser formula could not be removed and is still installed; the
+warning above says so. Its configuration is gone either way.")
 
 Also left alone: the other packages (codex, claude, opencode, worktrunk, gh,
 uv, node), every untracked key in both client configs, ~/.dotfiles-backups,
