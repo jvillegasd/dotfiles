@@ -19,7 +19,9 @@ Every change reaches `/ship` through one of three contract routes, and exactly o
 flowchart TD
     subgraph CONTRACT["contract"]
         ask_in["a bounded question"] --> ask["/ask<br>read-only, changes nothing"]
-        ask -.->|escalates when it is bigger than one answer| ask
+        ask -.->|needs deep tracing| research
+        ask -.->|unclear requirements or a tradeoff| grill
+        ask -.->|unclear requirements or a tradeoff| plan
 
         research_in["a question or a claim"] --> research["/research"]
         research --> ledger["finding ledger<br>planning input, not a contract"]
@@ -31,6 +33,8 @@ flowchart TD
         spec --> createticket["/create-ticket"]
         ledger --> createticket
         createticket --> ticket["implementation-ready tickets"]
+        createticket -->|research ticket,<br>contract fields missing| planning["planning-only ticket<br>no lifecycle label"]
+        planning -->|fields supplied,<br>/create-ticket promotes| ticket
 
         proto_in["requirements that<br>will not settle on paper"] --> proto["/proto<br>build a slice, local rungs green,<br>a human tries it, fold feedback in"]
         proto --> protoledger["requirements ledger"]
@@ -54,18 +58,19 @@ flowchart TD
         ship --> ladder["resolve the oracle ladder<br>project instructions, else task runner,<br>else the toolchain"]
         ladder --> implement["implement<br>loading ponytail"]
         implement --> rungs["local rungs green:<br>types, lint, tests, build"]
-        rungs --> conform["spec-conformance pass<br>diff against the contract"]
-        conform --> review["adversarial-review<br>blind reviewers, told the diff is wrong"]
-        review --> commit["commit"] --> push["push"] --> pr["open the pull request<br>capped body: what changed, contract,<br>checks, assumptions, refuted, rejected"]
-        pr --> checks(["remote required checks green<br>terminal state"])
+        rungs --> commit["commit"] --> review["adversarial-review<br>blind reviewers, told the diff is wrong"]
+        review --> conform["spec-conformance pass<br>diff against the contract"]
+        conform --> push["push"] --> pr["open the draft pull request<br>capped body: what changed, contract,<br>checks, assumptions, refuted, rejected"]
+        pr --> checks(["remote required checks<br>and both review passes green"])
+        checks -->|mark the draft ready| ready(["ready-for-human<br>terminal state"])
     end
 
     subgraph AFTER["after"]
-        checks --> feedback["/feedback<br>a bullet list from you;<br>deferred rounds apply only,<br>a full round settles the debt"]
-        checks --> addressreview["/address-review<br>review threads, red CI"]
+        ready --> feedback["/feedback<br>a bullet list from you;<br>deferred rounds apply only,<br>a full round settles the debt"]
+        ready --> addressreview["/address-review<br>review threads, red CI"]
         feedback --> merge{"a human decides to merge"}
         addressreview --> merge
-        checks --> merge
+        ready --> merge
         merge -->|someone else merged it| land["/land merged lane<br>verify conformance, where a mismatch<br>can only be reported"]
         merge -->|they type /land n merge| land2["/land open lane<br>gates and conformance first,<br>then squash merge, then repair dependents"]
         land --> landtail["reconcile the tracker,<br>retire the worktree"]
@@ -295,8 +300,8 @@ flowchart TD
         trigger --> parentstate["reconcile_parent"]
         parentstate -->|every child closed by a merged PR| closeparent["parent closed"]
         parentstate -->|a child reopened| reopenparent["parent reopened,<br>label: in-progress"]
-        frontier --> walk["walk to parents and dependents,<br>each issue reconciled once"]
-        parentstate --> walk
+        parentstate -->|state changed| parentqueue["parent queued for<br>a full reconcile pass"]
+        parentqueue --> trigger
     end
 
     GRAPH --> trigger
@@ -311,8 +316,9 @@ flowchart TD
         landopen --> mergedself["merged by this run, the closing<br>reference closes the ticket"]
         mergedself --> trigger
         merged --> trigger
-        merged -->|merged by someone else| land["/land merged lane: reconciles the tracker<br>and retires the worktree"]
-        mergedself -->|the same run continues| land
+        merged -->|merged by someone else| landmerged["/land merged lane<br>verify conformance, report a mismatch"]
+        landmerged -->|conformance clean| landtail["reconcile the tracker,<br>retire the worktree"]
+        mergedself -->|the same run continues| landtail
         humanmerge -->|they close it unmerged| abandonlabel["/abandon releases the claim by hand:<br>the reconciler skips an active label<br>and fires only on close or reopen"]
         inprogress -->|the run died| abandonlabel
         abandonlabel -->|every blocker still satisfied| ready
