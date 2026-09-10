@@ -902,17 +902,22 @@ check_tools() {
     # The resolved config proves what OpenCode loads; the global file proves
     # this installer is what put it there, since a project-root opencode.json
     # merges into the resolved view and would satisfy it on its own.
-    if ! python3 - "$config" "$CONFIG_HOME/opencode/opencode.json" <<'PY'
+    if ! python3 - "$config" "$CONFIG_HOME/opencode/opencode.json" "$(command -v agent-browser)" <<'PY'
 import json, pathlib, sys
 
 resolved = json.load(open(sys.argv[1]))
 assert sum("engram" in plugin for plugin in resolved.get("plugin", [])) == 1
-for name in ("engram", "agent-browser"):
-    assert name in (resolved.get("mcp") or {}), name
+servers = resolved.get("mcp") or {}
+assert "engram" in servers
+agent_browser = servers.get("agent-browser")
+assert agent_browser is not None
+assert agent_browser.get("type") == "local"
+assert agent_browser.get("enabled") is True
+assert agent_browser.get("command") == [sys.argv[3], "mcp"]
 global_config = pathlib.Path(sys.argv[2])
 assert global_config.exists(), f"{global_config} is missing"
 global_servers = json.loads(global_config.read_text()).get("mcp") or {}
-assert "agent-browser" in global_servers, f"agent-browser missing from {global_config}"
+assert global_servers.get("agent-browser", {}).get("command") == [sys.argv[3], "mcp"]
 PY
     then
         die "OpenCode is missing an expected plugin or MCP server."
