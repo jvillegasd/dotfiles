@@ -869,7 +869,7 @@ PY
 # assertion here needs a client or a package on PATH, which is exactly what
 # --links-only does not install.
 check_tools() {
-    local command config
+    local command config scope
     for command in codex claude opencode gh python3 uv engram wt agent-browser; do
         command -v "$command" >/dev/null || die "Missing required command: $command"
     done
@@ -885,7 +885,9 @@ check_tools() {
     # entry, so that half is the file; assert_plugin_count above covers the
     # plugin. The scope is asserted too: a leftover project-scoped entry would
     # satisfy a bare `get` while the user scope this writes stayed empty.
-    claude mcp get agent-browser | grep -q 'Scope: User config'
+    scope="$(claude mcp get agent-browser)"
+    grep -q 'Scope: User config' <<< "$scope" ||
+        die "agent-browser is not registered in the Claude Code user scope."
     [[ -f "$HOME/.claude/mcp/engram.json" ]] ||
         die "Engram's Claude Code MCP file is missing: $HOME/.claude/mcp/engram.json"
     codex mcp get agent-browser >/dev/null
@@ -907,8 +909,10 @@ resolved = json.load(open(sys.argv[1]))
 assert sum("engram" in plugin for plugin in resolved.get("plugin", [])) == 1
 for name in ("engram", "agent-browser"):
     assert name in (resolved.get("mcp") or {}), name
-global_servers = json.loads(pathlib.Path(sys.argv[2]).read_text()).get("mcp") or {}
-assert "agent-browser" in global_servers, "agent-browser missing from the global config"
+global_config = pathlib.Path(sys.argv[2])
+assert global_config.exists(), f"{global_config} is missing"
+global_servers = json.loads(global_config.read_text()).get("mcp") or {}
+assert "agent-browser" in global_servers, f"agent-browser missing from {global_config}"
 PY
     then
         die "OpenCode is missing an expected plugin or MCP server."
@@ -1012,20 +1016,27 @@ uninstall_engram() {
 # does not delete another tool's data directory.
 uninstall_agent_browser() {
     log "Removing agent-browser"
-    # Each client's own CLI when it is there, the file when it is not: a user
-    # who removed a client before uninstalling would otherwise keep a
-    # registration naming a binary this function is about to delete.
+    # Each client's own CLI, and nothing else. Editing the config behind a
+    # client that is gone means hand-rolling the format it owns, which is how
+    # an uninstall corrupts a file instead of tidying it. A client removed
+    # before this runs keeps its entry, so the removal says so and names the
+    # file; check_agent_browser_removed reports the survivor rather than
+    # failing a run that could not have removed it.
     if command -v claude >/dev/null; then
         claude mcp remove --scope user agent-browser >/dev/null 2>&1 || true
     else
-        remove_agent_browser_json "$HOME/.claude.json"
+        warn "Claude Code is not installed, so its agent-browser entry stays."
+        warn "Remove it by hand from $HOME/.claude.json under mcpServers."
     fi
     if command -v codex >/dev/null; then
         codex mcp remove agent-browser >/dev/null 2>&1 || true
     else
-        remove_agent_browser_codex
+        warn "Codex is not installed, so its agent-browser entry stays."
+        warn "Remove [mcp_servers.agent-browser] by hand from $HOME/.codex/config.toml."
     fi
-    remove_agent_browser_config
+    # Read rather than let a raw traceback abort the uninstall mid-way.
+    remove_agent_browser_config ||
+        die "Could not edit $CONFIG_HOME/opencode/opencode.json; fix it and re-run --uninstall."''
     if command -v brew >/dev/null && brew list --formula "$AGENT_BROWSER_FORMULA" >/dev/null 2>&1; then
         brew uninstall "$AGENT_BROWSER_FORMULA" || {
             AGENT_BROWSER_FORMULA_KEPT=true
@@ -1059,47 +1070,6 @@ if servers:
 else:
     data.pop("mcp", None)
 config.write_text(json.dumps(data, indent=2) + "\n")
-PY
-}
-
-# The fallbacks uninstall_agent_browser uses when a client CLI is gone. Keyed
-# on the name, never on position, and a file that does not exist has nothing to
-# remove.
-remove_agent_browser_json() {
-    python3 - "$1" <<'PY'
-import json, pathlib, sys
-
-config = pathlib.Path(sys.argv[1])
-if not config.exists():
-    raise SystemExit(0)
-try:
-    data = json.loads(config.read_text())
-except ValueError:
-    raise SystemExit(0)
-changed = False
-for holder in (data, *(v for v in data.get("projects", {}).values() if isinstance(v, dict))):
-    servers = holder.get("mcpServers")
-    if isinstance(servers, dict) and servers.pop("agent-browser", None) is not None:
-        changed = True
-if changed:
-    config.write_text(json.dumps(data, indent=2) + "\n")
-PY
-}
-
-remove_agent_browser_codex() {
-    python3 - "$HOME/.codex/config.toml" <<'PY'
-import pathlib, re, sys
-
-config = pathlib.Path(sys.argv[1])
-if not config.exists():
-    raise SystemExit(0)
-text = config.read_text()
-pattern = re.compile(
-    r'^\[mcp_servers\.(?:agent-browser|"agent-browser")\][^\[]*', re.MULTILINE
-)
-edited = pattern.sub("", text)
-if edited != text:
-    config.write_text(edited)
 PY
 }
 
@@ -1386,7 +1356,8 @@ check_agent_browser_removed() {
     # the machines that fallback exists for. Scoped to what the uninstall
     # removes, so an unrelated project-scoped entry cannot fail the last step
     # of a run that already deleted the formula.
-    if ! python3 - "$HOME/.claude.json" "$HOME/.codex/config.toml" <<'PY'
+    local survivors
+    survivors="$(python3 - "$HOME/.claude.json" "$HOME/.codex/config.toml" <<'PY'
 import json, pathlib, re, sys
 
 claude, codex = (pathlib.Path(argument) for argument in sys.argv[1:3])
@@ -1395,22 +1366,37 @@ if claude.exists():
         data = json.loads(claude.read_text())
     except ValueError:
         data = {}
-    assert "agent-browser" not in (data.get("mcpServers") or {}), "Claude Code user scope"
-if codex.exists():
-    assert not re.search(
-        r'^\[mcp_servers\.(?:agent-browser|"agent-browser")\]',
-        codex.read_text(),
-        re.MULTILINE,
-    ), "Codex config.toml"
+    if "agent-browser" in ((data if isinstance(data, dict) else {}).get("mcpServers") or {}):
+        print(claude)
+if codex.exists() and re.search(
+    r'^[ \t]*\[mcp_servers\.(?:agent-browser|"agent-browser")\]',
+    codex.read_text(),
+    re.MULTILINE,
+):
+    print(codex)
 PY
-    then
-        die "The agent-browser MCP survived the uninstall."
-    fi
+)"
+    # A survivor beside a client that is still installed means the CLI removal
+    # failed, which is this uninstall's bug. Beside one that is gone it is the
+    # documented consequence of not editing another tool's config by hand.
+    while IFS= read -r survivor; do
+        [[ -n "$survivor" ]] || continue
+        case "$survivor" in
+            *.claude.json) command -v claude >/dev/null &&
+                die "The agent-browser MCP survived the uninstall in $survivor." ;;
+            *config.toml) command -v codex >/dev/null &&
+                die "The agent-browser MCP survived the uninstall in $survivor." ;;
+        esac
+        warn "An agent-browser entry stays in $survivor; its client is not installed."
+    done <<< "$survivors"
     if ! python3 - "$CONFIG_HOME/opencode/opencode.json" <<'PY'
 import json, pathlib, sys
 
+# Quietly: the caller turns a false into a message, and a traceback beside it
+# only buries the one line that names the file.
 config = pathlib.Path(sys.argv[1])
-assert not config.exists() or "agent-browser" not in (json.loads(config.read_text()).get("mcp") or {})
+if config.exists() and "agent-browser" in (json.loads(config.read_text()).get("mcp") or {}):
+    raise SystemExit(1)
 PY
     then
         die "The agent-browser MCP survived the uninstall in $CONFIG_HOME/opencode/opencode.json."
@@ -1498,7 +1484,7 @@ installer wrote. Reinstalling finds it where it was. To take it with you:
 engram export <file>   (before uninstalling, while the binary still exists)
 
 $([[ -d "$HOME/.agent-browser" ]] && printf '%s' "
-Also kept: ~/.agent-browser ($(du -sh "$HOME/.agent-browser" 2>/dev/null | cut -f1)),
+Also kept: ~/.agent-browser ($(du -sh "$HOME/.agent-browser" 2>/dev/null | cut -f1 | tr -d " ")),
 the browser download and any profiles agent-browser saved beside it.
 Reinstalling reuses it. Delete it yourself to reclaim the space; a fresh
 machine gets the browser back from: agent-browser install")
