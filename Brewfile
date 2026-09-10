@@ -121,6 +121,8 @@ brew "worktrunk"
 brew "yarn"
 # General-purpose lossless data-compression library
 brew "zlib"
+# Browser automation CLI for AI agents
+brew "agent-browser"
 # The AI coding agent built for the terminal.
 brew "anomalyco/tap/opencode", trusted: true
 # Persistent memory for AI coding agents. Agent-agnostic, single binary, zero dependencies.
