@@ -95,6 +95,10 @@ class DeclarationTest(unittest.TestCase):
         matrix = {"scenarios": [scenario(), scenario()]}
         self.assertTrue(any("duplicate" in error for error in R.validate_matrix(matrix)))
 
+    def test_malformed_contains_entry_is_rejected(self):
+        matrix = {"scenarios": [scenario(artifacts={"contains": [{"path": "x"}]})]}
+        self.assertTrue(any("contains" in error for error in R.validate_matrix(matrix)))
+
 
 class DigestTest(unittest.TestCase):
     def test_digest_changes_when_harness_input_changes(self):
@@ -145,6 +149,14 @@ class OfflineRunTest(unittest.TestCase):
             (attempt / "review.json").write_text(json.dumps({"reviewed": True}))
             digest = R.scenario_digest(declaration, _HARNESS.parent)
             self.assertEqual(R.evaluate(attempt, declaration, digest)[0], "pass")
+
+    def test_failing_check_fails_the_attempt(self):
+        out = Path(tempfile.mkdtemp())
+        declaration = scenario(id="bad-check", mode="offline", check="exit 3")
+        state, where = R.run_one(
+            declaration, _HARNESS.parent, out, R.DEFAULT_FIXTURES, False, None
+        )
+        self.assertEqual(state, "fail", where)
 
 
 class ReportTest(unittest.TestCase):

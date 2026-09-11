@@ -26,7 +26,6 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-STATES = ("incomplete", "stale", "fail", "unreviewed", "pass")
 REQUIRED_EVIDENCE = (
     "provenance.json",
     "prompts.txt",
@@ -92,6 +91,9 @@ def validate_matrix(matrix: dict) -> list[str]:
         artifacts = scenario.get("artifacts") or {}
         if not any(key in artifacts for key in ARTIFACT_KEYS):
             errors.append(f"{where}: declares no artifacts or assertions")
+        for item in artifacts.get("contains", []):
+            if not isinstance(item, dict) or not item.get("path") or not item.get("text"):
+                errors.append(f"{where}: contains entry needs path and text")
         if mode(scenario) == "offline" and not scenario.get("check"):
             errors.append(f"{where}: offline scenario needs a check command")
     return errors
@@ -173,6 +175,12 @@ def forge_env(shim: Path) -> dict[str, str]:
     env["GH_CONFIG_DIR"] = str(shim.parent / "gh-config")
     env["GH_TOKEN"] = ""
     env["GITHUB_TOKEN"] = ""
+    # No interactive credentials, and no working ssh, so a scenario that adds a
+    # remote still cannot reach a forge. `gh` is already shadowed above.
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_ASKPASS"] = "/bin/false"
+    env["SSH_ASKPASS"] = "/bin/false"
+    env["GIT_SSH_COMMAND"] = "/bin/false"
     return env
 
 
@@ -189,7 +197,7 @@ def jsonl(items: list[dict]) -> str:
 
 def run_check(
     scenario: dict, repo: Path, env: dict, events: list, transcript: list
-) -> None:
+) -> int:
     command = scenario["check"]
     events.append({"type": "command", "command": command})
     result = subprocess.run(
@@ -198,6 +206,7 @@ def run_check(
     events.append({"type": "exit", "code": result.returncode})
     transcript.append({"stream": "stdout", "text": result.stdout})
     transcript.append({"stream": "stderr", "text": result.stderr})
+    return result.returncode
 
 
 def replay(fixture: Path, repo: Path, events: list, transcript: list) -> None:
@@ -216,7 +225,10 @@ def run_live(
     scenario: dict, repo: Path, env: dict, events: list, transcript: list
 ) -> None:
     client = scenario.get("client", "claude")
-    argv = {"claude": ["claude", "-p"], "codex": ["codex", "exec"]}.get(client)
+    argv = {
+        "claude": ["claude", "-p", "--output-format", "stream-json", "--verbose"],
+        "codex": ["codex", "exec", "--json"],
+    }.get(client)
     if not argv:
         raise RuntimeError(f"unsupported client: {client}")
     events.append({"type": "session-start", "client": client})
@@ -224,6 +236,14 @@ def run_live(
         argv + [scenario["prompt"]], cwd=repo, env=env, capture_output=True, text=True
     )
     events.append({"type": "session-end", "code": result.returncode})
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            events.append({"type": "output", "text": line})
     transcript.append({"stream": "stdout", "text": result.stdout})
     transcript.append({"stream": "stderr", "text": result.stderr})
 
@@ -269,61 +289,66 @@ def run_one(
         return "not-run", "live scenario: pass --allow-paid or provide a recording"
 
     workspace = Path(tempfile.mkdtemp(prefix=f"scenario-{scenario['id']}-"))
-    repo = workspace / "repo"
-    repo.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=repo)
-    shim, forge_log = install_forge_guard(workspace)
-    env = forge_env(shim)
-    env["HARNESS_ROOT"] = str(root)
-    env["SCENARIO_REPO"] = str(repo)
-    before = snapshot(repo)
-    events: list[dict] = []
-    transcript: list[dict] = []
+    try:
+        repo = workspace / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=repo)
+        shim, forge_log = install_forge_guard(workspace)
+        env = forge_env(shim)
+        env["HARNESS_ROOT"] = str(root)
+        env["SCENARIO_REPO"] = str(repo)
+        before = snapshot(repo)
+        events: list[dict] = []
+        transcript: list[dict] = []
+        check_code: int | None = None
 
-    if mode(scenario) == "offline":
-        executor = "offline"
-        run_check(scenario, repo, env, events, transcript)
-    elif fixture.is_dir():
-        executor = "recording"
-        replay(fixture, repo, events, transcript)
-    else:
-        executor = f"live:{scenario.get('client', 'claude')}"
-        claim_session(out_root, max_sessions)
-        run_live(scenario, repo, env, events, transcript)
+        if mode(scenario) == "offline":
+            executor = "offline"
+            check_code = run_check(scenario, repo, env, events, transcript)
+        elif fixture.is_dir():
+            executor = "recording"
+            replay(fixture, repo, events, transcript)
+        else:
+            executor = f"live:{scenario.get('client', 'claude')}"
+            claim_session(out_root, max_sessions)
+            run_live(scenario, repo, env, events, transcript)
 
-    after = snapshot(repo)
-    forge_calls = forge_log.read_text().splitlines() if forge_log.is_file() else []
-    entries = evaluate_artifacts(scenario, before, after, repo, forge_calls)
-    remotes = git_remotes(repo)
-    entries.append(entry("no-git-remote", not remotes, "; ".join(remotes)))
+        after = snapshot(repo)
+        forge_calls = forge_log.read_text().splitlines() if forge_log.is_file() else []
+        entries = evaluate_artifacts(scenario, before, after, repo, forge_calls)
+        if check_code is not None:
+            entries.append(entry("check-exit", check_code == 0, f"exit {check_code}"))
+        remotes = git_remotes(repo)
+        entries.append(entry("no-git-remote", not remotes, "; ".join(remotes)))
 
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    attempt = out_root / scenario["id"] / f"{stamp}-{digest[:8]}"
-    attempt.mkdir(parents=True, exist_ok=True)
-    (attempt / "prompts.txt").write_text(scenario["prompt"].rstrip() + "\n")
-    (attempt / "provenance.json").write_text(
-        json.dumps(
-            {
-                "scenario": scenario["id"],
-                "input_digest": digest,
-                "recorded_at": datetime.now(timezone.utc).isoformat(),
-                "executor": executor,
-            },
-            indent=2,
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        attempt = out_root / scenario["id"] / f"{stamp}-{digest[:8]}"
+        attempt.mkdir(parents=True, exist_ok=True)
+        (attempt / "prompts.txt").write_text(scenario["prompt"].rstrip() + "\n")
+        (attempt / "provenance.json").write_text(
+            json.dumps(
+                {
+                    "scenario": scenario["id"],
+                    "input_digest": digest,
+                    "recorded_at": datetime.now(timezone.utc).isoformat(),
+                    "executor": executor,
+                },
+                indent=2,
+            )
+            + "\n"
         )
-        + "\n"
-    )
-    (attempt / "events.jsonl").write_text(jsonl(events))
-    (attempt / "artifacts.json").write_text(
-        json.dumps({"ok": all(e["ok"] for e in entries), "results": entries}, indent=2) + "\n"
-    )
-    (attempt / "transcript.jsonl").write_text(jsonl(transcript))
-    state, reasons = evaluate(attempt, scenario, digest)
-    (attempt / "status.json").write_text(
-        json.dumps({"state": state, "reasons": reasons}, indent=2) + "\n"
-    )
-    shutil.rmtree(workspace, ignore_errors=True)
-    return state, str(attempt)
+        (attempt / "events.jsonl").write_text(jsonl(events))
+        (attempt / "artifacts.json").write_text(
+            json.dumps({"ok": all(e["ok"] for e in entries), "results": entries}, indent=2) + "\n"
+        )
+        (attempt / "transcript.jsonl").write_text(jsonl(transcript))
+        state, reasons = evaluate(attempt, scenario, digest)
+        (attempt / "status.json").write_text(
+            json.dumps({"state": state, "reasons": reasons}, indent=2) + "\n"
+        )
+        return state, str(attempt)
+    finally:
+        shutil.rmtree(workspace, ignore_errors=True)
 
 
 def load_matrix(path: Path) -> dict:

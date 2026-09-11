@@ -16,7 +16,8 @@
       },
       "harness_inputs": [
         "harness/commands/ask.md",
-        "harness/POLICY.md"
+        "harness/POLICY.md",
+        "harness/scenarios/runner.py"
       ]
     },
     {
@@ -38,7 +39,9 @@
         ]
       },
       "harness_inputs": [
-        "harness/skills/setup-harness/scripts/reconcile-agent-lifecycle.py"
+        "harness/skills/setup-harness/scripts/reconcile-agent-lifecycle.py",
+        "harness/scenarios/probes/lifecycle_blocked_to_ready.py",
+        "harness/scenarios/runner.py"
       ]
     }
   ]

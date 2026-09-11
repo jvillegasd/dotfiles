@@ -45,6 +45,8 @@ Each attempt under `attempts/<id>/<stamp>-<digest>/` retains:
 
 A transcript review is a `review.json` beside the attempt with `{"reviewed": true}`. It is the record that a human read the transcript, which artifact checks alone cannot supply.
 
+`run` additionally reports `not-run` for a live scenario that has neither a recording nor `--allow-paid`. That is not an evaluated state: nothing ran, so no attempt is written.
+
 ## Isolation
 
 Every scenario runs in a fresh temporary repository with no git remote. A `gh` shim is placed first on `PATH`; it logs each call and exits nonzero, so a scenario cannot reach a real forge or tracker. `GH_TOKEN` and `GITHUB_TOKEN` are cleared. Any logged call fails the attempt under `no-external-forge`.
@@ -55,4 +57,4 @@ A `live` scenario needs a recording under `fixtures/<id>/` or `--allow-paid`. Pa
 
 ## Fixtures
 
-A fixture is a recorded attempt. Its `repo/` is materialized into the disposable repository, and its `events.jsonl` and `transcript.jsonl` become the attempt's evidence. The shipped `ask-read-only` fixture exercises the read-only scenario offline. It is test data, not a claim about a specific session.
+A fixture is a recorded attempt. Its `repo/` holds the files the recorded session produced, and those files are materialized into the disposable repository; its `events.jsonl` and `transcript.jsonl` become the attempt's evidence. An absent `repo/` means the session wrote nothing, which is exactly what `tree_unchanged: true` asserts for a read-only command. The shipped `ask-read-only` fixture exercises the read-only scenario offline. It is test data, not a claim about a specific session.
