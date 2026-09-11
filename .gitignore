@@ -17,4 +17,7 @@
 
 # Names clients and employers. The committed example names nobody.
 harness/bench/cohorts.json
+
+# Scenario run output, retained locally.
+harness/scenarios/attempts/
 *.backup.*

@@ -1,0 +1,2 @@
+{"type": "tool_use", "tool": "read", "path": "harness/bench/measure.py"}
+{"type": "tool_result", "ok": true}
