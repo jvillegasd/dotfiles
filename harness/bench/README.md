@@ -2,7 +2,7 @@
 
 `measure.py` answers one question: did a change to `harness/` move cost and friction in the sessions it actually produced? `POLICY.md` makes this the oracle for a harness change, because re-reading prose and judging it plausible proves nothing. Quality stays a human read of the transcripts.
 
-Deliberately not a synthetic task battery. https://github.com/sjdonado/dotfiles/tree/master/bench built one and deleted it after a day: its control tasks swung 4x between identical runs, and the tasks contaminated their own fixture. Real sessions cost something else, arriving slowly and mixing variables no experiment controls, which is what `THIN` and the caveats below are for.
+Deliberately not a synthetic task battery. Synthetic control tasks can swing between identical runs and contaminate their own fixture. Real sessions cost something else, arriving slowly and mixing variables no experiment controls, which is what `THIN` and the caveats below are for.
 
 ## Usage
 
