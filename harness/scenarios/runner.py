@@ -51,15 +51,29 @@ def file_digest(path: Path) -> str:
         return "missing"
 
 
-def scenario_digest(scenario: dict, root: Path) -> str:
-    """Hash the declaration and every declared harness input.
+def tree_digest(root: Path) -> str:
+    if not root.is_dir():
+        return "missing"
+    parts = [
+        f"{path.relative_to(root).as_posix()}:{file_digest(path)}"
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    ]
+    return hashlib.sha256("\n".join(parts).encode()).hexdigest()
 
-    A changed scenario or harness input changes this digest, which is what
-    marks an older attempt stale instead of silently accepting it.
+
+def scenario_digest(
+    scenario: dict, root: Path, fixtures_root: Path = DEFAULT_FIXTURES
+) -> str:
+    """Hash the declaration, its harness inputs, and its recording.
+
+    A changed scenario, harness input, or recording changes this digest, which
+    is what marks an older attempt stale instead of silently accepting it.
     """
     parts = [canonical(scenario)]
     for relative in scenario.get("harness_inputs", []):
         parts.append(f"{relative}:{file_digest(root / relative)}")
+    parts.append(f"fixture:{tree_digest(fixtures_root / scenario['id'])}")
     return hashlib.sha256("\n".join(parts).encode()).hexdigest()
 
 
@@ -82,18 +96,28 @@ def validate_matrix(matrix: dict) -> list[str]:
         return ["matrix declares no scenarios"]
     for index, scenario in enumerate(scenarios):
         where = scenario.get("id") or f"scenario[{index}]"
-        for field in ("id", "command", "prompt", "artifacts"):
+        for field in ("id", "command", "prompt"):
             if not scenario.get(field):
                 errors.append(f"{where}: missing {field}")
         if where in seen:
             errors.append(f"{where}: duplicate id")
         seen.add(where)
-        artifacts = scenario.get("artifacts") or {}
-        if not any(key in artifacts for key in ARTIFACT_KEYS):
+        artifacts = scenario.get("artifacts")
+        if not isinstance(artifacts, dict) or not any(
+            key in artifacts for key in ARTIFACT_KEYS
+        ):
             errors.append(f"{where}: declares no artifacts or assertions")
-        for item in artifacts.get("contains", []):
-            if not isinstance(item, dict) or not item.get("path") or not item.get("text"):
-                errors.append(f"{where}: contains entry needs path and text")
+        else:
+            contains = artifacts.get("contains", [])
+            if not isinstance(contains, list):
+                errors.append(f"{where}: contains must be a list")
+            for item in contains if isinstance(contains, list) else []:
+                if (
+                    not isinstance(item, dict)
+                    or not isinstance(item.get("path"), str)
+                    or not isinstance(item.get("text"), str)
+                ):
+                    errors.append(f"{where}: contains entry needs string path and text")
         if mode(scenario) == "offline" and not scenario.get("check"):
             errors.append(f"{where}: offline scenario needs a check command")
     return errors
@@ -121,9 +145,11 @@ def evaluate_artifacts(
     for relative in artifacts.get("absent", []):
         path = repo / relative
         entries.append(entry(f"absent:{relative}", not path.exists()))
+    base = repo.resolve()
     for item in artifacts.get("contains", []):
-        path = repo / item["path"]
-        found = path.is_file() and item["text"] in path.read_text(errors="replace")
+        target = (repo / item["path"]).resolve()
+        inside = target.is_relative_to(base)
+        found = inside and target.is_file() and item["text"] in target.read_text(errors="replace")
         entries.append(entry(f"contains:{item['path']}:{item['text']}", found))
     entries.append(entry("no-external-forge", not forge_calls, "; ".join(forge_calls)))
     return entries
@@ -175,12 +201,13 @@ def forge_env(shim: Path) -> dict[str, str]:
     env["GH_CONFIG_DIR"] = str(shim.parent / "gh-config")
     env["GH_TOKEN"] = ""
     env["GITHUB_TOKEN"] = ""
-    # No interactive credentials, and no working ssh, so a scenario that adds a
-    # remote still cannot reach a forge. `gh` is already shadowed above.
+    # No interactive credentials and no git transport, so a scenario that adds
+    # a remote still cannot reach a forge. `gh` is already shadowed above.
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GIT_ASKPASS"] = "/bin/false"
     env["SSH_ASKPASS"] = "/bin/false"
     env["GIT_SSH_COMMAND"] = "/bin/false"
+    env["GIT_ALLOW_PROTOCOL"] = "none"
     return env
 
 
@@ -223,7 +250,7 @@ def replay(fixture: Path, repo: Path, events: list, transcript: list) -> None:
 
 def run_live(
     scenario: dict, repo: Path, env: dict, events: list, transcript: list
-) -> None:
+) -> int:
     client = scenario.get("client", "claude")
     argv = {
         "claude": ["claude", "-p", "--output-format", "stream-json", "--verbose"],
@@ -246,6 +273,7 @@ def run_live(
             events.append({"type": "output", "text": line})
     transcript.append({"stream": "stdout", "text": result.stdout})
     transcript.append({"stream": "stderr", "text": result.stderr})
+    return result.returncode
 
 
 def claim_session(out_root: Path, max_sessions: int | None) -> dict:
@@ -283,7 +311,7 @@ def run_one(
     allow_paid: bool,
     max_sessions: int | None,
 ) -> tuple[str, str]:
-    digest = scenario_digest(scenario, root)
+    digest = scenario_digest(scenario, root, fixtures_root)
     fixture = fixtures_root / scenario["id"]
     if mode(scenario) == "live" and not fixture.is_dir() and not allow_paid:
         return "not-run", "live scenario: pass --allow-paid or provide a recording"
@@ -301,6 +329,7 @@ def run_one(
         events: list[dict] = []
         transcript: list[dict] = []
         check_code: int | None = None
+        live_code: int | None = None
 
         if mode(scenario) == "offline":
             executor = "offline"
@@ -311,13 +340,15 @@ def run_one(
         else:
             executor = f"live:{scenario.get('client', 'claude')}"
             claim_session(out_root, max_sessions)
-            run_live(scenario, repo, env, events, transcript)
+            live_code = run_live(scenario, repo, env, events, transcript)
 
         after = snapshot(repo)
         forge_calls = forge_log.read_text().splitlines() if forge_log.is_file() else []
         entries = evaluate_artifacts(scenario, before, after, repo, forge_calls)
         if check_code is not None:
             entries.append(entry("check-exit", check_code == 0, f"exit {check_code}"))
+        if live_code is not None:
+            entries.append(entry("session-exit", live_code == 0, f"exit {live_code}"))
         remotes = git_remotes(repo)
         entries.append(entry("no-git-remote", not remotes, "; ".join(remotes)))
 

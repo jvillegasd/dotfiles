@@ -99,6 +99,19 @@ class DeclarationTest(unittest.TestCase):
         matrix = {"scenarios": [scenario(artifacts={"contains": [{"path": "x"}]})]}
         self.assertTrue(any("contains" in error for error in R.validate_matrix(matrix)))
 
+    def test_non_mapping_artifacts_is_rejected(self):
+        matrix = {"scenarios": [scenario(artifacts=["x"])]}
+        self.assertTrue(any("artifacts" in error for error in R.validate_matrix(matrix)))
+
+    def test_contains_cannot_escape_the_repository(self):
+        repo = Path(tempfile.mkdtemp())
+        (repo.parent / "outside.txt").write_text("secret")
+        declaration = scenario(
+            artifacts={"contains": [{"path": "../outside.txt", "text": "secret"}]}
+        )
+        entries = R.evaluate_artifacts(declaration, {}, {}, repo, [])
+        self.assertFalse(entries[0]["ok"])
+
 
 class DigestTest(unittest.TestCase):
     def test_digest_changes_when_harness_input_changes(self):
