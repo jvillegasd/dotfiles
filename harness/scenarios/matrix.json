@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "scenarios": [
+    {
+      "id": "ask-read-only",
+      "title": "A read-only command must not write",
+      "command": "ask",
+      "prompt": "Explain what harness/bench/measure.py measures. Change nothing.",
+      "mode": "live",
+      "client": "claude",
+      "artifacts": {
+        "tree_unchanged": true,
+        "present": [],
+        "absent": [],
+        "contains": []
+      },
+      "harness_inputs": [
+        "harness/commands/ask.md",
+        "harness/POLICY.md",
+        "harness/scenarios/runner.py"
+      ]
+    },
+    {
+      "id": "lifecycle-blocked-to-ready",
+      "title": "A blocked ticket becomes ready when its blocker merges",
+      "command": "reconcile-agent-lifecycle",
+      "prompt": "Apply the frontier decision: a blocked ticket whose blocker is closed by a merged pull request becomes ready-for-agent.",
+      "mode": "offline",
+      "check": "python3 \"$HARNESS_ROOT/harness/scenarios/probes/lifecycle_blocked_to_ready.py\"",
+      "artifacts": {
+        "tree_unchanged": false,
+        "present": ["artifacts/labels.json"],
+        "absent": [],
+        "contains": [
+          {
+            "path": "artifacts/labels.json",
+            "text": "ready-for-agent"
+          }
+        ]
+      },
+      "harness_inputs": [
+        "harness/skills/setup-harness/scripts/reconcile-agent-lifecycle.py",
+        "harness/scenarios/probes/lifecycle_blocked_to_ready.py",
+        "harness/scenarios/runner.py"
+      ]
+    }
+  ]
+}
