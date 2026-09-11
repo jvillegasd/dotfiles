@@ -1,6 +1,6 @@
 ---
 name: adversarial-review
-description: Review a diff with blind reviewers before pushing, then triage their findings.
+description: Review a diff with a requirements-aware reviewer and a diff-only reviewer before pushing, then triage their findings.
 disable-model-invocation: true
 metadata:
   opencode/autoinvoke: "false"
@@ -8,28 +8,23 @@ metadata:
 
 # Adversarial Review
 
-Self-review that grades its own homework is worthless. This protocol removes
-the implementer's context from the reviewer so the diff has to defend itself.
+Self-review that grades its own homework is worthless. This protocol withholds the implementer's rationale from the reviewer, so the diff has to defend itself.
 
 ## Invocation
 
-Launch reviewers as read-only subagents, in parallel, each with a fresh
-context. Never pass the conversation, the plan, your rationale, or a prior
-round. Anchoring a reviewer on why you thought the code was right is what makes
-the review useless.
+Launch reviewers as read-only subagents, in parallel, each with a fresh context. Never pass the conversation, the implementation rationale, the plan behind the change, or a prior round. Anchoring a reviewer on why you thought the code was right is what makes the review useless.
+
+Reviewer A holds the requirements but never that rationale; Reviewer B holds only the diff. Requirements are what let a reviewer check conformance; rationale only biases it.
 
 Scale to blast radius:
 
-- One reviewer when the diff is under roughly 50 changed lines, in a single
-  file, and touches no data, auth, concurrency, migration, or public-contract
-  surface. Use Reviewer B and hand it the requirements too: on a small diff a
-  missed requirement is usually visible in the diff itself, while a bug is not.
+- One reviewer when the diff is under roughly 50 changed lines, in a single file, and touches no data, auth, concurrency, migration, or public-contract surface. Use Reviewer A, so the single reviewer gets the requirements and not the rationale, the same explicit context rule the two-reviewer case uses.
 - Two reviewers otherwise.
 - Never three. A third mostly re-finds what the first two found.
 
 ## Reviewer A: does it do the job
 
-Give it the diff and the requirements. Nothing else.
+Give it the diff and the requirements, never the implementation rationale. Nothing else.
 
 > Assume this diff fails to do what the requirements say. Find where.
 

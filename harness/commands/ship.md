@@ -53,10 +53,10 @@ Inspect `git status --short` before creating anything. A worktree holding pre-ex
 
 3. Review the diff before pushing, in two passes over the same diff.
 
-   - Run `adversarial-review` first: blind reviewers who hold neither the plan nor the rationale, so the diff has to defend itself. Triage every finding.
-   - Then run a spec-conformance pass yourself, holding the contract: walk each acceptance criterion and each agreed test seam against the diff, and name anything the contract asked for that the code does not do, anything the code does that the contract did not ask for, and any documented repository standard the diff breaks. This pass is the second axis, not a re-run: the blind round could not see the contract.
+   - Run `adversarial-review` first: Reviewer A holds the requirements but not the implementation rationale, Reviewer B holds only the diff, and the small-diff single reviewer follows Reviewer A's rule, so the diff has to defend itself. Triage every finding.
+   - Then run a spec-conformance pass yourself, holding the contract. It stays separate and authoritative: walk each acceptance criterion and each agreed test seam against the diff, and name anything the contract asked for that the code does not do, anything the code does that the contract did not ask for, and any documented repository standard the diff breaks. This pass is the second axis, not a re-run: adversarial review challenges the diff, and this implementer-held pass is the authoritative walk of every criterion and seam.
 
-   Repair every finding and repeat both passes until each is clean.
+   Repair every finding. A second adversarial round reviews only the repair delta, never the whole diff. Conformance rechecks the criteria and test seams the repair touched; it repeats the complete pass only when the contract or broad behavior changed.
 
 4. Push, then create or update a draft pull request with a Conventional Commit title. Write the body to this skeleton, in this order, and add nothing it does not name:
 
