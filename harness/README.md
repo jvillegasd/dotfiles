@@ -62,7 +62,7 @@ flowchart TD
         ship --> ladder["resolve the oracle ladder<br>project instructions, else task runner,<br>else the toolchain"]
         ladder --> implement["implement<br>loading ponytail"]
         implement --> rungs["local rungs green:<br>types, lint, tests, build"]
-        rungs --> commit["commit"] --> review["adversarial-review<br>blind reviewers, told the diff is wrong"]
+        rungs --> commit["commit"] --> review["adversarial-review<br>requirements-aware and diff-only reviewers"]
         review --> conform["spec-conformance pass<br>diff against the contract"]
         conform --> push["push"] --> pr["open the draft pull request<br>capped body: what changed, contract,<br>checks, assumptions, refuted, rejected"]
         pr --> checks(["remote required checks<br>and both review passes green"])

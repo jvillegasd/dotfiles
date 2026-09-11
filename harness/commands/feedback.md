@@ -42,7 +42,7 @@ Pick the type at the start of the round. If the input says to defer or that more
 
 4. Apply every item. Verify each has a corresponding change or an explicit reason it needed none. Run the narrowest checks for the changed surface first, then the policy's oracle ladder. For data, auth, concurrency, migration, or public-contract changes, also verify failure behavior, compatibility, and rollback.
 
-5. Run `adversarial-review` over the accumulated delta and triage every finding: fix it, reject it with a specific reason, or escalate it if it is a product decision. Resolve findings in the working tree; never post them to the forge.
+5. Run `adversarial-review` over the accumulated delta and triage every finding: fix it, reject it with a specific reason, or escalate it if it is a product decision. A second adversarial round reviews only the repair delta. Then recheck the criteria and test seams this round touched against the contract, repeating the complete conformance pass only when the approved behavior, acceptance criteria, or verification changed. Resolve findings in the working tree; never post them to the forge.
 
 6. Make the fewest coherent Conventional Commits and push. Then drive the required remote checks green: a red required check is a failure to fix, not a result to report.
 
