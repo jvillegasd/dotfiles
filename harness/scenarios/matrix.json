@@ -154,6 +154,64 @@
         "harness/scenarios/probes/checkpoint_protocol.py",
         "harness/scenarios/runner.py"
       ]
+    },
+    {
+      "id": "spec-slicing",
+      "title": "A one-slice spec is promoted in place while a many-slice spec keeps its child DAG",
+      "command": "create-ticket",
+      "prompt": "Apply the /create-ticket slicing rule: promote a single-slice spec itself, publish a child DAG for many slices, and never collapse a research batch.",
+      "mode": "offline",
+      "check": "python3 \"$HARNESS_ROOT/harness/scenarios/probes/spec_slicing.py\"",
+      "artifacts": {
+        "tree_unchanged": false,
+        "present": ["artifacts/slicing.json"],
+        "absent": [],
+        "contains": [
+          {
+            "path": "artifacts/slicing.json",
+            "text": "\"zero_slice_publishes_nothing\": true"
+          },
+          {
+            "path": "artifacts/slicing.json",
+            "text": "\"one_slice_creates_no_child\": true"
+          },
+          {
+            "path": "artifacts/slicing.json",
+            "text": "\"one_slice_implementation_label\": true"
+          },
+          {
+            "path": "artifacts/slicing.json",
+            "text": "\"multi_slice_preserves_parent\": true"
+          },
+          {
+            "path": "artifacts/slicing.json",
+            "text": "\"multi_slice_preserves_children\": true"
+          },
+          {
+            "path": "artifacts/slicing.json",
+            "text": "\"multi_slice_preserves_edges\": true"
+          },
+          {
+            "path": "artifacts/slicing.json",
+            "text": "\"multi_slice_preserves_frontier\": true"
+          },
+          {
+            "path": "artifacts/slicing.json",
+            "text": "\"research_batch_uses_child_dag\": true"
+          },
+          {
+            "path": "artifacts/slicing.json",
+            "text": "\"single_slice_binding_is_one_artifact\": true"
+          }
+        ]
+      },
+      "harness_inputs": [
+        "harness/commands/create-ticket.md",
+        "harness/skills/local-tracker/SKILL.md",
+        "docs/agents/harness.json",
+        "harness/scenarios/probes/spec_slicing.py",
+        "harness/scenarios/runner.py"
+      ]
     }
   ]
 }
