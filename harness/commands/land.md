@@ -17,6 +17,23 @@ Explicitly invoking `/land` authorizes squash-merging the resolved open pull req
 
 The open lane runs its gates before the merge on purpose. The merge is irreversible, so everything that could stop it, mergeability and conformance both, moves ahead of it. Reached after a merge someone else already made, the same conformance check can only report a mismatch, which is the best that half can manage.
 
+<landing-rule>
+
+```json
+{
+  "invocation_required": true,
+  "authorized_only_by": "explicit_human_invocation",
+  "automatic_routing_allowed": false,
+  "open_lane": {"state": "OPEN", "draft": false, "action": "merge"},
+  "draft_lane": {"state": "OPEN", "draft": true, "action": "stop"},
+  "merged_lane": {"state": "MERGED", "action": "cleanup_only"},
+  "closed_lane": {"state": "CLOSED", "action": "abandon"}
+}
+```
+
+</landing-rule>
+
+
 1. Resolve the pull request first, and name what you resolved before anything below runs. A pull request number resolves directly; a ticket id resolves through its closing reference. With no input, resolve the head branch of the worktree this command is running in and take its pull request: that is the branch the human is standing on, and it is the only detection allowed to name an open pull request. When that branch has none, fall back to the most recently merged pull request on this repository whose head branch still has a worktree. The fallback considers merged pull requests only: an open one reached by search is a guess, and a guess is not what the human authorized. Then inspect the closing references or linked tracker metadata. The ticket is optional.
 
 2. Pick the lane from the state. Run `gh pr view <n> --json state,isDraft,mergedAt,headRefName`.
