@@ -43,6 +43,67 @@
         "harness/scenarios/probes/lifecycle_blocked_to_ready.py",
         "harness/scenarios/runner.py"
       ]
+    },
+    {
+      "id": "checkpoint-protocol",
+      "title": "Checkpoint recovery isolates branches, drops stale saved fields, and excludes terminal or invalid records",
+      "command": "workflow-checkpoint",
+      "prompt": "Apply the workflow-checkpoint protocol: one branch-scoped topic key, deterministic recovery validation, terminal-state exclusion, and read-back.",
+      "mode": "offline",
+      "check": "python3 \"$HARNESS_ROOT/harness/scenarios/probes/checkpoint_protocol.py\"",
+      "artifacts": {
+        "tree_unchanged": false,
+        "present": ["artifacts/checkpoint.json"],
+        "absent": [],
+        "contains": [
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"isolation\": true"
+          },
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"stale_checks_dropped\": true"
+          },
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"invalid_state_rejected\": true"
+          },
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"terminal_excluded\": true"
+          },
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"empty_contract_rejected\": true"
+          },
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"shape_rejected\": true"
+          },
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"contract_rejected\": true"
+          },
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"contract_partial\": true"
+          },
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"read_back\": true"
+          },
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"read_back_detects_corruption\": true"
+          }
+        ]
+      },
+      "harness_inputs": [
+        "harness/skills/workflow-checkpoint/SKILL.md",
+        "harness/skills/workflow-checkpoint/agents/openai.yaml",
+        "harness/scenarios/probes/checkpoint_protocol.py",
+        "harness/scenarios/runner.py"
+      ]
     }
   ]
 }

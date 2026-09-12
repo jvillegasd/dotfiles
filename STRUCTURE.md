@@ -58,7 +58,8 @@ harness/
 │   ├── grilling/               # the one interview protocol, interactive and self-grill
 │   ├── grill-with-docs/        # that interview plus domain-modeling, for decisions that must persist
 │   ├── local-tracker/          # tracker operations when the tracker is committed files
-│   └── adversarial-review|evidence/  # protocols the delivery commands load
+│   ├── adversarial-review|evidence/  # review and evidence protocols the delivery commands load
+│   └── workflow-checkpoint/    # one branch-scoped Engram checkpoint protocol, canonical in the skill
 ├── bench/                      # session-population comparison for harness changes, with its own README
 └── tests/                      # runnable regression checks, run with python3 -m unittest discover
 ```
