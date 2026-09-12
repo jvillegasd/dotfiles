@@ -31,8 +31,17 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
+
+CODEX_TOOL_ITEMS = (
+    "command_execution",
+    "function_call",
+    "mcp_tool_call",
+    "file_change",
+    "local_shell_call",
+)
 
 REQUIRED_EVIDENCE = (
     "provenance.json",
@@ -40,6 +49,7 @@ REQUIRED_EVIDENCE = (
     "events.jsonl",
     "artifacts.json",
     "transcript.jsonl",
+    "metrics.json",
 )
 ARTIFACT_KEYS = (
     "tree_unchanged",
@@ -82,12 +92,14 @@ def _number(value: object) -> int | float | None:
 
 def _usage_fields(usage: dict) -> dict:
     details = usage.get("input_tokens_details")
+    prompt_details = usage.get("prompt_tokens_details")
     cached = usage.get("cached_input")
     for candidate in (
         cached,
         usage.get("cache_read_input_tokens"),
         usage.get("cached_input_tokens"),
         details.get("cached_tokens") if isinstance(details, dict) else None,
+        prompt_details.get("cached_tokens") if isinstance(prompt_details, dict) else None,
     ):
         if candidate is not None:
             cached = candidate
@@ -152,20 +164,53 @@ def count_tool_calls(events: list) -> int:
                 for part in content
                 if isinstance(part, dict) and part.get("type") == "tool_use"
             )
+        item = event.get("item")
+        if (
+            event.get("type") == "item.completed"
+            and isinstance(item, dict)
+            and item.get("type") in CODEX_TOOL_ITEMS
+        ):
+            count += 1
     return count
 
 
+def _content_bytes(content: object) -> int:
+    if isinstance(content, list):
+        return sum(
+            len(str(part.get("text", "") or "").encode())
+            if isinstance(part, dict)
+            else len(str(part).encode())
+            for part in content
+        )
+    return len(str(content if content is not None else "").encode())
+
+
 def command_output_bytes(events: list) -> int:
+    """Bytes the run's tools returned across the recorded client shapes.
+
+    A recorded or offline event carries one top-level `tool_result`; a live
+    Claude stream nests the same block under a `user` message's content; a
+    codex item carries `command_execution.aggregated_output`.
+    """
     total = 0
     for event in events:
-        if not isinstance(event, dict) or event.get("type") != "tool_result":
+        if not isinstance(event, dict):
             continue
-        content = event.get("content", event.get("text", ""))
+        if event.get("type") == "tool_result":
+            total += _content_bytes(event.get("content", event.get("text", "")))
+        message = event.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
         if isinstance(content, list):
-            content = "".join(
-                str(part.get("text", "")) for part in content if isinstance(part, dict)
-            )
-        total += len(str(content if content is not None else "").encode())
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "tool_result":
+                    total += _content_bytes(part.get("content", part.get("text", "")))
+        item = event.get("item")
+        if (
+            event.get("type") == "item.completed"
+            and isinstance(item, dict)
+            and item.get("type") == "command_execution"
+        ):
+            total += _content_bytes(item.get("aggregated_output", ""))
     return total
 
 
@@ -183,7 +228,7 @@ def build_metrics(
     scenario: dict, events: list, wall_seconds: float, status: str
 ) -> dict:
     usage = parse_usage(events)
-    return {
+    values = {
         "scenario": scenario["id"],
         "model": model_from_events(events),
         "input_tokens": usage["input_tokens"],
@@ -194,6 +239,7 @@ def build_metrics(
         "wall_seconds": round(wall_seconds, 6),
         "terminal_status": status,
     }
+    return {field: values[field] for field in METRIC_FIELDS}
 
 
 def read_metrics(attempt: Path) -> dict:
@@ -205,6 +251,13 @@ def read_metrics(attempt: Path) -> dict:
     except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def recorded_digest(attempt: Path) -> str | None:
+    try:
+        return json.loads((attempt / "provenance.json").read_text()).get("input_digest")
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return None
 
 
 def canonical(value: object) -> str:
@@ -347,11 +400,14 @@ def evaluate(attempt: Path, scenario: dict, current_digest: str) -> tuple[str, l
     try:
         provenance = json.loads((attempt / "provenance.json").read_text())
         artifacts = json.loads((attempt / "artifacts.json").read_text())
+        metrics = json.loads((attempt / "metrics.json").read_text())
     except (OSError, json.JSONDecodeError) as error:
         return "incomplete", [f"unreadable evidence: {error}"]
+    if not isinstance(metrics, dict):
+        return "incomplete", ["unreadable evidence: metrics is not an object"]
     if provenance.get("input_digest") != current_digest:
         return "stale", [f"inputs changed since {provenance.get('recorded_at', '')}"]
-    if read_metrics(attempt).get("terminal_status") == "interrupted":
+    if metrics.get("terminal_status") == "interrupted":
         return "interrupted", ["session interrupted"]
     if not artifacts.get("ok"):
         failed = [e["name"] for e in artifacts.get("results", []) if not e.get("ok")]
@@ -610,17 +666,39 @@ EFFICIENCY_FIELDS = (
 
 
 def _batch(root: Path, scenario: dict, digest: str) -> tuple[dict, dict]:
+    """Count a batch by its own recorded states, not the current checkout.
+
+    A batch retained under another harness version carries a different input
+    digest, so evaluating it against the current checkout would mark every
+    attempt stale and make cross-version comparison impossible. Each attempt is
+    read against the digest it recorded; an attempt that disagrees with the
+    newest one in its own batch is the stale one, which keeps within-batch
+    drift visible without hiding a whole batch. An unknown model is left out of
+    efficiency pairing, since two unlabelled models are not known to match.
+    """
     attempts = attempt_paths(root, scenario["id"])
     counts: dict[str, int] = {}
     passing: dict = {}
-    for attempt in attempts:
-        state, _ = evaluate(attempt, scenario, digest)
+    if not attempts:
+        return {"unavailable": 1}, passing
+    recorded = [recorded_digest(attempt) for attempt in attempts]
+    tally = Counter(value for value in recorded if value is not None)
+    if digest in tally:
+        reference = digest
+    elif tally:
+        reference = tally.most_common(1)[0][0]
+    else:
+        reference = digest
+    for attempt, value in zip(attempts, recorded):
+        if value is not None and value != reference:
+            counts["stale"] = counts.get("stale", 0) + 1
+            continue
+        state, _ = evaluate(attempt, scenario, value or digest)
         counts[state] = counts.get(state, 0) + 1
         if state == "pass":
             metrics = read_metrics(attempt)
-            passing.setdefault(metrics.get("model"), []).append(metrics)
-    if not attempts:
-        counts = {"unavailable": 1}
+            if metrics.get("model") is not None:
+                passing.setdefault(metrics["model"], []).append(metrics)
     return counts, passing
 
 
@@ -669,9 +747,7 @@ def compare(
         lines.append(f"  {scenario['id']}")
         lines.append(f"    before: {_rate(before_counts)}")
         lines.append(f"    after:  {_rate(after_counts)}")
-        for model in sorted(
-            set(before_pass) & set(after_pass), key=lambda item: (item is None, item)
-        ):
+        for model in sorted(set(before_pass) & set(after_pass)):
             pairs.append((scenario["id"], model, before_pass[model], after_pass[model]))
 
     lines.append("")
@@ -680,9 +756,14 @@ def compare(
         lines.append("  no comparable pair")
         return "\n".join(lines)
     if len(pairs) == 1:
-        lines.append("  smoke: one successful pair, report as smoke rather than a savings claim")
+        scenario_id, model, _, _ = pairs[0]
+        lines.append(
+            f"  smoke: one successful pair ({scenario_id} model={model}), "
+            "report as smoke rather than a savings claim"
+        )
+        return "\n".join(lines)
     for scenario_id, model, before_records, after_records in pairs:
-        lines.append(f"  {scenario_id} model={model if model is not None else 'unknown'}")
+        lines.append(f"  {scenario_id} model={model}")
         lines.append(f"    {'metric':<20} {'before':>10} {'after':>10} {'delta':>10}")
         for field in EFFICIENCY_FIELDS:
             before = _median(before_records, field)
@@ -746,7 +827,7 @@ def main(argv: list[str] | None = None) -> int:
             exit_code = 1
             continue
         print(f"{scenario['id']}: {state} -> {where}")
-        if state in ("fail", "not-run"):
+        if state in ("fail", "not-run", "interrupted"):
             exit_code = 1
     print(report(matrix, args.out, args.root))
     return exit_code

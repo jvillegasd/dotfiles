@@ -43,8 +43,19 @@ def write_attempt(path, digest="abc", ok=True, review=False, metrics=None):
         json.dumps({"ok": ok, "results": [{"name": "x", "ok": ok}]})
     )
     (path / "transcript.jsonl").write_text("")
-    if metrics is not None:
-        (path / "metrics.json").write_text(json.dumps(metrics))
+    if metrics is None:
+        metrics = {
+            "scenario": "s",
+            "model": None,
+            "input_tokens": None,
+            "output_tokens": None,
+            "cached_input": None,
+            "tool_calls": 0,
+            "command_output_bytes": 0,
+            "wall_seconds": 0.0,
+            "terminal_status": "ok",
+        }
+    (path / "metrics.json").write_text(json.dumps(metrics))
     if review:
         (path / "review.json").write_text(json.dumps({"reviewed": True, "by": "test"}))
 
@@ -250,6 +261,12 @@ class MetricsTest(unittest.TestCase):
             )["cached_input"],
             2,
         )
+        self.assertEqual(
+            R.parse_usage(
+                [{"type": "turn.completed", "usage": {"input_tokens": 4, "output_tokens": 1, "prompt_tokens_details": {"cached_tokens": 3}}}]
+            )["cached_input"],
+            3,
+        )
 
     def test_terminal_status(self):
         self.assertEqual(R.terminal_status(None), "unknown")
@@ -273,6 +290,27 @@ class MetricsTest(unittest.TestCase):
             {"type": "assistant"},
         ]
         self.assertEqual(R.command_output_bytes(events), 5)
+
+    def test_command_output_bytes_counts_nested_stream_tool_results(self):
+        events = [
+            {
+                "type": "user",
+                "message": {
+                    "content": [
+                        {"type": "tool_result", "content": [{"type": "text", "text": "abc"}]}
+                    ]
+                },
+            }
+        ]
+        self.assertEqual(R.command_output_bytes(events), 3)
+
+    def test_codex_item_events_count_tool_calls_and_output(self):
+        events = [
+            {"type": "item.completed", "item": {"type": "command_execution", "aggregated_output": "abc"}},
+            {"type": "item.completed", "item": {"type": "agent_message", "text": "hi"}},
+        ]
+        self.assertEqual(R.count_tool_calls(events), 1)
+        self.assertEqual(R.command_output_bytes(events), 3)
 
     def test_build_metrics_carries_every_field(self):
         scenario = {"id": "s"}
@@ -304,6 +342,23 @@ class ReadOnlyOracleTest(unittest.TestCase):
         forge = next(e for e in entries if e["name"] == "no-external-forge")
         self.assertFalse(forge["ok"])
 
+    def test_shipped_read_only_scenarios_declare_no_write_checks(self):
+        matrix = R.load_matrix(R.DEFAULT_MATRIX)
+        for scenario_id in ("ask-read-only", "read-only-execution"):
+            declaration = next(
+                s for s in matrix["scenarios"] if s["id"] == scenario_id
+            )
+            self.assertTrue(declaration["artifacts"].get("tree_unchanged"))
+            self.assertTrue(declaration["artifacts"].get("fixtures_unchanged"))
+
+    def test_read_only_execution_runs_a_command(self):
+        matrix = R.load_matrix(R.DEFAULT_MATRIX)
+        declaration = next(
+            s for s in matrix["scenarios"] if s["id"] == "read-only-execution"
+        )
+        self.assertEqual(declaration["mode"], "offline")
+        self.assertTrue(declaration["check"])
+
 
 class InterruptedStateTest(unittest.TestCase):
     def setUp(self):
@@ -317,10 +372,11 @@ class InterruptedStateTest(unittest.TestCase):
         )
         self.assertEqual(R.evaluate(attempt, self.scenario, "abc")[0], "interrupted")
 
-    def test_attempt_without_metrics_is_never_interrupted(self):
+    def test_missing_metrics_is_incomplete(self):
         attempt = self.tmp / "attempt"
         write_attempt(attempt, ok=True, review=True)
-        self.assertEqual(R.evaluate(attempt, self.scenario, "abc")[0], "pass")
+        (attempt / "metrics.json").unlink()
+        self.assertEqual(R.evaluate(attempt, self.scenario, "abc")[0], "incomplete")
 
 
 class CompareTest(unittest.TestCase):
@@ -330,12 +386,13 @@ class CompareTest(unittest.TestCase):
         self.matrix = {"scenarios": [self.scenario]}
         self.digest = R.scenario_digest(self.scenario, self.tmp)
 
-    def batch(self, side, attempts):
+    def batch(self, side, attempts, digest=None):
+        digest = digest or self.digest
         for index, spec in enumerate(attempts):
-            path = self.tmp / side / self.scenario["id"] / f"a{index}-{self.digest[:8]}"
+            path = self.tmp / side / self.scenario["id"] / f"a{index}-{digest[:8]}"
             write_attempt(
                 path,
-                digest=self.digest,
+                digest=digest,
                 ok=spec.get("ok", True),
                 review=spec.get("reviewed", True),
                 metrics={
@@ -402,6 +459,24 @@ class CompareTest(unittest.TestCase):
     def test_unavailable_scenario_is_visible(self):
         self.batch("after", [{"model": "m1", "input_tokens": 80}])
         self.assertIn("unavailable", self.compare())
+
+    def test_cross_version_batches_still_pair(self):
+        self.batch("before", [{"model": "m1", "input_tokens": 100}], digest="oldharness")
+        self.batch("after", [{"model": "m1", "input_tokens": 80}])
+        self.assertNotIn("no comparable pair", self.compare())
+
+    def test_within_batch_drift_is_visible_as_stale(self):
+        self.batch(
+            "before",
+            [{"model": "m1", "input_tokens": 100}, {"model": "m1", "input_tokens": 90}],
+            digest="newharness",
+        )
+        drifted = self.tmp / "before" / self.scenario["id"] / "0-old"
+        write_attempt(drifted, digest="oldharness", ok=True, review=True)
+        self.batch("after", [{"model": "m1", "input_tokens": 80}])
+        text = self.compare()
+        self.assertIn("stale=1", text)
+        self.assertIn("pass 2/3", text)
 
 
 if __name__ == "__main__":

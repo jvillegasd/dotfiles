@@ -22,6 +22,24 @@
       ]
     },
     {
+      "id": "read-only-execution",
+      "title": "A read-only execution writes no fixture, forge, or tracker",
+      "command": "ask",
+      "prompt": "Execute a read-only command: emit output and write nothing.",
+      "mode": "offline",
+      "check": "printf read-only",
+      "artifacts": {
+        "tree_unchanged": true,
+        "fixtures_unchanged": true,
+        "present": [],
+        "absent": [],
+        "contains": []
+      },
+      "harness_inputs": [
+        "harness/scenarios/runner.py"
+      ]
+    },
+    {
       "id": "landing-authorization",
       "title": "An open pull request cannot merge without explicit human invocation of /land",
       "command": "land",
