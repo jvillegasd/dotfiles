@@ -283,6 +283,98 @@
         "harness/scenarios/probes/spec_slicing.py",
         "harness/scenarios/runner.py"
       ]
+    },
+    {
+      "id": "harness-audit",
+      "title": "The read-only audit reports every source, keeps unavailable ones unknown, gates a verdict on evidence, and thresholds findings by cost",
+      "command": "harness-audit",
+      "prompt": "Apply the /harness-audit rules: coverage for every source, no verdict without workflow-bearing evidence, unavailable sources stay unknown, one uncosted occurrence is an observation while a costed one or a pattern is a finding, transcript signals stay bounded, and the pass changes no fixture file or Git state.",
+      "mode": "offline",
+      "check": "python3 \"$HARNESS_ROOT/harness/scenarios/probes/harness_audit.py\"",
+      "artifacts": {
+        "tree_unchanged": false,
+        "present": ["artifacts/audit.json"],
+        "absent": [],
+        "contains": [
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"all_sources_reported\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"present_is_recorded\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"absent_is_unknown\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"unreadable_is_unknown\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"no_evidence_no_verdict\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"evidence_yields_verdict\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"single_without_cost_not_finding\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"single_without_cost_observed\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"single_with_cost_is_finding\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"pattern_two_occurrences_is_finding\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"transcript_is_bounded\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"transcript_scan_is_capped\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"transcript_finds_named_signals\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"effects_are_read_only\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"setup_harness_boundary\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"fixture_files_unchanged\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"audit_engine_writes_nothing\": true"
+          },
+          {
+            "path": "artifacts/audit.json",
+            "text": "\"git_state_unchanged\": true"
+          }
+        ]
+      },
+      "harness_inputs": [
+        "harness/commands/harness-audit.md",
+        "harness/scenarios/probes/harness_audit.py",
+        "harness/scenarios/runner.py"
+      ]
     }
   ]
 }
