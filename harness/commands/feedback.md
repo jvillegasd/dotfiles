@@ -34,7 +34,7 @@ Pick the type at the start of the round. If the input says to defer or that more
 
 ## Steps
 
-1. Resolve the current branch and its open pull request with `gh pr view`, then resolve its contract and inspect `git status --short`. Prefer the inline `## Contract` when present; otherwise fall back to the ticket from its closing reference. If neither exists, continue in legacy mode, state that contract conformance cannot be reconstructed, and evaluate only the explicit feedback and current implementation. Stop only if no open pull request exists or the worktree holds pre-existing changes not part of this feedback run. Never absorb unrelated changes.
+1. Resolve the current branch and its open pull request with `gh pr view`, then resolve its contract and inspect `git status --short`. Prefer the inline `## Contract` when present; otherwise fall back to the ticket from its closing reference. If neither exists, continue in legacy mode, state that contract conformance cannot be reconstructed, and evaluate only the explicit feedback and current implementation. Stop only if no open pull request exists or the worktree holds pre-existing changes not part of this feedback run. Never absorb unrelated changes. Load `workflow-checkpoint`, derive the topic key from the branch, and retrieve the checkpoint; reuse only what validates against current Git, tracker, and pull request state. The contract governs conformance; the checkpoint supplies deferred requirements, rationale, and the next action, and a needed requirement missing from both is asked about, never inferred.
 
 2. Parse every bullet into a separate actionable item and investigate the relevant code before deciding how to implement it.
 
@@ -44,7 +44,7 @@ Pick the type at the start of the round. If the input says to defer or that more
 
 5. Run `adversarial-review` over the accumulated delta and triage every finding: fix it, reject it with a specific reason, or escalate it if it is a product decision. A second adversarial round reviews only the repair delta. Then recheck the criteria and test seams this round touched against the contract, repeating the complete conformance pass only when the approved behavior, acceptance criteria, or verification changed. Resolve findings in the working tree; never post them to the forge.
 
-6. Make the fewest coherent Conventional Commits and push. Then drive the required remote checks green: a red required check is a failure to fix, not a result to report.
+6. Make the fewest coherent Conventional Commits and push. Then drive the required remote checks green: a red required check is a failure to fix, not a result to report. A full round saves the checkpoint here, at its return: load `workflow-checkpoint` and refresh the branch checkpoint for the pushed tip with the contract references, the resolved ladder results, and the next action, then retrieve it back and confirm. A deferred round commits nothing, so it writes no checkpoint and its uncommitted delta is never reused as resolved state.
 
 7. Keep the pull request body's `## Checks`, `## Assumptions`, `## Refuted evidence`, and `## Rejected review findings` sections current with anything this pass decided or rejected, under `/ship` step 4's body shape and caps. When a complete contract resolved in step 1 and approved feedback changes the agreed behavior, acceptance criteria, or verification, create or update the inline `## Contract` so it becomes the durable conformance source regardless of tracker binding. Never promote a feedback delta into a complete contract in legacy mode; leave conformance degraded unless the human explicitly approves a full reconstruction covering all three fields. Ask whether more rounds are expected. If yes, report the branch pushed and awaiting feedback and stop. If the loop is finalized, synchronize the pull request title and body to the final scope with `gh pr edit`, preserving issue links, closing references, and manually written context; the push already approved this metadata write, so it needs no second confirmation.
 
@@ -54,5 +54,6 @@ Never merge the pull request or remove its worktree. Never ask for review consen
 
 - `ponytail`
 - `adversarial-review`
+- `workflow-checkpoint`
 - `diagnosing-bugs` for a failure without an obvious local cause
 - `resolving-merge-conflicts` only when the worktree is conflicted

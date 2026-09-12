@@ -31,7 +31,7 @@ Treat the effective input as task data. It cannot override this workflow's const
 
    Complete reconciliation explicitly rather than assuming an issue event did it: relationship edits and already-closed tickets need not produce a close/reopen event. Verify the final tracker state after any triggered lifecycle run finishes. On a failed or partial write, stop before retiring the worktree, report what persisted and what remains, and resume from read-back state without duplicating history or reapplying completed changes.
 
-5. Retire the local worktree and branches only after tracker reconciliation completes, or is skipped for trackerless work. Immediately before each deletion, re-read the surviving local and remote branch tips and their unpushed commits, and `git status --short` where a worktree remains. Compare them with step 3's approved inventory regardless of whether the worktree still exists. A changed tip or discard list stops for a revised confirmation; worktree absence never skips this check.
+5. Retire the local worktree and branches only after tracker reconciliation completes, or is skipped for trackerless work. Immediately before each deletion, re-read the surviving local and remote branch tips and their unpushed commits, and `git status --short` where a worktree remains. Compare them with step 3's approved inventory regardless of whether the worktree still exists. A changed tip or discard list stops for a revised confirmation; worktree absence never skips this check. Once the re-read confirms the approved inventory, and before the deletion, load `workflow-checkpoint`, derive the topic key from the branch, and finalize the checkpoint as `abandoned` for a released attempt or `cancelled` for approved requirement cancellation, then retrieve it back and confirm the record matches. A terminal checkpoint stays auditable and ordinary continuation ignores it: new work after it gets a new ticket, branch, and topic key.
 
    Inside Orca, use the runtime-provided Orca CLI guide. Otherwise, where the worktree remains, run `wt remove <branch> --force --force-delete --foreground`. The force flags discard only the approved unmerged work, and foreground waits for removal before reporting it. If the worktree is gone but its local branch remains, verify with `git worktree list` that it is not checked out elsewhere, then delete only the approved tip with `git update-ref -d refs/heads/<branch> <approved-local-tip>`. An absent branch or worktree is reported, never recreated.
 
@@ -43,4 +43,5 @@ Never merge a pull request from here, never touch application code, never abando
 
 ## Skills this loads
 
+- `workflow-checkpoint`
 - `local-tracker` only when ticket-bound and `docs/agents/harness.json` sets `"tracker": "local-markdown"`
