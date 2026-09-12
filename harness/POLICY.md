@@ -28,6 +28,7 @@ One frontend design body is installed, `impeccable`. It carries no invocation gu
 | "what does X do", "why does Y happen", one bounded question | `/ask` |
 | "set this repo up for the workflow" | `setup-harness` |
 | "triage this", a pasted ticket, a production error signal | `/triage` |
+| "audit the workflow residue", "what does the harness leave behind" | `/harness-audit` |
 | "poke holes in this", "challenge this design" | `grilling` |
 | "grill this and write it down", a greenfield design, decisions a later session will need | `grill-with-docs` |
 | "spec this out", "write it up" | `/spec` |
