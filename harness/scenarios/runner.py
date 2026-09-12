@@ -8,6 +8,12 @@ tool events, artifact results, and transcript evidence. An attempt passes only
 when its artifact checks pass and a transcript review record exists. Changed
 scenario or harness inputs mark an older attempt stale.
 
+Each attempt also normalizes efficiency from its recorded events (tokens, tool
+calls, command-output bytes, wall time, model, terminal status), leaving a
+measurement nobody made unknown rather than zero. `compare` reports behavioral
+pass rates first, then efficiency among passing runs only, one scenario and
+model at a time.
+
 Paid model execution is off unless `--allow-paid` is passed with a retained
 per-batch session cap. Local tooling success is reported separately from
 behavioral acceptance.
@@ -20,9 +26,11 @@ import hashlib
 import json
 import os
 import shutil
+import statistics
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -33,11 +41,170 @@ REQUIRED_EVIDENCE = (
     "artifacts.json",
     "transcript.jsonl",
 )
-ARTIFACT_KEYS = ("tree_unchanged", "present", "absent", "contains")
+ARTIFACT_KEYS = (
+    "tree_unchanged",
+    "fixtures_unchanged",
+    "present",
+    "absent",
+    "contains",
+)
+METRIC_FIELDS = (
+    "scenario",
+    "model",
+    "input_tokens",
+    "output_tokens",
+    "cached_input",
+    "tool_calls",
+    "command_output_bytes",
+    "wall_seconds",
+    "terminal_status",
+)
+STATE_ORDER = (
+    "pass",
+    "fail",
+    "interrupted",
+    "stale",
+    "unreviewed",
+    "incomplete",
+    "unavailable",
+)
 BATCH = "batch.json"
 HERE = Path(__file__).resolve().parent
 DEFAULT_MATRIX = HERE / "matrix.json"
 DEFAULT_FIXTURES = HERE / "fixtures"
+
+
+def _number(value: object) -> int | float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return value
+
+
+def _usage_fields(usage: dict) -> dict:
+    details = usage.get("input_tokens_details")
+    cached = usage.get("cached_input")
+    for candidate in (
+        cached,
+        usage.get("cache_read_input_tokens"),
+        usage.get("cached_input_tokens"),
+        details.get("cached_tokens") if isinstance(details, dict) else None,
+    ):
+        if candidate is not None:
+            cached = candidate
+            break
+    return {
+        "input_tokens": _number(usage.get("input_tokens", usage.get("prompt_tokens"))),
+        "output_tokens": _number(usage.get("output_tokens", usage.get("completion_tokens"))),
+        "cached_input": _number(cached),
+    }
+
+
+def parse_usage(events: list) -> dict:
+    """Normalize token usage, keeping an absent measurement unknown.
+
+    A summary event (`result` or `turn.completed`) carries the run totals and
+    wins; otherwise per-message usages are summed. A field nobody measured
+    stays `None`, never `0`, because an absent measurement and a measured zero
+    are different claims.
+    """
+    found: dict = {key: [] for key in ("input_tokens", "output_tokens", "cached_input")}
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        message = event.get("message")
+        nested = message.get("usage") if isinstance(message, dict) else None
+        usage = event.get("usage") if isinstance(event.get("usage"), dict) else nested
+        if not isinstance(usage, dict):
+            continue
+        values = _usage_fields(usage)
+        if event.get("type") in ("result", "turn.completed"):
+            return values
+        for key, value in values.items():
+            if value is not None:
+                found[key].append(value)
+    return {key: (sum(values) if values else None) for key, values in found.items()}
+
+
+def model_from_events(events: list) -> str | None:
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        if isinstance(event.get("model"), str):
+            return event["model"]
+        message = event.get("message")
+        if isinstance(message, dict) and isinstance(message.get("model"), str):
+            return message["model"]
+    return None
+
+
+def count_tool_calls(events: list) -> int:
+    count = 0
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        if event.get("type") in ("tool_use", "tool_call", "function_call"):
+            count += 1
+        message = event.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        if isinstance(content, list):
+            count += sum(
+                1
+                for part in content
+                if isinstance(part, dict) and part.get("type") == "tool_use"
+            )
+    return count
+
+
+def command_output_bytes(events: list) -> int:
+    total = 0
+    for event in events:
+        if not isinstance(event, dict) or event.get("type") != "tool_result":
+            continue
+        content = event.get("content", event.get("text", ""))
+        if isinstance(content, list):
+            content = "".join(
+                str(part.get("text", "")) for part in content if isinstance(part, dict)
+            )
+        total += len(str(content if content is not None else "").encode())
+    return total
+
+
+def terminal_status(code: int | None) -> str:
+    if code is None:
+        return "unknown"
+    if code == 0:
+        return "ok"
+    if code < 0 or code >= 128:
+        return "interrupted"
+    return "failed"
+
+
+def build_metrics(
+    scenario: dict, events: list, wall_seconds: float, status: str
+) -> dict:
+    usage = parse_usage(events)
+    return {
+        "scenario": scenario["id"],
+        "model": model_from_events(events),
+        "input_tokens": usage["input_tokens"],
+        "output_tokens": usage["output_tokens"],
+        "cached_input": usage["cached_input"],
+        "tool_calls": count_tool_calls(events),
+        "command_output_bytes": command_output_bytes(events),
+        "wall_seconds": round(wall_seconds, 6),
+        "terminal_status": status,
+    }
+
+
+def read_metrics(attempt: Path) -> dict:
+    path = attempt / "metrics.json"
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def canonical(value: object) -> str:
@@ -132,13 +299,21 @@ def entry(name: str, ok: bool, detail: str = "") -> dict:
 
 
 def evaluate_artifacts(
-    scenario: dict, before: dict, after: dict, repo: Path, forge_calls: list[str]
+    scenario: dict,
+    before: dict,
+    after: dict,
+    repo: Path,
+    forge_calls: list[str],
+    fixtures_unchanged: bool = True,
 ) -> list[dict]:
     artifacts = scenario.get("artifacts", {})
     entries: list[dict] = []
     if "tree_unchanged" in artifacts:
         expected = bool(artifacts["tree_unchanged"])
         entries.append(entry("tree_unchanged", (before == after) == expected))
+    if "fixtures_unchanged" in artifacts:
+        expected = bool(artifacts["fixtures_unchanged"])
+        entries.append(entry("fixtures_unchanged", fixtures_unchanged == expected))
     for relative in artifacts.get("present", []):
         path = repo / relative
         entries.append(entry(f"present:{relative}", path.exists()))
@@ -176,6 +351,8 @@ def evaluate(attempt: Path, scenario: dict, current_digest: str) -> tuple[str, l
         return "incomplete", [f"unreadable evidence: {error}"]
     if provenance.get("input_digest") != current_digest:
         return "stale", [f"inputs changed since {provenance.get('recorded_at', '')}"]
+    if read_metrics(attempt).get("terminal_status") == "interrupted":
+        return "interrupted", ["session interrupted"]
     if not artifacts.get("ok"):
         failed = [e["name"] for e in artifacts.get("results", []) if not e.get("ok")]
         return "fail", [f"artifact checks failed: {', '.join(failed) or 'none recorded'}"]
@@ -231,6 +408,7 @@ def run_check(
         command, shell=True, cwd=repo, env=env, capture_output=True, text=True
     )
     events.append({"type": "exit", "code": result.returncode})
+    events.append({"type": "tool_result", "content": result.stdout + result.stderr})
     transcript.append({"stream": "stdout", "text": result.stdout})
     transcript.append({"stream": "stderr", "text": result.stderr})
     return result.returncode
@@ -326,11 +504,13 @@ def run_one(
         env["HARNESS_ROOT"] = str(root)
         env["SCENARIO_REPO"] = str(repo)
         before = snapshot(repo)
+        fixtures_before = tree_digest(fixture)
         events: list[dict] = []
         transcript: list[dict] = []
         check_code: int | None = None
         live_code: int | None = None
 
+        started = time.monotonic()
         if mode(scenario) == "offline":
             executor = "offline"
             check_code = run_check(scenario, repo, env, events, transcript)
@@ -341,10 +521,18 @@ def run_one(
             executor = f"live:{scenario.get('client', 'claude')}"
             claim_session(out_root, max_sessions)
             live_code = run_live(scenario, repo, env, events, transcript)
+        wall_seconds = time.monotonic() - started
 
         after = snapshot(repo)
         forge_calls = forge_log.read_text().splitlines() if forge_log.is_file() else []
-        entries = evaluate_artifacts(scenario, before, after, repo, forge_calls)
+        entries = evaluate_artifacts(
+            scenario,
+            before,
+            after,
+            repo,
+            forge_calls,
+            fixtures_unchanged=fixtures_before == tree_digest(fixture),
+        )
         if check_code is not None:
             entries.append(entry("check-exit", check_code == 0, f"exit {check_code}"))
         if live_code is not None:
@@ -373,6 +561,14 @@ def run_one(
             json.dumps({"ok": all(e["ok"] for e in entries), "results": entries}, indent=2) + "\n"
         )
         (attempt / "transcript.jsonl").write_text(jsonl(transcript))
+        exit_code = check_code if check_code is not None else live_code
+        (attempt / "metrics.json").write_text(
+            json.dumps(
+                build_metrics(scenario, events, wall_seconds, terminal_status(exit_code)),
+                indent=2,
+            )
+            + "\n"
+        )
         state, reasons = evaluate(attempt, scenario, digest)
         (attempt / "status.json").write_text(
             json.dumps({"state": state, "reasons": reasons}, indent=2) + "\n"
@@ -403,6 +599,101 @@ def report(matrix: dict, out_root: Path, root: Path) -> str:
     return "\n".join(lines)
 
 
+EFFICIENCY_FIELDS = (
+    "input_tokens",
+    "output_tokens",
+    "cached_input",
+    "tool_calls",
+    "command_output_bytes",
+    "wall_seconds",
+)
+
+
+def _batch(root: Path, scenario: dict, digest: str) -> tuple[dict, dict]:
+    attempts = attempt_paths(root, scenario["id"])
+    counts: dict[str, int] = {}
+    passing: dict = {}
+    for attempt in attempts:
+        state, _ = evaluate(attempt, scenario, digest)
+        counts[state] = counts.get(state, 0) + 1
+        if state == "pass":
+            metrics = read_metrics(attempt)
+            passing.setdefault(metrics.get("model"), []).append(metrics)
+    if not attempts:
+        counts = {"unavailable": 1}
+    return counts, passing
+
+
+def _rate(counts: dict) -> str:
+    if set(counts) == {"unavailable"}:
+        return "unavailable"
+    total = sum(counts.values())
+    detail = " ".join(f"{state}={counts[state]}" for state in STATE_ORDER if counts.get(state))
+    return f"pass {counts.get('pass', 0)}/{total} ({detail})"
+
+
+def _median(records: list, field: str) -> int | float | None:
+    values = [
+        record[field]
+        for record in records
+        if isinstance(record.get(field), (int, float))
+        and not isinstance(record.get(field), bool)
+    ]
+    return statistics.median(values) if values else None
+
+
+def _format(value: int | float | None) -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, float) and not value.is_integer():
+        return f"{value:.3f}"
+    return str(int(value))
+
+
+def compare(
+    before_root: Path, after_root: Path, matrix: dict, root: Path
+) -> str:
+    """Compare two batches: pass rates first, then efficiency among passes.
+
+    Efficiency pairs only a passing before with a passing after of the same
+    scenario and model, so unlike models or scenarios are never pooled and a
+    failed baseline can never read as a win. One successful pair is a smoke
+    result, not a savings claim.
+    """
+    lines = ["behavioral pass rates"]
+    pairs: list = []
+    for scenario in matrix.get("scenarios", []):
+        digest = scenario_digest(scenario, root)
+        before_counts, before_pass = _batch(before_root, scenario, digest)
+        after_counts, after_pass = _batch(after_root, scenario, digest)
+        lines.append(f"  {scenario['id']}")
+        lines.append(f"    before: {_rate(before_counts)}")
+        lines.append(f"    after:  {_rate(after_counts)}")
+        for model in sorted(
+            set(before_pass) & set(after_pass), key=lambda item: (item is None, item)
+        ):
+            pairs.append((scenario["id"], model, before_pass[model], after_pass[model]))
+
+    lines.append("")
+    lines.append("efficiency (passing runs only)")
+    if not pairs:
+        lines.append("  no comparable pair")
+        return "\n".join(lines)
+    if len(pairs) == 1:
+        lines.append("  smoke: one successful pair, report as smoke rather than a savings claim")
+    for scenario_id, model, before_records, after_records in pairs:
+        lines.append(f"  {scenario_id} model={model if model is not None else 'unknown'}")
+        lines.append(f"    {'metric':<20} {'before':>10} {'after':>10} {'delta':>10}")
+        for field in EFFICIENCY_FIELDS:
+            before = _median(before_records, field)
+            after = _median(after_records, field)
+            delta = after - before if after is not None and before is not None else None
+            lines.append(
+                f"    {field:<20} {_format(before):>10} {_format(after):>10} {_format(delta):>10}"
+            )
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--matrix", type=Path, default=DEFAULT_MATRIX)
@@ -417,9 +708,15 @@ def main(argv: list[str] | None = None) -> int:
     run_parser.add_argument("--allow-paid", action="store_true")
     run_parser.add_argument("--max-sessions", type=int)
     sub.add_parser("report", parents=[common])
+    compare_parser = sub.add_parser("compare", parents=[common])
+    compare_parser.add_argument("--before", type=Path, required=True)
+    compare_parser.add_argument("--after", type=Path, required=True)
     args = parser.parse_args(argv)
 
     matrix = load_matrix(args.matrix)
+    if args.command == "compare":
+        print(compare(args.before, args.after, matrix, args.root))
+        return 0
     if args.command == "validate":
         errors = validate_matrix(matrix)
         for error in errors:
