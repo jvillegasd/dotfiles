@@ -23,6 +23,8 @@ class IssueAPI(Protocol):
 
     def related(self, number: int, relation: str) -> list[dict]: ...
 
+    def events(self, number: int) -> list[dict]: ...
+
     def blocker_satisfied(self, issue: dict) -> bool: ...
 
     def update(self, number: int, **changes: object) -> None: ...
@@ -71,6 +73,9 @@ class GitHubAPI:
                     return []
                 raise
         return self._get(paths[relation], paginate=True)  # type: ignore[return-value]
+
+    def events(self, number: int) -> list[dict]:
+        return self._get(f"issues/{number}/events", paginate=True)  # type: ignore[return-value]
 
     def blocker_satisfied(self, issue: dict) -> bool:
         if issue["state"] != "closed":
@@ -176,25 +181,31 @@ def reconcile_parent(
     api: IssueAPI, number: int, labels: dict[str, str]
 ) -> bool:
     parent = api.issue(number)
-    if not label_names(parent) & set(labels.values()):
-        return False
     children = api.related(number, "sub_issues")
     if not children:
         return False
-
-    target = "closed" if all(api.blocker_satisfied(child) for child in children) else "open"
-    if parent["state"] == target:
+    lifecycle = set(labels.values())
+    current = label_names(parent)
+    # Label history preserves enrollment after completed parents shed status labels.
+    if not current & lifecycle and not any(
+        event["event"] == "labeled" and event.get("label", {}).get("name") in lifecycle
+        for event in api.events(number)
+    ):
         return False
 
-    changes: dict[str, object] = {"state": target}
+    target = "closed" if all(api.blocker_satisfied(child) for child in children) else "open"
+    desired = current - lifecycle
+    changes: dict[str, object] = {}
+    if parent["state"] != target:
+        changes["state"] = target
     if target == "open":
-        current = label_names(parent) - {
-            labels["blocked"],
-            labels["ready_for_agent"],
-            labels["ready_for_human"],
-        }
-        current.add(labels["in_progress"])
-        changes["labels"] = sorted(current)
+        if not changes and current & lifecycle:
+            return False
+        desired.add(labels["in_progress"])
+    if desired != current:
+        changes["labels"] = sorted(desired)
+    if not changes:
+        return False
     api.update(number, **changes)
     return True
 
@@ -216,7 +227,8 @@ def reconcile(
         reconcile_frontier(api, number, labels, reset_active)
         for dependent in api.related(number, "blocking"):
             reconcile_frontier(api, dependent["number"], labels)
-        reconcile_parent(api, number, labels)
+        if reconcile_parent(api, number, labels):
+            reconcile_frontier(api, number, labels)
 
         parents = api.related(number, "parent")
         if parents:
