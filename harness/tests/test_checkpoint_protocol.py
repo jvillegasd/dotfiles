@@ -9,6 +9,7 @@ skill, and that no command duplicates the schema.
 import importlib.util
 import json
 import re
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,6 +20,7 @@ _GUARD = _HARNESS / "skills/workflow-checkpoint/agents/openai.yaml"
 _COMMANDS = _HARNESS / "commands"
 _MATRIX = _HARNESS / "scenarios/matrix.json"
 _PROBE = _HARNESS / "scenarios/probes/checkpoint_protocol.py"
+_TWO_SESSION_PROBE = _HARNESS / "scenarios/probes/checkpoint_two_session.py"
 
 _SPEC = importlib.util.spec_from_file_location("checkpoint_protocol", _PROBE)
 P = importlib.util.module_from_spec(_SPEC)
@@ -233,6 +235,100 @@ class ProtocolTest(unittest.TestCase):
             "read_back_detects_corruption",
         ):
             self.assertIn(f'"{key}": true', texts)
+
+
+class TwoSessionScenarioTest(unittest.TestCase):
+    def load_probe(self):
+        sys.path.insert(0, str(_TWO_SESSION_PROBE.parent))
+        try:
+            spec = importlib.util.spec_from_file_location(
+                "checkpoint_two_session", _TWO_SESSION_PROBE
+            )
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        finally:
+            sys.path.remove(str(_TWO_SESSION_PROBE.parent))
+        return module
+
+    def test_two_session_probe_recovers_every_declared_outcome(self):
+        result = self.load_probe().run()
+        self.assertTrue(all(result.values()), result)
+        self.assertEqual(len(result), 7)
+
+    def test_matrix_declares_the_two_session_scenario(self):
+        matrix = json.loads(_MATRIX.read_text())
+        scenario = next(
+            (s for s in matrix["scenarios"] if s["id"] == "checkpoint-two-session"),
+            None,
+        )
+        self.assertIsNotNone(scenario)
+        self.assertEqual(scenario["mode"], "offline")
+        self.assertTrue(scenario["check"].endswith("checkpoint_two_session.py\""))
+        self.assertTrue(
+            any(
+                "checkpoint_two_session.py" in entry
+                for entry in scenario["harness_inputs"]
+            )
+        )
+        texts = [entry["text"] for entry in scenario["artifacts"]["contains"]]
+        for key in (
+            "two_session_recovers_requirement",
+            "two_session_recovers_rationale",
+            "two_session_recovers_contract",
+            "branch_isolation",
+            "stable_topic_key_upserts",
+            "stale_tip_keeps_rationale",
+            "terminal_excluded",
+        ):
+            self.assertIn(f'"{key}": true', texts)
+
+
+class CommandWiringTest(unittest.TestCase):
+    DELIVERY_COMMANDS = (
+        "proto",
+        "ship",
+        "feedback",
+        "address-review",
+        "land",
+        "abandon",
+    )
+    SAVE_BOUNDARY = {
+        "proto": "save the branch checkpoint",
+        "ship": "save the branch checkpoint",
+        "feedback": "refresh the branch checkpoint",
+        "address-review": "refresh the branch checkpoint",
+        "land": "finalize the checkpoint as `completed`",
+        "abandon": "finalize the checkpoint as",
+    }
+
+    def test_delivery_commands_load_and_retrieve_the_checkpoint(self):
+        for name in self.DELIVERY_COMMANDS:
+            text = (_COMMANDS / f"{name}.md").read_text().lower()
+            self.assertIn(
+                "load `workflow-checkpoint`",
+                text,
+                f"{name}.md does not load the checkpoint skill at its boundary",
+            )
+            self.assertIn(
+                "retrieve",
+                text,
+                f"{name}.md does not retrieve the checkpoint",
+            )
+
+    def test_delivery_commands_save_or_finalize_at_their_return(self):
+        for name, boundary in self.SAVE_BOUNDARY.items():
+            text = (_COMMANDS / f"{name}.md").read_text().lower()
+            self.assertIn(
+                boundary,
+                text,
+                f"{name}.md does not save or finalize the checkpoint at its return",
+            )
+
+    def test_terminal_commands_name_their_terminal_states(self):
+        self.assertIn("`completed`", (_COMMANDS / "land.md").read_text())
+        abandon = (_COMMANDS / "abandon.md").read_text()
+        self.assertIn("`abandoned`", abandon)
+        self.assertIn("`cancelled`", abandon)
 
 
 if __name__ == "__main__":

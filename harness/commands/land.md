@@ -47,6 +47,8 @@ The open lane runs its gates before the merge on purpose. The merge is irreversi
 
 7. Verify the merged state, and the default branch with it. Fetch and prune, then fast-forward the local default branch in the worktree that has it checked out: resolve that path with `git worktree list`, taking the entry whose branch is `<default>`, then run `git -C <that path> merge --ff-only origin/<default>`. Always pass `-C`, whatever the current directory. Without it the command operates on whatever branch the current worktree has checked out, which aborts as diverged when that branch has parted from the default one, reading as a conflict rather than a wrong target, and silently fast-forwards that branch when it has not. `git checkout <default>` is not a way around it: from a linked worktree it exits 128 with `already used by worktree at <path>`. Confirm the merge and default-branch health.
 
+   Once the merge is confirmed, load `workflow-checkpoint`, derive the topic key from the merged branch, and finalize the checkpoint as `completed`, then retrieve it back and confirm the record matches. A terminal checkpoint stays auditable and ordinary continuation ignores it: new work after it gets a new ticket, branch, and topic key rather than reopening completed execution state.
+
    Reaching this step straight from step 2, run step 4's conformance check here and resume at step 8, never at step 5: steps 5 and 6 belong to the run that does the merging. Someone else merged this pull request, so a blocking mismatch is reported rather than prevented, and the landing stops here.
 
 8. Reconcile the tracker only for ticket-bound work. Where `setup-harness` installed the GitHub lifecycle workflow, confirm it already ran: the ticket closed, the parent closed once every child had merge evidence, and each unblocked sibling moved to mapped `ready_for_agent`. Where it did not run, or the tracker is not GitHub, apply those transitions by hand and say which ones you applied. Where the tracker is local markdown, load the `local-tracker` skill: the transitions are file edits that must be committed and pushed on the default branch, which step 7 has already fast-forwarded past the merge, and before step 9 retires the worktree. Never close a parent whose children lack merge evidence. For trackerless work, skip tracker transitions.
@@ -56,3 +58,8 @@ The open lane runs its gates before the merge on purpose. The merge is irreversi
 10. Report the pull request, whether this run merged it and the merge commit when it did, the contract source, the remote branch deleted, and the worktree removed. Where this run merged, report every dependent pull request that was retargeted and rebased, and every one that was left for a human. The merged lane skips steps 3 and 6, so it reports that dependents were neither enumerated nor repaired, which is not the same as reporting none. For ticket-bound work, also report the ticket and parent states, labels moved, and next ready frontier. For trackerless work, report that tracker reconciliation was skipped.
 
 Never merge a pull request this session implemented without its review passes having run, never merge someone else's pull request without being told to, never merge anything step 1 did not name, and never touch application code from here.
+
+## Skills this loads
+
+- `workflow-checkpoint`
+- `local-tracker` only when ticket-bound and `docs/agents/harness.json` sets `"tracker": "local-markdown"`

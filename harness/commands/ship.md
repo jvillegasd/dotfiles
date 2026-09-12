@@ -44,6 +44,7 @@ Inspect `git status --short` before creating anything. A worktree holding pre-ex
 3. For any other contract inside Orca, use the runtime-provided Orca CLI guide and create an Orca worktree from the updated remote default branch. Never guess Orca commands.
 4. For any other contract outside Orca, run Worktrunk non-interactively: `wt switch --create <branch> --base origin/<default> --no-cd --format=json --yes`, then work only in the returned path.
 5. When tracker-bound, claim the ticket; skip this step for trackerless work. Mapped `ready_for_agent` is claimed by changing it to mapped `in_progress`. Mapped `in_progress` has two readings, and what separates them is this run's contract source rather than its branch name: step 2 derives the same `<tracker-id>` branch name for every tracker-bound contract, so the name alone cannot say who claimed the ticket. Where this run's contract is a `/proto` ledger and step 1 reused that prototype's existing branch, the claim is the one `/proto` took at its setup step: verify it, continue, and change nothing. For every other contract the branch is one this run just created, so a ticket already at mapped `in_progress` means another run took it first: abort. Where the tracker is local markdown, load the `local-tracker` skill: the transition is a bookkeeping commit on the default branch, so it never enters this pull request's diff. An abort retires only a worktree this run created for itself, and that is the one case outside `/land` and `/abandon` where this workflow retires one. Never retire a worktree step 1 reused: it holds unpushed prototype work this run did not write, and `/proto` owns whether that is discarded.
+6. Load `workflow-checkpoint`. Derive the topic key from the branch and retrieve the checkpoint. For a `/proto` ledger reusing the prototype's branch, validate it against current Git, tracker, and pull request state and reuse only what survives; a fresh branch has no checkpoint. A requirement the work needs that is missing from the validated record and the contract is asked about, never inferred.
 
 ## Delivery loop
 
@@ -104,7 +105,7 @@ Inspect `git status --short` before creating anything. A worktree holding pre-ex
 
    Do not wait for review threads. A pull request just opened has none, and any that appear arrive after this run has finished. `/address-review` owns them.
 
-6. When required checks and both review passes are green, mark the pull request ready and refresh `## Checks` with the remote rung's result. When tracker-bound, also change the ticket from mapped `in_progress` to mapped `ready_for_human`; skip label transitions for trackerless work.
+6. When required checks and both review passes are green, mark the pull request ready and refresh `## Checks` with the remote rung's result. When tracker-bound, also change the ticket from mapped `in_progress` to mapped `ready_for_human`; skip label transitions for trackerless work. Then load `workflow-checkpoint` and save the branch checkpoint for the final tip: state, branch tip, the pull request URL and ticket reference, every resolved ladder result, and the next action, which is human review followed by `/land`. Retrieve it back and confirm it matches. Requirements already recorded in the ticket or the pull request contract are referenced, not copied.
 
 Return the pull request, checks, review result, and retained worktree path. Never merge the pull request or remove the worktree; `/land` owns the merge when a human asks for it, and everything after one.
 
@@ -118,5 +119,6 @@ Return the pull request, checks, review result, and retained worktree path. Neve
 - `codebase-design` when an agreed seam needs implementation vocabulary
 - `diagnosing-bugs` for failures that do not have an obvious local cause
 - `adversarial-review`
+- `workflow-checkpoint`
 - `local-tracker` only when `docs/agents/harness.json` sets `"tracker": "local-markdown"`
 - `resolving-merge-conflicts` only when the worktree is conflicted

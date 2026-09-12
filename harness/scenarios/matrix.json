@@ -104,6 +104,56 @@
         "harness/scenarios/probes/checkpoint_protocol.py",
         "harness/scenarios/runner.py"
       ]
+    },
+    {
+      "id": "checkpoint-two-session",
+      "title": "A later session recovers the deferred requirement and its rationale through the branch topic key, not another branch's checkpoint",
+      "command": "workflow-checkpoint",
+      "prompt": "Recover a branch checkpoint in a second session: retrieve it by topic key, recover the exact deferred requirement and its rationale, keep another branch's checkpoint out, drop stale resolved checks, and exclude terminal records.",
+      "mode": "offline",
+      "check": "python3 \"$HARNESS_ROOT/harness/scenarios/probes/checkpoint_two_session.py\"",
+      "artifacts": {
+        "tree_unchanged": false,
+        "present": ["artifacts/checkpoint.json"],
+        "absent": [],
+        "contains": [
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"two_session_recovers_requirement\": true"
+          },
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"two_session_recovers_rationale\": true"
+          },
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"two_session_recovers_contract\": true"
+          },
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"branch_isolation\": true"
+          },
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"stable_topic_key_upserts\": true"
+          },
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"stale_tip_keeps_rationale\": true"
+          },
+          {
+            "path": "artifacts/checkpoint.json",
+            "text": "\"terminal_excluded\": true"
+          }
+        ]
+      },
+      "harness_inputs": [
+        "harness/skills/workflow-checkpoint/SKILL.md",
+        "harness/skills/workflow-checkpoint/agents/openai.yaml",
+        "harness/scenarios/probes/checkpoint_two_session.py",
+        "harness/scenarios/probes/checkpoint_protocol.py",
+        "harness/scenarios/runner.py"
+      ]
     }
   ]
 }
