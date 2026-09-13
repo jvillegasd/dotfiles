@@ -194,6 +194,26 @@ class Generation(unittest.TestCase):
                     self.assertTrue(link.is_symlink())
                 self.assertFalse((base / "missing").exists())
 
+    def test_missing_duplicate_and_unknown_roles_preserve_outputs(self):
+        self.generate()
+        before = tree(self.out)
+        for kind in ("missing", "duplicate", "unknown"):
+            with self.subTest(kind=kind):
+                roles = self.tmp / kind
+                shutil.copytree(_ROLES, roles)
+                if kind == "missing":
+                    (roles / "reviewer-b.md").unlink()
+                elif kind == "duplicate":
+                    shutil.copy(roles / "reviewer-a.md", roles / "copy.md")
+                else:
+                    role = roles / "reviewer-b.md"
+                    role.write_text(role.read_text().replace("name: reviewer-b", "name: other"))
+                for flags in ((), ("--check",)):
+                    result = run(*flags, roles, self.out)
+                    self.assertEqual(result.returncode, 4, result.stdout)
+                    self.assertIn("reviewer", result.stderr)
+                    self.assertEqual(tree(self.out), before)
+
     def test_incomplete_or_widened_role_is_refused(self):
         edits = {
             "description": ("description: ", "summary: "),

@@ -79,9 +79,11 @@ def load(path):
 
 
 def render(roles):
+    definitions = [load(path) for path in sorted(roles.glob("*.md"))]
+    if sorted(name for name, _, _ in definitions) != ["reviewer-a", "reviewer-b"]:
+        fail(f"{roles}: expected exactly one reviewer-a and one reviewer-b", 4)
     outputs = {}
-    for path in sorted(roles.glob("*.md")):
-        name, description, body = load(path)
+    for name, description, body in definitions:
         # JSON string quoting is valid in both YAML and TOML for this text.
         quoted = '"' + description.replace("\\", "\\\\").replace('"', '\\"') + '"'
         outputs[f"claude/{name}.md"] = f"---\nname: {name}\ndescription: {quoted}\n{CLAUDE_TOOLS}\n---\n\n{body}\n"
@@ -89,8 +91,6 @@ def render(roles):
         codex = name.replace("-", "_")
         outputs[f"codex/{codex}.toml"] = f"name = \"{codex}\"\ndescription = {quoted}\n{CODEX_SANDBOX}\ndeveloper_instructions = '''\n{body.replace(ACCESS, CODEX_ACCESS)}\n'''\n{CODEX_MCP}"
         outputs[f"opencode/{name}.md"] = f"---\ndescription: {quoted}\nmode: subagent\n{OPENCODE_PERMISSION}---\n\n{body}\n"
-    if not outputs:
-        fail(f"{roles}: no roles found", 4)
     return outputs
 
 
