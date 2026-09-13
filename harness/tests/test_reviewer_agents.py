@@ -222,6 +222,39 @@ class InstallerOwnership(unittest.TestCase):
         self.assertTrue(foreign.is_symlink())
 
 
+    def test_install_refuses_unowned_collisions_before_linking(self):
+        for kind in ("file", "foreign-link", "root-link"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory:
+                tmp = Path(directory).resolve()
+                harness, home = tmp / "harness", tmp / "home"
+                harness.mkdir()
+                for name in ("clients", "skills"):
+                    (harness / name).symlink_to(_HARNESS / name)
+                root = home / ".config/opencode/agents"
+                root.parent.mkdir(parents=True)
+                private = tmp / "private"
+                private.mkdir()
+                (private / "reviewer-b.md").write_text("private agent\n")
+                if kind == "root-link":
+                    root.symlink_to(private)
+                else:
+                    root.mkdir()
+                    target = root / "reviewer-b.md"
+                    if kind == "file":
+                        target.write_text("private agent\n")
+                    else:
+                        target.symlink_to(private / "reviewer-b.md")
+                result = installer_agents(harness, home, uninstall=False)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn(str(root), result.stderr)
+                self.assertEqual((root / "reviewer-b.md").read_text(), "private agent\n")
+                self.assertEqual((private / "reviewer-b.md").read_text(), "private agent\n")
+                self.assertFalse((home / ".claude/agents/reviewer-a.md").exists())
+                if kind == "root-link":
+                    self.assertTrue(root.is_symlink())
+                elif kind == "foreign-link":
+                    self.assertTrue((root / "reviewer-b.md").is_symlink())
+
     def test_uninstall_fails_by_name_on_a_link_inside_a_symlinked_root(self):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp)

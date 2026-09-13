@@ -752,9 +752,21 @@ sweep_agent_links() {
 
 # The generator prints every enforcement gap on each run, so what a client cannot restrict is never reported as enforced.
 install_agents() {
-    local pair client root entry status
+    local pair client root entry destination status
     "$HARNESS_DIR/clients/agents.py" "$HARNESS_DIR/skills/adversarial-review/roles" "$AGENT_OUT" && status=0 || status=$?
     [[ "$status" == 0 || "$status" == 3 ]] || die "Generating the reviewer agents failed with status $status."
+    for pair in "${AGENT_ROOTS[@]}"; do
+        client="${pair%%|*}" root="${pair#*|}"
+        [[ ! -L "$root" && ( ! -e "$root" || -d "$root" ) ]] ||
+            die "Unowned reviewer agent root: $root"
+        for entry in "$AGENT_OUT/$client"/*; do
+            destination="$root/$(basename "$entry")"
+            if [[ -e "$destination" || -L "$destination" ]]; then
+                [[ -L "$destination" && "$(readlink "$destination")" == "$entry" ]] ||
+                    die "Unowned reviewer agent collision: $destination"
+            fi
+        done
+    done
     for pair in "${AGENT_ROOTS[@]}"; do
         ensure_managed_dir "${pair#*|}"
     done
