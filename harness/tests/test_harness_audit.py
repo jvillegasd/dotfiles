@@ -165,7 +165,6 @@ class InvocationTest(unittest.TestCase):
     def test_installer_guards_every_command_generically(self):
         text = _INSTALL.read_text()
         self.assertRegex(_COMMAND.stem, r"^[a-z0-9][a-z0-9-]*$")
-        self.assertIn("allow_implicit_invocation: false", text)
         self.assertIn('"$HARNESS_DIR"/commands/*.md', text)
         self.assertIn("$HOME/.claude/commands", text)
         self.assertIn("$CONFIG_HOME/opencode/command", text)

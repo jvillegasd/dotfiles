@@ -3,7 +3,7 @@
 # AI harness.
 #
 # Installs everything in Brewfile, symlinks the tracked configs, installs the
-# harness for Codex, Claude Code, and OpenCode, and bootstraps Neovim plugins
+# harness for Claude Code and OpenCode, and bootstraps Neovim plugins
 # and LSPs headlessly so the first `nvim` launch is instant.
 #
 # Safe to re-run: brew bundle is idempotent, existing real configs get backed

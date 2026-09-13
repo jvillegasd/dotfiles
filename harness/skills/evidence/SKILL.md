@@ -104,4 +104,4 @@ Where a project has no such capability configured, say so and move on. Absence
 of data is never a reason to block, and never a reason to invent a number.
 
 Name a tool as its server plus its bare tool name, never a client-specific
-prefix. This policy loads in three clients and each prefixes differently.
+prefix. This policy loads in two clients and each prefixes differently.

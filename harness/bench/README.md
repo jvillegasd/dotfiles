@@ -48,7 +48,7 @@ Each client records a project differently: a dashed slug, a `cwd`, a `directory`
 ## Where the sessions come from
 
 - **Claude Code**, `~/.claude/projects/<slug>/<session>.jsonl`. The only client recording all eight metrics. Interrupts and denials come from matching `CLAUDE_INTERRUPT` and `CLAUDE_DENIALS` in `measure.py`.
-- **Codex**, `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`. Records no declined call, slash command, subagent, or distinguishable failed result, so those four are absent.
+- **Codex**, `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`. Records no declined call, slash command, subagent, or distinguishable failed result, so those four are absent. Codex is no longer a harness client, and its rollouts stay readable so sessions from before its retirement remain measurable.
 - **OpenCode**, `~/.local/share/opencode/opencode.db`, opened read-only and immutable because a client may be running. No interrupt, denial, failed result, or slash command, so those four are absent.
 
 **A subagent is delegation, not a session.** Claude Code writes `<session-id>/subagents/*.jsonl` beside the session file, and OpenCode gives a subagent a `session` row carrying the parent's id, so a recursive glob or an unfiltered query counts them as sessions: on this machine, 273 sidecars against 209 real sessions, and 77 against 36. Both are excluded and counted as the parent's `delegation`. The inline `isSidechain` flag those entries used to carry is still written and now always false, so a reader still looking there reports no delegation rather than reporting it cannot see any.
