@@ -12,13 +12,11 @@ Self-review that grades its own homework is worthless. This protocol withholds t
 
 ## Invocation
 
-Launch each reviewer as its named agent, in parallel, each with a fresh context: `reviewer-a` and `reviewer-b` in Claude Code and OpenCode, `reviewer_a` and `reviewer_b` in Codex. The installer generates them from `roles/reviewer-a.md` and `roles/reviewer-b.md` beside this skill, which own each reviewer's standing instructions, lenses, and output format.
+Launch each reviewer as its named agent, in parallel, each with a fresh context: `reviewer-a` and `reviewer-b` in Claude Code and OpenCode. The installer generates them from `roles/reviewer-a.md` and `roles/reviewer-b.md` beside this skill, which own each reviewer's standing instructions, lenses, and output format.
 
 Never pass the conversation, the implementation rationale, the plan behind the change, or a prior round. Anchoring a reviewer on why you thought the code was right is what makes the review useless.
 
 When a named agent is unavailable, say so, launch a general agent with the matching role file's full text as its instructions, and report that this fallback enforces only the general agent's own permissions rather than the named agent's read-search restrictions. Never skip or silently omit a review because a named agent is missing.
-
-In Codex, give that fallback the role text with its Access line replaced by `CODEX_ACCESS` from `clients/agents.py`, because shell is how Codex reads files.
 
 The named agents' restrictions are best effort: each client enforces what its own controls support, and `clients/agents.py` reports the gaps.
 

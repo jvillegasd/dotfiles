@@ -488,7 +488,6 @@ def run_live(
     client = scenario.get("client", "claude")
     argv = {
         "claude": ["claude", "-p", "--output-format", "stream-json", "--verbose"],
-        "codex": ["codex", "exec", "--json"],
     }.get(client)
     if not argv:
         raise RuntimeError(f"unsupported client: {client}")

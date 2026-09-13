@@ -146,13 +146,14 @@ Configs linked:
   $HOME/.gitconfig                     -> $SCRIPT_DIR/git/gitconfig
   $CONFIG_HOME/git/ignore              -> $SCRIPT_DIR/git/ignore
   $CONFIG_HOME/worktrunk/config.toml   -> $SCRIPT_DIR/worktrunk/config.toml
-  AI harness policy and skills         -> Codex, Claude Code, and OpenCode
+  AI harness policy and skills         -> Claude Code and OpenCode
 
 Next steps:
   1. Launch: nvim
   2. Sanity: :checkhealth   ·   :Lazy   ·   :Mason
-  3. Authenticate when needed: codex login · claude auth login · opencode auth login · gh auth login
-  4. Restart the three AI clients, then review and trust the Engram hooks in Codex /hooks.
+  3. Authenticate when needed: claude auth login · gh auth login · OpenCode: /connect,
+     then OpenAI, then ChatGPT Plus/Pro ("Manually enter API Key" bills the API)
+  4. Restart Claude Code and OpenCode.
   5. Machine-local git settings go in ~/.gitconfig.local, which git/gitconfig includes and this repo never tracks.
 
 EOF

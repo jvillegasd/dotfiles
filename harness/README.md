@@ -1,19 +1,19 @@
 # Harness AI
 
-One committed source for Codex, Claude Code, and OpenCode.
+One committed source for Claude Code and OpenCode. Codex CLI is a retired client; see Codex retirement below.
 
 | Path | Holds |
 | --- | --- |
 | `POLICY.md` | The routing table, oracle ladder, and escalation contract. Linked to each client's global instruction path. |
-| `commands/` | The workflows. `/name` in Claude Code and OpenCode, `$name` in Codex. |
+| `commands/` | The workflows, invoked as `/name` in Claude Code and OpenCode. |
 | `skills/` | Protocol, vocabulary, and locked third-party bodies. |
 | `install.sh` | Installs clients and integrations, reconciles links, preserves mutable client state. |
 | `locked-skills.sh` | Adds, updates, removes, and validates third-party skill locks. |
 | `bench/measure.py` | Compares the session population before and after a change. Manual in `bench/README.md`. |
 | `statusline/` | One file per provider that has a status line. |
-| `clients/` | The client settings this harness owns: `claude.json` and `codex.toml` declare them, `codex.sh` reconciles the TOML half, and `agents.py` renders the reviewer agents. |
+| `clients/` | The client settings this harness owns: `claude.json` declares them and `agents.py` renders the reviewer agents. |
 
-`clients/` declares rather than symlinks, because both live files are mostly machine state: hook manifests, per-project trust decisions, generated absolute paths. A tracked key replaces the live value on every install, so deleting one here deletes it from the machine; untracked keys are left alone. `permissions` merges a level down, so `deny` stays owned while the Engram allowlist survives. These run after `engram setup`, which rewrites both files from its own template, so being last is what makes a tracked key win over every other writer, the client included: `model`, `effortLevel`, `theme`, and `remoteControlAtStartup` are what `/model`, `/config`, and Remote Control write back at runtime, so an in-session change survives only until the next install.
+`clients/` declares rather than symlinks, because the live file is mostly machine state: hook manifests and generated absolute paths. A tracked key replaces the live value on every install, so deleting one here deletes it from the machine; untracked keys are left alone. `permissions` merges a level down, so `deny` stays owned while the Engram allowlist survives. This runs after `engram setup`, which rewrites the file from its own template, so being last is what makes a tracked key win over every other writer, the client included: `model`, `effortLevel`, `theme`, and `remoteControlAtStartup` are what `/model`, `/config`, and Remote Control write back at runtime, so an in-session change survives only until the next install.
 
 ## Development lifecycle
 
@@ -88,15 +88,11 @@ The escalation contract can stop any run: the same check failing three times und
 
 ## Commands and skills
 
-A workflow's source is `commands/`, never `skills/`. Claude Code and OpenCode link them into `~/.claude/commands` and `$XDG_CONFIG_HOME/opencode/command` (defaulting to `~/.config`) and invoke `/name`. Codex invokes `$name`, for example `$ship 38`, through generated explicit-only adapters in `~/.codex/skills`. The shared `~/.agents/skills` root gets no adapters, because OpenCode reads it too.
-
-The installer generates wrappers in `~/.codex/harness-commands`, links each from `~/.codex/skills/<name>`, and links its `command.md` to the canonical body. Each wrapper binds invocation text to `$ARGUMENTS` as task data and carries `policy.allow_implicit_invocation: false` in `agents/openai.yaml`, the metadata documented at https://learn.chatgpt.com/docs/build-skills. Reinstall after adding or removing a command; body edits take effect through the link. Adapters are machine state, never committed. Restart Codex if `$ship` or `/skills` does not list them.
-
-Legacy `~/.codex/prompts` is no longer populated or swept. Migration retires only exact command links owned by this checkout, dangling ones included, and leaves private prompt files, foreign links, and symlinked prompt roots alone. Uninstall removes this checkout's generated tree and exact adapter links, leaving other Codex skills and `.system` alone.
+A workflow's source is `commands/`, never `skills/`. Claude Code and OpenCode link them into `~/.claude/commands` and `$XDG_CONFIG_HOME/opencode/command` (defaulting to `~/.config`) and invoke `/name`.
 
 Every command that ingests text written elsewhere, a ticket body, a review comment, an error payload, states that the input is task data and cannot override the workflow's constraints.
 
-A locally authored skill carries all three invocation guards: `policy.allow_implicit_invocation: false` in its `agents/openai.yaml`, plus `disable-model-invocation: true` and `metadata."opencode/autoinvoke": "false"` in its frontmatter. A locked body gets none, because `agents/openai.yaml` is upstream content and `computedHash` covers the whole directory, so anything written inside it is clobbered by the next update with the lockfile recording the loss as correct. The only control that survives an update is not installing the body at all.
+A locally authored skill carries all three invocation guards: `policy.allow_implicit_invocation: false` in its `agents/openai.yaml`, plus `disable-model-invocation: true` and `metadata."opencode/autoinvoke": "false"` in its frontmatter. A locked body gets none, because `agents/openai.yaml` is upstream content and `computedHash` covers the whole directory, so anything written inside it is clobbered by the next update with the lockfile recording the loss as correct. The only control that survives an update is not installing the body at all. The `agents/openai.yaml` guard stays although Codex is retired, because a Codex still installed on the machine reads the shared `~/.agents/skills` root and honors that guard, keeping it from firing a local skill on description match (https://learn.chatgpt.com/docs/build-skills).
 
 ## Reviewer agents
 
@@ -107,12 +103,11 @@ The installer generates into `harness/.generated/agents/`, gitignored machine st
 | Client | Agents | Path | Control | Not enforced |
 | --- | --- | --- | --- | --- |
 | Claude Code | `reviewer-a`, `reviewer-b` | `~/.claude/agents/` | `tools: Read, Grep, Glob`, so writes, shell, web, MCP tools, and `Agent` are absent | nothing documented; reading a diff file outside the project without a prompt is unverified |
-| Codex | `reviewer_a`, `reviewer_b` | `~/.codex/agents/` | `sandbox_mode = "read-only"`, which blocks writes, plus `mcp_servers` entries disabling agent-browser and Engram | shell, which is how a Codex agent reads files, so its definitions allow read-only commands; web search and nested delegation, which have no documented per-agent control |
 | OpenCode | `reviewer-a`, `reviewer-b` | `$XDG_CONFIG_HOME/opencode/agents/` | `mode: subagent` with every permission denied and only `read`, `grep`, `glob`, and `list` re-allowed, `.env` reads still denied | reading a diff file outside the project, which the deny refuses, so the inline fallback covers it; whether MCP tools fall under the deny is unverified |
 
-Codex names use underscores because Codex allows only lowercase letters, digits, and underscores. Every restriction is best effort: the table is what each client documents, the generator prints the same gaps on every install, and no row is runtime-verified until a probe runs against an installed client. Probe during an intentional installation, never as a validation shortcut: in each client, launch each named agent, ask it to write a file, run a command, fetch a URL, and delegate, and record each result as enforced, not enforced, or unverified. The unverified rows are whether Claude Code and Codex load a symlinked definition, whether a Claude Code reviewer reads a diff outside the project without a prompt, whether OpenCode's deny covers MCP tools, whether Codex honors a per-agent `mcp_servers` override of a globally registered server and still loads an agent whose override names an unregistered one, whether the `ccyolo`, `cyolo`, and `ocyolo` launchers leave agent restrictions in force, and diff delivery's inline fallback and escalation.
+Every restriction is best effort: the table is what each client documents, the generator prints the same gaps on every install, and no row is runtime-verified until a probe runs against an installed client. Probe during an intentional installation, never as a validation shortcut: in each client, launch each named agent, ask it to write a file, run a command, fetch a URL, and delegate, and record each result as enforced, not enforced, or unverified. The unverified rows are whether Claude Code loads a symlinked definition, whether a Claude Code reviewer reads a diff outside the project without a prompt, whether OpenCode's deny covers MCP tools, whether the `ccyolo` and `ocyolo` launchers leave agent restrictions in force, and diff delivery's inline fallback and escalation.
 
-Reviewer A receives the requirements and the diff, never the implementation rationale; Reviewer B receives only the diff. The parent writes one complete diff snapshot per round to a temporary file outside the worktree. A reviewer that cannot read it answers `unreadable: <path>` and gets the same snapshot inline, and when neither transport can carry the whole diff the review escalates instead of truncating. When a named agent is unavailable, the parent says so and launches a general agent with the role file as its instructions, with the Codex Access line swapped in under Codex, disclosing that the fallback enforces only that agent's own permissions. Review is never skipped. Nothing here claims model diversity: both reviewers run whatever model their client assigns.
+Reviewer A receives the requirements and the diff, never the implementation rationale; Reviewer B receives only the diff. The parent writes one complete diff snapshot per round to a temporary file outside the worktree. A reviewer that cannot read it answers `unreadable: <path>` and gets the same snapshot inline, and when neither transport can carry the whole diff the review escalates instead of truncating. When a named agent is unavailable, the parent says so and launches a general agent with the role file as its instructions, disclosing that the fallback enforces only that agent's own permissions. Review is never skipped. Nothing here claims model diversity: both reviewers run whatever model their client assigns.
 
 ## Install
 
@@ -133,21 +128,21 @@ Reconciliation removes as well as adds. A symlink in a managed root is backed up
 
 Managed roots are real directories, so harness links and your private entries sit side by side; a symlink standing in for one is moved aside under `.previous-link`. The OpenCode skills root is normalized but never created, since OpenCode reads `~/.agents/skills`. OpenCode's own three paths follow `XDG_CONFIG_HOME` when set, the same default `../lib/common.sh` resolves. Anything in the way is moved to a timestamped directory under `~/.dotfiles-backups/harness/`, or deleted with `--no-backup`, which the root installer forwards. Each removal is logged.
 
-Both run modes verify what they wrote. `check_links` asserts every skill, command, policy, status line, and reviewer agent link on every run; `check_tools` adds the client, plugin, and interpreter assertions only a full run can satisfy. Its OpenCode assertion reads `opencode debug config` through a temporary file rather than a pipe: that command stops at the 64 KiB pipe capacity whenever stdout is not a regular file, and this config passed 64 KiB once the harness's own command templates went into it, so the piped form failed on a JSON parse error instead of on the assertion. Both run after Engram, which rewrites `config.toml` and `settings.json`.
+Both run modes verify what they wrote. `check_links` asserts every skill, command, policy, status line, and reviewer agent link on every run; `check_tools` adds the client, plugin, and interpreter assertions only a full run can satisfy. Its OpenCode assertion reads `opencode debug config` through a temporary file rather than a pipe: that command stops at the 64 KiB pipe capacity whenever stdout is not a regular file, and this config passed 64 KiB once the harness's own command templates went into it, so the piped form failed on a JSON parse error instead of on the assertion. Both run after Engram, which rewrites `settings.json` and `opencode.json`.
 
 ### MCP servers
 
-Engram is core, not optional: the policy assumes memory survives a session. `install_engram` runs one `engram setup <agent>` per client, as engram's own `docs/AGENT-SETUP.md` (https://github.com/Gentleman-Programming/engram) documents, and is idempotent. Both run modes reconcile it unconditionally rather than probing, because probing sees presence but never whether the pinned absolute binary path still resolves; setup rewrites the pin every time. The claude-code command is answered yes to allowlist Engram's tools; the other two take a closed stdin. The allowlist stays untracked, since a tracked copy of a tool set Engram owns goes stale silently.
+Engram is core, not optional: the policy assumes memory survives a session. `install_engram` runs one `engram setup <agent>` per client, as engram's own `docs/AGENT-SETUP.md` (https://github.com/Gentleman-Programming/engram) documents, and is idempotent. Both run modes reconcile it unconditionally rather than probing, because probing sees presence but never whether the pinned absolute binary path still resolves; setup rewrites the pin every time. The claude-code command is answered yes to allowlist Engram's tools; the opencode command takes a closed stdin. The allowlist stays untracked, since a tracked copy of a tool set Engram owns goes stale silently.
 
-agent-browser (https://github.com/vercel-labs/agent-browser) ships no per-client registrar, so `install_agent_browser` writes the three registrations itself: `claude mcp add --scope user` and `codex mcp add`, plus a JSON edit to `opencode.json` for the client whose `opencode mcp add` is interactive. It runs from `reconcile_clients`, after `engram setup`, which would otherwise drop it. `check_tools` asserts both servers per client, so a run that clobbered Engram's entry fails.
+agent-browser (https://github.com/vercel-labs/agent-browser) ships no per-client registrar, so `install_agent_browser` writes both registrations itself: `claude mcp add --scope user`, plus a JSON edit to `opencode.json` for the client whose `opencode mcp add` is interactive. It runs from `reconcile_clients`, after `engram setup`, which would otherwise drop it. `check_tools` asserts both servers per client, so a run that clobbered Engram's entry fails.
 
-Registration is global. Only two clients could be per project anyway, since Codex reads only `~/.codex/config.toml`, verified with `codex doctor`, and a browser driver is a general tool like `gh` rather than a dependency of one repository. Each registration is removed and re-added, so a re-run is idempotent and the pinned path is never stale. The profile is the default, meaning no `--tools` flag, so only `core` loads. Widening to `network`, `state`, `debug`, `tabs`, `react`, `mobile`, or `all` is a one-word edit there, and each would cost context in every session of all three clients.
+Registration is global, because a browser driver is a general tool like `gh` rather than a dependency of one repository. Each registration is removed and re-added, so a re-run is idempotent and the pinned path is never stale. The profile is the default, meaning no `--tools` flag, so only `core` loads. Widening to `network`, `state`, `debug`, `tabs`, `react`, `mobile`, or `all` is a one-word edit there, and each would cost context in every session of both clients.
 
-The formula is homebrew-core. It publishes no x86_64 macOS bottle, so an Intel Mac builds from source, and on Linux the install takes `--with-deps`, which is mandatory there and rejected elsewhere. Its caveat is run rather than printed: `agent-browser install` downloads Chrome for Testing, without which every browser call fails mid-session. The uninstall removes all three registrations and the formula, and leaves `~/.agent-browser` alone: it holds the browser download and whatever profiles the CLI saved beside it, and this installer does not delete another tool's data directory. The summary measures the directory and reports it.
+The formula is homebrew-core. It publishes no x86_64 macOS bottle, so an Intel Mac builds from source, and on Linux the install takes `--with-deps`, which is mandatory there and rejected elsewhere. Its caveat is run rather than printed: `agent-browser install` downloads Chrome for Testing, without which every browser call fails mid-session. The uninstall removes both registrations and the formula, and leaves `~/.agent-browser` alone: it holds the browser download and whatever profiles the CLI saved beside it, and this installer does not delete another tool's data directory. The summary measures the directory and reports it.
 
 ### Packages
 
-Homebrew carries every tool on both platforms, because three of them (OpenCode, Engram, Worktrunk) ship only as taps. Codex is the exception: its formula is a macOS cask, so Linux takes `@openai/codex` from npm. Claude Code comes from Anthropic's native latest channel. The installer never starts an interactive client or authenticates for you.
+Homebrew carries every tool on both platforms, because three of them (OpenCode, Engram, Worktrunk) ship only as taps. Claude Code comes from Anthropic's native latest channel. The installer never starts an interactive client or authenticates for you.
 
 Python belongs to uv rather than Homebrew:
 
@@ -157,14 +152,27 @@ uv python install 3.14
 
 `PYTHON_VERSIONS` in `../lib/python.sh` is the one declaration, and sourcing it is the only thing this installer reads from outside `harness/`. The root scripts call `install_pythons`; `check_tools` calls `assert_pythons`, because the harness consumes the interpreters. That check asks `uv python find --managed-python` rather than testing `PATH`, since a shadowing Homebrew `python3.14` would pass while uv had nothing to resolve, and `uv` therefore arrives first, from `Brewfile` on macOS and `linux.sh` on Linux. Nothing here claims the name `python3`: each version also lands as `~/.local/bin/python3.14`, usually behind the pyenv shims. Run `uv python update-shell` to change that.
 
+### OpenAI models through OpenCode
+
+OpenAI models reach the harness through OpenCode, and Claude models through Claude Code, each in its own client. The installer never authenticates, copies a credential, or bridges one client into another. Sign OpenCode in natively: run `/connect` inside OpenCode, select OpenAI, then `ChatGPT Plus/Pro`, which opens a browser sign-in for that subscription (https://opencode.ai/docs/providers/). `opencode auth login` configures a provider from a shell, and `opencode auth list` shows what `~/.local/share/opencode/auth.json` holds (https://opencode.ai/docs/cli/).
+
+`Manually enter API Key` is API billing, a separate payment path. Choose it only on purpose, never as a fallback for a failed subscription sign-in. OpenCode also loads provider keys from environment variables and a project's `.env`, and which credential wins when both exist is undocumented, so an exported `OPENAI_API_KEY` is a second way onto API billing: unset it before relying on the subscription. A failed sign-in or model request is reported as it is, never worked around through another account, provider, or key. Account access stays unverified until a sign-in and a model request succeed on this machine.
+
+### Codex retirement
+
+Codex CLI is not a harness client. The installer no longer installs it, generates its command adapters or reviewer agents, links the policy into `~/.codex`, reconciles `~/.codex/config.toml` or its status line, registers MCP servers for it, or defines `cyolo`. Provisioning and every check run without a `codex` executable.
+
+Every run, install and uninstall alike, retires what an earlier install wrote there, and only what link text proves this checkout wrote: the `~/.codex/harness-commands` tree whose `.source` points at this checkout's `commands/`, the `~/.codex/skills` links into it, legacy `~/.codex/prompts` command links, the `~/.codex/AGENTS.md` policy link, and `~/.codex/agents` links into `harness/.generated/agents/`. A private file at any of those names, a foreign link, and a symlinked root are left alone. `check_links` and `check_removed` fail if the owned adapter tree, a prompt link, the policy link, or an agent link survives. A `~/.codex/skills` link left dangling after its adapter tree is already gone proves no checkout's ownership, so it stays, the same reason the orphan sweep's dangling-link defect is not extended. An install archives what it retires; an uninstall deletes it.
+
+Nothing else under `~/.codex` is touched: not `config.toml`, whose model, status line, Engram, and agent-browser entries cannot be told apart from ones Codex or you wrote; not credentials or session history; and not the Codex binary, which stays installed until you remove it, since `brew bundle` runs without cleanup. An Engram or agent-browser entry an earlier install wrote there survives a later uninstall and names a binary that uninstall removed. `bench/measure.py` still reads `~/.codex/sessions`, and CodexBar stays in `Brewfile`.
+
 ## Shell aliases
 
-`aliases.sh` holds the yolo-mode launchers and is sourced from `~/.zshrc` through one managed line. The installer removes any hand-written `ccyolo`, `cyolo`, or `ocyolo` so the committed file is the only source, and leaves every other alias alone.
+`aliases.sh` holds the yolo-mode launchers and is sourced from `~/.zshrc` through one managed line. The installer removes any hand-written `ccyolo` or `ocyolo`, and the retired `cyolo` and `oyolo`, so the committed file is the only source, and leaves every other alias alone.
 
 | Alias | Runs |
 | --- | --- |
 | `ccyolo` | `claude --dangerously-skip-permissions` |
-| `cyolo` | `codex --dangerously-bypass-approvals-and-sandbox` |
 | `ocyolo` | `opencode` with `OPENCODE_PERMISSION` set to allow edit, bash, and webfetch |
 
 OpenCode has no bypass flag: its permissions are configuration, and `OPENCODE_PERMISSION` overrides them for one run.
@@ -173,31 +181,14 @@ Zsh is the only shell either shell-facing step writes: the aliases go into `~/.z
 
 ## Status line
 
-The three clients expose three different amounts of surface, so one committed script cannot serve all of them.
+The two clients expose different amounts of surface, so one committed script cannot serve both.
 
 | Client | File | Mechanism |
 | --- | --- | --- |
 | Claude Code | `statusline/claude.sh` | A renderer run on every draw, linked to `~/.claude/statusline.sh` with `statusLine` pointed at it |
-| Codex | `statusline/codex.sh` | A reconciler run once, writing `status_line` and `status_line_use_colors` into `[tui]` in `~/.codex/config.toml` |
 | OpenCode | none | No status line field in its schema and no plugin hook, so there is nothing to render into |
 
 `claude.sh` renders model, context-window percentage, directory and branch with a dirty marker, session duration, and reasoning effort, then the five-hour and weekly rate-limit bars, fetched from the OAuth usage endpoint and cached for sixty seconds in `/tmp/claude`.
-
-`codex.sh` owns the item ids, so the installer never names them. It prints the reconciled config on stdout and exits 3 when the file already says this, which lets `install.sh` back up only on a real change. Run it by hand to see the diff it would make:
-
-```sh
-./harness/statusline/codex.sh ~/.codex/config.toml
-```
-
-The two keys it owns, whose item ids are the closest match to the Claude line:
-
-```toml
-[tui]
-status_line = ["model", "context-used", "project-name", "git-branch", "reasoning", "five-hour-limit", "weekly-limit"]
-status_line_use_colors = true
-```
-
-`model` and `reasoning` are separate items rather than the combined `model-with-reasoning`, so effort sits after the branch the way it does in `claude.sh`, and `project-name` is the basename `current-dir` would print in full. Session duration is dropped, because Codex has no item for it. `/statusline` inside Codex edits the same two keys, so a choice made there survives until the next install. The reconciler rewrites only those two keys and leaves every other line byte for byte, which also avoids `tomllib`: it needs Python 3.11, absent from the system `python3` macOS ships.
 
 ## Third-party skill updates
 
@@ -214,7 +205,7 @@ status_line_use_colors = true
 
 Review every upstream body, security report, and diff, then commit only the approved change. Locked bodies stay pristine; behavior changes belong in a command or in `POLICY.md`. Provisioning never runs the helper or a lockfile restore. A copied skill with unknown provenance stays an attributed local fork until its upstream is identified. Engram and Orca-provided skills are runtime managed and never belong in `skills-lock.json`.
 
-Binaries are the deliberate exception. Every prose body has its hash in `skills-lock.json`, while the clients arrive unpinned: `curl -fsSL https://claude.ai/install.sh | bash`, `npm install --global @openai/codex@latest`, and two Homebrew taps. A locked body is a reviewed instruction this harness executes forever, so a change to one has to be read; a client is a moving target whose next version is the point of re-running the installer. The trade is a supply chain that trusts Anthropic, OpenAI, and two tap owners at install time.
+Binaries are the deliberate exception. Every prose body has its hash in `skills-lock.json`, while the clients arrive unpinned: `curl -fsSL https://claude.ai/install.sh | bash` and two Homebrew taps. A locked body is a reviewed instruction this harness executes forever, so a change to one has to be read; a client is a moving target whose next version is the point of re-running the installer. The trade is a supply chain that trusts Anthropic and two tap owners at install time.
 
 ## Roster
 
@@ -242,7 +233,7 @@ Ponytail is a locked skill body, not a plugin. None of the plugin is installed, 
 
 ## Invocation guards
 
-`POLICY.md` opens with the commands-and-skills split. Command storage carries it for the workflows, and generated Codex adapters enforce explicit invocation through native metadata. For the local skills the roster lists, the three per-client guards carry it. For a locked body prose is the only control, which is why a body that must never fire on its own is not installed at all.
+`POLICY.md` opens with the commands-and-skills split. Command storage carries it for the workflows. For the local skills the roster lists, the three guards carry it. For a locked body prose is the only control, which is why a body that must never fire on its own is not installed at all.
 
 ## GitHub lifecycle
 
@@ -310,7 +301,7 @@ Validate a change to this directory against the sessions it produced, as `harnes
 python3 harness/bench/measure.py --split <commit-date> --since <window-start>
 ```
 
-It reads Claude Code JSONL transcripts, Codex rollout JSONL, and the OpenCode SQLite database, and reports each client separately; `--client` narrows it. A metric a client does not record, such as a declined tool call in Codex or OpenCode, prints as `-` rather than zero.
+It reads Claude Code JSONL transcripts, Codex rollout JSONL, and the OpenCode SQLite database, and reports each client separately; `--client` narrows it. Codex rollouts stay readable so sessions from before its retirement remain measurable. A metric a client does not record, such as a declined tool call in Codex or OpenCode, prints as `-` rather than zero.
 
 Eight medians per cohort: `turns`, `tool_calls`, and `minutes` for cost, `interrupts`, `denials`, and `errors` for friction, and `commands` and `delegation` for routing adoption and subagent use. A subagent gets its own transcript in both clients that delegate, and counts as the parent's delegation rather than as a session.
 

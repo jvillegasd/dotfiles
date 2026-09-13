@@ -1,6 +1,6 @@
 # dotfiles
 
-Personal dotfiles: **Neovim**, **Ghostty**, **git**, **Worktrunk**, and **Harness AI** for Codex, Claude Code, and OpenCode. Neovim is built on `lazy.nvim` with a grouped, mnemonic `<leader>` scheme on Space; Ghostty shares its JetBrains Mono Nerd Font and catppuccin-mocha theme so editor and terminal match.
+Personal dotfiles: **Neovim**, **Ghostty**, **git**, **Worktrunk**, and **Harness AI** for Claude Code and OpenCode. Neovim is built on `lazy.nvim` with a grouped, mnemonic `<leader>` scheme on Space; Ghostty shares its JetBrains Mono Nerd Font and catppuccin-mocha theme so editor and terminal match.
 
 - [`KEYMAPS.md`](KEYMAPS.md): every mapping
 - [`STRUCTURE.md`](STRUCTURE.md): Neovim and harness layout
@@ -17,7 +17,7 @@ Each script installs its platform's packages, symlinks the tracked configs, inst
 
 Both share `lib/common.sh`, which owns symlinking, the harness call, and the Neovim bootstrap. Only the package step differs: `macos.sh` applies `Brewfile` via `brew bundle`, `linux.sh` installs build prerequisites with the distribution's package manager and everything after with Homebrew. Python comes from neither: `lib/python.sh` declares the uv-managed interpreter set once, and `harness/install.sh` sources the same file to assert it.
 
-Ghostty picks up `ghostty/config` automatically. Authentication and hook trust stay interactive, and the installer prints what is left to do.
+Ghostty picks up `ghostty/config` automatically. Authentication stays interactive, and the installer prints what is left to do.
 
 Requires macOS or Linux, Homebrew (installed when missing), Neovim ≥ 0.10, and a Nerd Font (installed on macOS, bring your own on Linux).
 
@@ -40,7 +40,7 @@ macos.sh / linux.sh       # platform bootstrap
 lib/common.sh             # symlinking, harness call, nvim bootstrap, shared
 lib/python.sh             # uv-managed interpreter set, shared with harness/install.sh
 Brewfile                  # macOS package manifest
-harness/                  # portable three-client policy, commands, skills, installer
+harness/                  # two-client policy, commands, skills, installer
 skills-lock.json          # reviewed standalone third-party skill lock
 .agents/skills            # symlink to the canonical harness/skills
 .claude/skills            # skills.sh/Claude bookkeeping symlinks

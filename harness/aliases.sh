@@ -5,7 +5,6 @@
 # keeps this honest; the client's prompt is not.
 
 alias ccyolo='claude --dangerously-skip-permissions'
-alias cyolo='codex --dangerously-bypass-approvals-and-sandbox'
 
 # OpenCode has no bypass flag. Permissions are configuration, and
 # OPENCODE_PERMISSION overrides them for one run.

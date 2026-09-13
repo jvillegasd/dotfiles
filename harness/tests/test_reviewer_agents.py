@@ -20,13 +20,10 @@ _POLICY = _HARNESS / "POLICY.md"
 _INSTALL = _HARNESS / "install.sh"
 
 ACCESS = "Read and search only. Read and search the repository to follow callers and context. Never edit a file, run a command, fetch from the web, or delegate to another agent, even where the client would let you."
-CODEX_ACCESS = "Read and search only. Read and search the repository to follow callers and context. Never edit a file, fetch from the web, or delegate to another agent, even where the client would let you. Shell is how this client reads files, so run only commands that read or search, never one that changes state."
 
 OUTPUTS = {
     "claude/reviewer-a.md",
     "claude/reviewer-b.md",
-    "codex/reviewer_a.toml",
-    "codex/reviewer_b.toml",
     "opencode/reviewer-a.md",
     "opencode/reviewer-b.md",
 }
@@ -99,26 +96,18 @@ class Generation(unittest.TestCase):
         for role in ("a", "b"):
             body = (_ROLES / f"reviewer-{role}.md").read_text().split("---\n", 2)[2].strip()
             claude = (self.out / f"claude/reviewer-{role}.md").read_text()
-            codex = (self.out / f"codex/reviewer_{role}.toml").read_text()
             opencode = (self.out / f"opencode/reviewer-{role}.md").read_text()
             self.assertIn(f"\nname: reviewer-{role}\n", claude)
             self.assertIn("\ntools: Read, Grep, Glob\n", claude)
-            self.assertIn(f'name = "reviewer_{role}"\n', codex)
-            self.assertIn('\nsandbox_mode = "read-only"\n', codex)
-            self.assertIn("\n[mcp_servers.agent-browser]\nenabled = false\n", codex)
-            self.assertIn("\n[mcp_servers.engram]\nenabled = false\n", codex)
             self.assertIn("\nmode: subagent\npermission:\n  \"*\": deny\n", opencode)
             self.assertIn('\n    "*.env": deny\n', opencode)
             allowed = [line.split(":")[0].strip() for line in opencode.split("---")[1].splitlines() if line.startswith("  ") and line.endswith(": allow")]
             self.assertEqual(allowed, ['"*"', '"*.env.example"', "grep", "glob", "list"])
             self.assertIn(body, claude)
             self.assertIn(body, opencode)
-            self.assertIn(body.replace(ACCESS, CODEX_ACCESS), codex)
-            self.assertNotIn(ACCESS, codex)
 
     def test_gaps_and_unverified_capabilities_are_reported_apart(self):
         report = self.generate().stdout.splitlines()
-        self.assertTrue(any(line.startswith("gap: codex: shell") for line in report), report)
         self.assertTrue(any(line.startswith("unverified: ") for line in report), report)
         self.assertFalse(any(line.startswith("gap: claude") for line in report), report)
         self.assertTrue(any(line.startswith("unverified: ") and "ccyolo" in line for line in report), report)
@@ -132,8 +121,6 @@ class Generation(unittest.TestCase):
         mutations = [
             ("claude/reviewer-a.md", "tools: Read, Grep, Glob\n", "tools: Read, Grep, Glob, Bash\n"),
             ("claude/reviewer-b.md", "tools: Read, Grep, Glob\n", ""),
-            ("codex/reviewer_a.toml", 'sandbox_mode = "read-only"', 'sandbox_mode = "workspace-write"'),
-            ("codex/reviewer_b.toml", "[mcp_servers.engram]\nenabled = false\n", ""),
             ("opencode/reviewer-a.md", '  "*": deny', '  "*": allow'),
             ("opencode/reviewer-b.md", "  list: allow\n", "  list: allow\n  bash: allow\n"),
             ("opencode/reviewer-b.md", "mode: subagent\n", "mode: subagent\ntools:\n  bash: true\n"),
@@ -151,12 +138,10 @@ class Generation(unittest.TestCase):
 
     def test_check_detects_missing_and_drifted_output(self):
         self.generate()
-        (self.out / "codex/reviewer_b.toml").unlink()
         target = self.out / "claude/reviewer-a.md"
         target.write_text(target.read_text() + "\nExtra instruction.\n")
         result = run("--check", _ROLES, self.out)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("missing: codex/reviewer_b.toml", result.stdout)
         self.assertIn("changed: claude/reviewer-a.md", result.stdout)
 
     def test_generation_removes_stale_outputs(self):
@@ -242,7 +227,7 @@ class InstallerOwnership(unittest.TestCase):
         for name in ("clients", "skills"):
             (harness / name).symlink_to(_HARNESS / name)
         out = harness / ".generated/agents"
-        roots = {"claude": home / ".claude/agents", "codex": home / ".codex/agents", "opencode": home / ".config/opencode/agents"}
+        roots = {"claude": home / ".claude/agents", "opencode": home / ".config/opencode/agents"}
         roots["claude"].mkdir(parents=True)
         private = roots["claude"] / "mine.md"
         private.write_text("mine\n")
@@ -347,9 +332,8 @@ class Protocol(unittest.TestCase):
                 "Use ephemeral specialist roles. Do not create persistent client-specific personas when a command, a skill, or an isolated review context is enough. Role definitions generated from one canonical source, such as the reviewer agents, are shared instructions and client capability configuration, not personas.",
             ],
             _SKILL: [
-                "Launch each reviewer as its named agent, in parallel, each with a fresh context: `reviewer-a` and `reviewer-b` in Claude Code and OpenCode, `reviewer_a` and `reviewer_b` in Codex. The installer generates them from `roles/reviewer-a.md` and `roles/reviewer-b.md` beside this skill, which own each reviewer's standing instructions, lenses, and output format.",
+                "Launch each reviewer as its named agent, in parallel, each with a fresh context: `reviewer-a` and `reviewer-b` in Claude Code and OpenCode. The installer generates them from `roles/reviewer-a.md` and `roles/reviewer-b.md` beside this skill, which own each reviewer's standing instructions, lenses, and output format.",
                 "When a named agent is unavailable, say so, launch a general agent with the matching role file's full text as its instructions, and report that this fallback enforces only the general agent's own permissions rather than the named agent's read-search restrictions. Never skip or silently omit a review because a named agent is missing.",
-                "In Codex, give that fallback the role text with its Access line replaced by `CODEX_ACCESS` from `clients/agents.py`, because shell is how Codex reads files.",
                 "Give Reviewer A the requirements and the diff, never the implementation rationale. Nothing else.",
                 "Give Reviewer B only the diff. No requirements, no rationale, no ticket.",
                 "Snapshot the complete diff once per round into a readable temporary file outside the worktree, and give each reviewer that path. A reviewer that answers `unreadable: <path>` gets the same snapshot inline instead. Never truncate the diff: when neither the file nor inline text can carry the complete snapshot, stop and escalate per the escalation contract.",
