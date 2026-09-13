@@ -18,6 +18,9 @@
 # Names clients and employers. The committed example names nobody.
 harness/bench/cohorts.json
 
+# Generated client agent definitions, linked into each client by install.sh.
+harness/.generated/
+
 # Scenario run output, retained locally.
 harness/scenarios/attempts/
 *.backup.*

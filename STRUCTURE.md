@@ -49,7 +49,8 @@ harness/
 ├── clients/                    # the client settings the harness owns, reconciled not symlinked
 │   ├── claude.json             # tracked keys merged into ~/.claude/settings.json
 │   ├── codex.toml              # tracked top-level keys for ~/.codex/config.toml
-│   └── codex.sh                # reconciles the TOML half; install.sh reconciles claude.json inline
+│   ├── codex.sh                # reconciles the TOML half; install.sh reconciles claude.json inline
+│   └── agents.py               # renders the reviewer roles into linked, untracked client agents
 ├── aliases.sh                  # yolo-mode launchers, sourced from ~/.zshrc
 ├── commands/                   # canonical workflows; /name in Claude/OpenCode, $name in Codex
 ├── skills/
@@ -58,7 +59,7 @@ harness/
 │   ├── grilling/               # the one interview protocol, interactive and self-grill
 │   ├── grill-with-docs/        # that interview plus domain-modeling, for decisions that must persist
 │   ├── local-tracker/          # tracker operations when the tracker is committed files
-│   ├── adversarial-review|evidence/  # review and evidence protocols the delivery commands load
+│   ├── adversarial-review|evidence/  # review and evidence protocols the delivery commands load; roles/ holds the canonical reviewers
 │   └── workflow-checkpoint/    # one branch-scoped Engram checkpoint protocol, canonical in the skill
 ├── bench/                      # session-population comparison for harness changes, with its own README
 └── tests/                      # runnable regression checks, run with python3 -m unittest discover
