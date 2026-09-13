@@ -121,6 +121,14 @@ COMMAND_ROOTS=(
 CODEX_ADAPTERS="$HOME/.codex/harness-commands"
 CODEX_SKILLS="$HOME/.codex/skills"
 
+# Reviewer agents are rendered into this checkout's own untracked directory and linked into each client, so a link's text is what proves this checkout wrote it. Pairs are client|root, because bash 3.2 has no associative arrays.
+AGENT_OUT="$HARNESS_DIR/.generated/agents"
+AGENT_ROOTS=(
+    "claude|$HOME/.claude/agents"
+    "codex|$HOME/.codex/agents"
+    "opencode|$CONFIG_HOME/opencode/agents"
+)
+
 skill_names() {
     find "$HARNESS_DIR/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort
 }
@@ -725,6 +733,85 @@ remove_codex_commands() {
     backup_existing "$CODEX_ADAPTERS"
 }
 
+# A link is this checkout's only when its text points into AGENT_OUT, the exact-text ownership unlink_managed uses, so a private agent, a foreign link, and another checkout's dangling link are never touched. An install removes the links whose definition was retired; an uninstall removes all of them.
+sweep_agent_links() {
+    local pair root entry target
+    for pair in "${AGENT_ROOTS[@]}"; do
+        root="${pair#*|}"
+        [[ -d "$root" && ! -L "$root" ]] || continue
+        for entry in "$root"/*; do
+            [[ -L "$entry" ]] || continue
+            target="$(readlink "$entry")"
+            [[ "$target" == "$AGENT_OUT/"* ]] || continue
+            if $UNINSTALL || [[ ! -e "$target" ]]; then
+                backup_existing "$entry"
+            fi
+        done
+    done
+}
+
+# The generator prints every enforcement gap on each run, so what a client cannot restrict is never reported as enforced.
+install_agents() {
+    local pair client root entry destination status
+    "$HARNESS_DIR/clients/agents.py" "$HARNESS_DIR/skills/adversarial-review/roles" "$AGENT_OUT" && status=0 || status=$?
+    [[ "$status" == 0 || "$status" == 3 ]] || die "Generating the reviewer agents failed with status $status."
+    for pair in "${AGENT_ROOTS[@]}"; do
+        client="${pair%%|*}" root="${pair#*|}"
+        [[ ! -L "$root" && ( ! -e "$root" || -d "$root" ) ]] ||
+            die "Unowned reviewer agent root: $root"
+        for entry in "$AGENT_OUT/$client"/*; do
+            destination="$root/$(basename "$entry")"
+            if [[ -e "$destination" || -L "$destination" ]]; then
+                [[ -L "$destination" && "$(readlink "$destination")" == "$entry" ]] ||
+                    die "Unowned reviewer agent collision: $destination"
+            fi
+        done
+    done
+    for pair in "${AGENT_ROOTS[@]}"; do
+        ensure_managed_dir "${pair#*|}"
+    done
+    sweep_agent_links
+    for pair in "${AGENT_ROOTS[@]}"; do
+        client="${pair%%|*}" root="${pair#*|}"
+        for entry in "$AGENT_OUT/$client"/*; do
+            link_managed "$entry" "$root/$(basename "$entry")"
+        done
+    done
+}
+
+check_agents() {
+    local pair client root entry
+    "$HARNESS_DIR/clients/agents.py" --check "$HARNESS_DIR/skills/adversarial-review/roles" "$AGENT_OUT" ||
+        die "Reviewer agents in $AGENT_OUT are missing, drifted, or widened."
+    for pair in "${AGENT_ROOTS[@]}"; do
+        client="${pair%%|*}" root="${pair#*|}"
+        for entry in "$AGENT_OUT/$client"/*; do
+            [[ "$(readlink "$root/$(basename "$entry")")" == "$entry" ]] ||
+                die "Missing reviewer agent link: $root/$(basename "$entry")"
+        done
+    done
+}
+
+remove_agents() {
+    sweep_agent_links
+    rm -rf "$AGENT_OUT"
+    rmdir "$HARNESS_DIR/.generated" 2>/dev/null || true
+}
+
+# Follows a symlinked root on purpose. The sweep never writes through a directory this checkout does not own, so a link it left inside one fails here by name instead of passing silently.
+check_agents_removed() {
+    local pair root entry
+    for pair in "${AGENT_ROOTS[@]}"; do
+        root="${pair#*|}"
+        [[ -d "$root" ]] || continue
+        for entry in "$root"/*; do
+            [[ ! -L "$entry" || "$(readlink "$entry")" != "$AGENT_OUT/"* ]] ||
+                die "Reviewer agent link survived the uninstall: $entry"
+        done
+    done
+    [[ ! -e "$AGENT_OUT" ]] || die "Generated reviewer agents survived the uninstall: $AGENT_OUT"
+}
+
 install_links() {
     local skill source command root desired="|"
     ensure_managed_dir "$HOME/.agents/skills"
@@ -767,6 +854,7 @@ install_links() {
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.codex/AGENTS.md"
     link_managed "$HARNESS_DIR/POLICY.md" "$HOME/.claude/CLAUDE.md"
     link_managed "$HARNESS_DIR/POLICY.md" "$CONFIG_HOME/opencode/AGENTS.md"
+    install_agents
     # The SEO group is gone. Its launcher lives outside the roots the orphan
     # sweep covers, so retiring it stays an explicit line.
     backup_existing "$HOME/.local/bin/claude-seo"
@@ -832,6 +920,7 @@ check_links() {
     [[ "$(readlink "$HOME/.claude/CLAUDE.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing Claude policy link."
     [[ "$(readlink "$CONFIG_HOME/opencode/AGENTS.md")" == "$HARNESS_DIR/POLICY.md" ]] || die "Missing OpenCode policy link."
     [[ -f "$HARNESS_DIR/skills/ponytail/SKILL.md" ]] || die "Missing the ponytail skill body."
+    check_agents
     # Every tracked key reached the live config. Each TOML half asserts by
     # re-running its own reconciler, where only exit 3 means "the config
     # already says this": exit 0 is a key that would still change, and
@@ -1296,6 +1385,7 @@ uninstall_links() {
     unlink_managed "$HARNESS_DIR/POLICY.md" "$HOME/.claude/CLAUDE.md"
     unlink_managed "$HARNESS_DIR/POLICY.md" "$CONFIG_HOME/opencode/AGENTS.md"
     unlink_managed "$HARNESS_DIR/statusline/claude.sh" "$HOME/.claude/statusline.sh"
+    remove_agents
 }
 
 # The mirror of check_links: the mode that removes things confirms the removal
@@ -1304,6 +1394,7 @@ uninstall_links() {
 # would surface as a client loading a policy from a checkout that has moved.
 check_removed() {
     local root entry target script status
+    check_agents_removed
     [[ ! -e "$CODEX_ADAPTERS/.source" || "$(readlink "$CODEX_ADAPTERS/.source")" != "$HARNESS_DIR/commands" ]] || die "Codex adapters survived the uninstall."
     for root in "${SKILL_ROOTS[@]}" "${COMMAND_ROOTS[@]}"; do
         [[ -d "$root" ]] || continue
@@ -1479,7 +1570,8 @@ uninstall_summary() {
 $(printf '\033[1;32m✓ Harness AI removed.\033[0m')
 
 Gone: every managed skill and command link, the three POLICY.md links, the
-Claude status line link, the ~/.zshrc alias block, the tracked keys in
+Claude status line link, the reviewer agent links and their generated
+definitions, the ~/.zshrc alias block, the tracked keys in
 ~/.claude/settings.json and ~/.codex/config.toml, Engram: its plugin,
 marketplace, and MCP registration in all three clients, plus the formula, and
 agent-browser: its MCP registration in all three clients, plus the formula.
