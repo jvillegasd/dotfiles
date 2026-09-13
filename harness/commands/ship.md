@@ -93,8 +93,8 @@ Inspect `git status --short` before creating anything. A worktree holding pre-ex
    Two counts bound what this workflow writes. Every entry outside `## Contract` is one list line of at most 50 words, the opening included; a transcribed criterion keeps its source wording whatever its length. Everything outside `## Contract` comes to at most 500 words. Draft the body to a file outside the worktree, under `$TMPDIR` or `/tmp`, and count it there; on any later edit count the live body instead, because the body no longer lives in a file this run owns. A stray draft inside the worktree would trip this workflow's own pre-flight on the next run.
 
    ````
-   awk '/^ *```/{f=!f} /^## /&&!f{c=($0=="## Contract")} !c' "$TMPDIR/pr-body.md" | wc -w
-   gh pr view --json body -q .body | awk '/^ *```/{f=!f} /^## /&&!f{c=($0=="## Contract")} !c' | wc -w
+   awk '/^ *```/{f=!f} /^## /&&!f{c=/^## Contract$/} !c' "$TMPDIR/pr-body.md" | wc -w
+   gh pr view --json body -q .body | awk '/^ *```/{f=!f} /^## /&&!f{c=/^## Contract$/} !c' | wc -w
    ````
 
    Over the cap, condense entries; move nothing into or out of `## Contract`. Leave a human's own additions to the body alone even when they carry the count past 500: the cap governs what this workflow writes, never what it finds.
