@@ -13,7 +13,7 @@ Workflows are commands. Knowledge is skills. The split is structural, not a matt
 
 Announce a routing decision in one line so a wrong guess is cheap to correct. After a command is invoked, load only the skills it names.
 
-Use ephemeral specialist roles. Do not create persistent client-specific personas when a command, a skill, or an isolated review context is enough.
+Use ephemeral specialist roles. Do not create persistent client-specific personas when a command, a skill, or an isolated review context is enough. Role definitions generated from one canonical source, such as the reviewer agents, are shared instructions and client capability configuration, not personas.
 
 Run independent roles in parallel when the client supports it; otherwise run them sequentially without merging their scopes.
 

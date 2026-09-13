@@ -11,7 +11,7 @@ One committed source for Codex, Claude Code, and OpenCode.
 | `locked-skills.sh` | Adds, updates, removes, and validates third-party skill locks. |
 | `bench/measure.py` | Compares the session population before and after a change. Manual in `bench/README.md`. |
 | `statusline/` | One file per provider that has a status line. |
-| `clients/` | The client settings this harness owns: `claude.json` and `codex.toml` declare them, `codex.sh` reconciles the TOML half. |
+| `clients/` | The client settings this harness owns: `claude.json` and `codex.toml` declare them, `codex.sh` reconciles the TOML half, and `agents.py` renders the reviewer agents. |
 
 `clients/` declares rather than symlinks, because both live files are mostly machine state: hook manifests, per-project trust decisions, generated absolute paths. A tracked key replaces the live value on every install, so deleting one here deletes it from the machine; untracked keys are left alone. `permissions` merges a level down, so `deny` stays owned while the Engram allowlist survives. These run after `engram setup`, which rewrites both files from its own template, so being last is what makes a tracked key win over every other writer, the client included: `model`, `effortLevel`, `theme`, and `remoteControlAtStartup` are what `/model`, `/config`, and Remote Control write back at runtime, so an in-session change survives only until the next install.
 
@@ -62,7 +62,7 @@ flowchart TD
         ship --> ladder["resolve the oracle ladder<br>project instructions, else task runner,<br>else the toolchain"]
         ladder --> implement["implement<br>loading ponytail"]
         implement --> rungs["local rungs green:<br>types, lint, tests, build"]
-        rungs --> commit["commit"] --> review["adversarial-review<br>requirements-aware and diff-only reviewers"]
+        rungs --> commit["commit"] --> review["adversarial-review<br>named reviewer agents, requirements-aware<br>and diff-only, disclosed fallback"]
         review --> conform["spec-conformance pass<br>diff against the contract"]
         conform --> push["push"] --> pr["open the draft pull request<br>capped body: what changed, contract,<br>checks, assumptions, refuted, rejected"]
         pr --> checks(["remote required checks<br>and both review passes green"])
@@ -98,6 +98,22 @@ Every command that ingests text written elsewhere, a ticket body, a review comme
 
 A locally authored skill carries all three invocation guards: `policy.allow_implicit_invocation: false` in its `agents/openai.yaml`, plus `disable-model-invocation: true` and `metadata."opencode/autoinvoke": "false"` in its frontmatter. A locked body gets none, because `agents/openai.yaml` is upstream content and `computedHash` covers the whole directory, so anything written inside it is clobbered by the next update with the lockfile recording the loss as correct. The only control that survives an update is not installing the body at all.
 
+## Reviewer agents
+
+`adversarial-review` launches Reviewer A and Reviewer B as named agents. Their standing instructions, lenses, output format, and read-search intent live once, in `skills/adversarial-review/roles/`; the skill keeps orchestration, scaling, diff delivery, triage, and the loop cap. `clients/agents.py <roles> <output>` renders one definition per reviewer per client and rewrites nothing that already matches; `--check` reports a missing, drifted, unmanaged, or widened definition.
+
+The installer generates into `harness/.generated/agents/`, gitignored machine state owned by this checkout, and links each definition into its client's agent directory. The only links it claims are ones whose text points into that directory: an install removes a link whose definition was retired, an uninstall removes every such link and the generated directory, and a private agent or another checkout's link beside them is left alone. `check_links` fails on a missing link or on a definition that lost its restrictions.
+
+| Client | Agents | Path | Control | Not enforced |
+| --- | --- | --- | --- | --- |
+| Claude Code | `reviewer-a`, `reviewer-b` | `~/.claude/agents/` | `tools: Read, Grep, Glob`, so writes, shell, web, MCP tools, and `Agent` are absent | nothing documented; reading a diff file outside the project without a prompt is unverified |
+| Codex | `reviewer_a`, `reviewer_b` | `~/.codex/agents/` | `sandbox_mode = "read-only"`, which blocks writes, plus `mcp_servers` entries disabling agent-browser and Engram | shell, which is how a Codex agent reads files, so its definitions allow read-only commands; web search and nested delegation, which have no documented per-agent control |
+| OpenCode | `reviewer-a`, `reviewer-b` | `$XDG_CONFIG_HOME/opencode/agents/` | `mode: subagent` with every permission denied and only `read`, `grep`, `glob`, and `list` re-allowed, `.env` reads still denied | reading a diff file outside the project, which the deny refuses, so the inline fallback covers it; whether MCP tools fall under the deny is unverified |
+
+Codex names use underscores because Codex allows only lowercase letters, digits, and underscores. Every restriction is best effort: the table is what each client documents, the generator prints the same gaps on every install, and no row is runtime-verified until a probe runs against an installed client. Probe during an intentional installation, never as a validation shortcut: in each client, launch each named agent, ask it to write a file, run a command, fetch a URL, and delegate, and record each result as enforced, not enforced, or unverified. The unverified rows are whether Claude Code and Codex load a symlinked definition, whether a Claude Code reviewer reads a diff outside the project without a prompt, whether OpenCode's deny covers MCP tools, whether Codex honors a per-agent `mcp_servers` override of a globally registered server and still loads an agent whose override names an unregistered one, whether the `ccyolo`, `cyolo`, and `ocyolo` launchers leave agent restrictions in force, and diff delivery's inline fallback and escalation.
+
+Reviewer A receives the requirements and the diff, never the implementation rationale; Reviewer B receives only the diff. The parent writes one complete diff snapshot per round to a temporary file outside the worktree. A reviewer that cannot read it answers `unreadable: <path>` and gets the same snapshot inline, and when neither transport can carry the whole diff the review escalates instead of truncating. When a named agent is unavailable, the parent says so and launches a general agent with the role file as its instructions, with the Codex Access line swapped in under Codex, disclosing that the fallback enforces only that agent's own permissions. Review is never skipped. Nothing here claims model diversity: both reviewers run whatever model their client assigns.
+
 ## Install
 
 The root `../macos.sh` and `../linux.sh` install the harness by default. To reconcile only policy, commands, and skills:
@@ -110,14 +126,14 @@ The root `../macos.sh` and `../linux.sh` install the harness by default. To reco
 | --- | --- |
 | `--links-only` | Reconcile links without installing packages. Engram and agent-browser are still reconciled, so both must already be installed. |
 | `--no-backup` | Delete what is in the way instead of archiving it. Destructive and unrecoverable. |
-| `--uninstall` | Remove every managed link, the alias block, the tracked client keys, Engram, and agent-browser. Keeps `~/.engram` and `~/.agent-browser`. |
+| `--uninstall` | Remove every managed link, the generated reviewer agents, the alias block, the tracked client keys, Engram, and agent-browser. Keeps `~/.engram` and `~/.agent-browser`. |
 | `--clear-backups` | Delete every archive under `~/.dotfiles-backups/harness/`. Runs on its own. |
 
 Reconciliation removes as well as adds. A symlink in a managed root is backed up and removed when its target is gone, points into `harness/` at something no longer installed, or carries a name differing from its target's, so a retired entry cannot outlive the change that retired it. A real directory shadowing a managed name is backed up too, since the sweep cannot see it. One defect is left in place and tracked separately: the dangling branch removes a dangling symlink whoever wrote it, because a target resolving to nothing cannot be tested for ownership.
 
 Managed roots are real directories, so harness links and your private entries sit side by side; a symlink standing in for one is moved aside under `.previous-link`. The OpenCode skills root is normalized but never created, since OpenCode reads `~/.agents/skills`. OpenCode's own three paths follow `XDG_CONFIG_HOME` when set, the same default `../lib/common.sh` resolves. Anything in the way is moved to a timestamped directory under `~/.dotfiles-backups/harness/`, or deleted with `--no-backup`, which the root installer forwards. Each removal is logged.
 
-Both run modes verify what they wrote. `check_links` asserts every skill, command, policy, and status line link on every run; `check_tools` adds the client, plugin, and interpreter assertions only a full run can satisfy. Its OpenCode assertion reads `opencode debug config` through a temporary file rather than a pipe: that command stops at the 64 KiB pipe capacity whenever stdout is not a regular file, and this config passed 64 KiB once the harness's own command templates went into it, so the piped form failed on a JSON parse error instead of on the assertion. Both run after Engram, which rewrites `config.toml` and `settings.json`.
+Both run modes verify what they wrote. `check_links` asserts every skill, command, policy, status line, and reviewer agent link on every run; `check_tools` adds the client, plugin, and interpreter assertions only a full run can satisfy. Its OpenCode assertion reads `opencode debug config` through a temporary file rather than a pipe: that command stops at the 64 KiB pipe capacity whenever stdout is not a regular file, and this config passed 64 KiB once the harness's own command templates went into it, so the piped form failed on a JSON parse error instead of on the assertion. Both run after Engram, which rewrites `config.toml` and `settings.json`.
 
 ### MCP servers
 

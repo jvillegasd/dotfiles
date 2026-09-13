@@ -12,9 +12,21 @@ Self-review that grades its own homework is worthless. This protocol withholds t
 
 ## Invocation
 
-Launch reviewers as read-only subagents, in parallel, each with a fresh context. Never pass the conversation, the implementation rationale, the plan behind the change, or a prior round. Anchoring a reviewer on why you thought the code was right is what makes the review useless.
+Launch each reviewer as its named agent, in parallel, each with a fresh context: `reviewer-a` and `reviewer-b` in Claude Code and OpenCode, `reviewer_a` and `reviewer_b` in Codex. The installer generates them from `roles/reviewer-a.md` and `roles/reviewer-b.md` beside this skill, which own each reviewer's standing instructions, lenses, and output format.
+
+Never pass the conversation, the implementation rationale, the plan behind the change, or a prior round. Anchoring a reviewer on why you thought the code was right is what makes the review useless.
+
+When a named agent is unavailable, say so, launch a general agent with the matching role file's full text as its instructions, and report that this fallback enforces only the general agent's own permissions rather than the named agent's read-search restrictions. Never skip or silently omit a review because a named agent is missing.
+
+In Codex, give that fallback the role text with its Access line replaced by `CODEX_ACCESS` from `clients/agents.py`, because shell is how Codex reads files.
+
+The named agents' restrictions are best effort: each client enforces what its own controls support, and `clients/agents.py` reports the gaps.
 
 Reviewer A holds the requirements but never that rationale; Reviewer B holds only the diff. Requirements are what let a reviewer check conformance; rationale only biases it.
+
+Give Reviewer A the requirements and the diff, never the implementation rationale. Nothing else.
+
+Give Reviewer B only the diff. No requirements, no rationale, no ticket.
 
 Scale to blast radius:
 
@@ -22,58 +34,9 @@ Scale to blast radius:
 - Two reviewers otherwise.
 - Never three. A third mostly re-finds what the first two found.
 
-## Reviewer A: does it do the job
+## Diff delivery
 
-Give it the diff and the requirements, never the implementation rationale. Nothing else.
-
-> Assume this diff fails to do what the requirements say. Find where.
-
-Lenses: an unmet requirement; scope creep past what was asked; an edge case
-handled wrongly; a missing failure path; an error swallowed silently; a
-migration without a rollback; an auth or data-boundary change; a broken public
-contract; a check that would still pass if the logic it covers were deleted.
-
-## Reviewer B: is it wrong
-
-Give it only the diff. No requirements, no context, no ticket.
-
-> Assume this diff is wrong. Find the bug.
-
-Lenses: callers of every touched symbol left unupdated, so grep them; sibling
-code paths left broken because a fix landed at one call site only; dead code
-and leftovers; `ponytail` violations, meaning a new abstraction with one user,
-a dependency for a few lines, or config for a constant; anything whose
-correctness depends on information not visible in the diff.
-
-On a UI diff, add one more lens: a palette, token system, or state set the
-contract never asked for is unrequested surface area.
-
-On added or modified lines, add one more lens: a comment restating the line it sits on, or a docstring longer than what it documents.
-
-## Reviewer output
-
-One line per finding:
-
-```
-path:Lline: <severity>: <problem>. <fix>.
-```
-
-Severity is one of:
-
-- `bug:` broken behavior that will cause an incident
-- `risk:` works but fragile, meaning a race, a missing guard, or a swallowed
-  error
-- `nit:` naming, style, or micro-optimization; the implementer may ignore it
-- `q:` a genuine question rather than a suggestion, and where an unsure
-  reviewer belongs
-
-Name the symbol in backticks and give the fix, not "consider refactoring". Drop
-the throat-clearing: no hedging, no restating what the line does. A security
-finding or an architectural disagreement is the exception and needs its
-reasoning spelled out.
-
-A reviewer that finds nothing must state what it checked and why the diff
-survives. "Looks good" is not a review.
+Snapshot the complete diff once per round into a readable temporary file outside the worktree, and give each reviewer that path. A reviewer that answers `unreadable: <path>` gets the same snapshot inline instead. Never truncate the diff: when neither the file nor inline text can carry the complete snapshot, stop and escalate per the escalation contract.
 
 Reviewers never edit files, and findings never reach the forge.
 
