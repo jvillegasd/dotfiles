@@ -75,7 +75,7 @@ def installer_agents(harness, home, uninstall):
 
 class Generation(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp())
+        self.tmp = Path(tempfile.mkdtemp()).resolve()
         self.addCleanup(shutil.rmtree, self.tmp)
         self.out = self.tmp / "out"
 
@@ -167,6 +167,33 @@ class Generation(unittest.TestCase):
         self.assertFalse(stale.exists())
         self.assertEqual(set(tree(self.out)), OUTPUTS)
 
+    def test_symlinked_output_paths_are_refused_without_writes(self):
+        for kind in ("file", "client", "output", "ancestor", "dangling"):
+            with self.subTest(kind=kind):
+                base = self.tmp / kind
+                output = base / "parent/out"
+                self.assertEqual(run(_ROLES, output).returncode, 0)
+                link = {
+                    "file": output / "claude/reviewer-a.md",
+                    "client": output / "claude",
+                    "output": output,
+                    "ancestor": output.parent,
+                    "dangling": output / "claude/reviewer-a.md",
+                }[kind]
+                external = base / "external"
+                link.rename(external)
+                if external.is_file():
+                    external.write_text("private agent\n")
+                link.symlink_to(base / "missing" if kind == "dangling" else external)
+                before = tree(base)
+                for flags in ((), ("--check",)):
+                    result = run(*flags, _ROLES, output)
+                    self.assertNotEqual(result.returncode, 0, result.stdout)
+                    self.assertIn("symlink", result.stderr)
+                    self.assertEqual(tree(base), before)
+                    self.assertTrue(link.is_symlink())
+                self.assertFalse((base / "missing").exists())
+
     def test_incomplete_or_widened_role_is_refused(self):
         edits = {
             "description": ("description: ", "summary: "),
@@ -188,7 +215,7 @@ class Generation(unittest.TestCase):
 
 class InstallerOwnership(unittest.TestCase):
     def test_install_and_uninstall_touch_only_this_checkouts_links(self):
-        tmp = Path(tempfile.mkdtemp())
+        tmp = Path(tempfile.mkdtemp()).resolve()
         self.addCleanup(shutil.rmtree, tmp)
         harness, home = tmp / "harness", tmp / "home"
         harness.mkdir()
@@ -256,7 +283,7 @@ class InstallerOwnership(unittest.TestCase):
                     self.assertTrue((root / "reviewer-b.md").is_symlink())
 
     def test_uninstall_fails_by_name_on_a_link_inside_a_symlinked_root(self):
-        tmp = Path(tempfile.mkdtemp())
+        tmp = Path(tempfile.mkdtemp()).resolve()
         self.addCleanup(shutil.rmtree, tmp)
         harness, home = tmp / "harness", tmp / "home"
         harness.mkdir()

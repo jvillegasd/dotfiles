@@ -5,6 +5,8 @@ Usage: agents.py [--check] <roles-dir> <output-dir>
 
 Generation writes <output-dir>/<client>/<file> for every role and client, removes any other file under <output-dir>, and prints the enforcement gaps and unverified capabilities. It exits 0 when it wrote or removed something and 3 when the output already matched, the same codes clients/codex.sh uses, so a crash cannot pass for "nothing to do". A role that is incomplete or asks for more than read-search access exits 4 before anything is written.
 
+Output paths and their ancestors must not be symlinks; both generation and checking refuse them before reconciliation.
+
 --check writes nothing. It reports each output that is missing, drifted, unmanaged, or no longer carries its client's restrictions, and exits 1 when it found any.
 
 The output directory is wholly owned: install.sh links client agent paths to these files and never writes a definition into a client directory itself, which is what keeps a private agent beside them untouched.
@@ -149,6 +151,11 @@ def main(argv):
         fail(__doc__.splitlines()[2], 2)
     roles, output = (Path(argument) for argument in arguments)
     outputs = render(roles)
+    for relative in outputs:
+        path = output / relative
+        for entry in (path, *path.parents):
+            if entry.is_symlink():
+                fail(f"{entry}: symlink in reviewer output path", 1 if checking else 4)
     return check(outputs, output) if checking else generate(outputs, output)
 
 
