@@ -89,7 +89,6 @@ def _usage_fields(usage: dict) -> dict:
     for candidate in (
         cached,
         usage.get("cache_read_input_tokens"),
-        usage.get("cached_input_tokens"),
         details.get("cached_tokens") if isinstance(details, dict) else None,
         prompt_details.get("cached_tokens") if isinstance(prompt_details, dict) else None,
     ):
@@ -106,8 +105,8 @@ def _usage_fields(usage: dict) -> dict:
 def parse_usage(events: list) -> dict:
     """Normalize token usage, keeping an absent measurement unknown.
 
-    A summary `result` event carries the run totals and
-    wins; otherwise per-message usages are summed. A field nobody measured
+    A summary `result` event carries the run totals and wins; otherwise
+    per-message usages are summed. A field nobody measured
     stays `None`, never `0`, because an absent measurement and a measured zero
     are different claims.
     """

@@ -160,7 +160,7 @@ OpenAI models reach the harness through OpenCode, and Claude models through Clau
 
 ## Shell aliases
 
-`aliases.sh` holds the yolo-mode launchers and is sourced from `~/.zshrc` through one managed line. The installer removes any hand-written `ccyolo` or `ocyolo`, and the retired `cyolo` and `oyolo`, so the committed file is the only source, and leaves every other alias alone.
+`aliases.sh` holds the yolo-mode launchers and is sourced from `~/.zshrc` through one managed line. The installer removes any hand-written `ccyolo` or `ocyolo`, and the retired `oyolo`, so the committed file is the only source, and leaves every other alias alone.
 
 | Alias | Runs |
 | --- | --- |

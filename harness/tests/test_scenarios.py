@@ -257,12 +257,6 @@ class MetricsTest(unittest.TestCase):
     def test_cached_usage_variants_are_normalized(self):
         self.assertEqual(
             R.parse_usage(
-                [{"type": "result", "usage": {"input_tokens": 4, "output_tokens": 1, "cached_input_tokens": 2}}]
-            )["cached_input"],
-            2,
-        )
-        self.assertEqual(
-            R.parse_usage(
                 [{"type": "result", "usage": {"input_tokens": 4, "output_tokens": 1, "prompt_tokens_details": {"cached_tokens": 3}}}]
             )["cached_input"],
             3,

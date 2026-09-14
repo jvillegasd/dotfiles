@@ -2,7 +2,8 @@
 """Compare the real session population before and after a harness change.
 
 The harness is portable, so this reads both clients' own session stores:
-Claude Code JSONL transcripts and the OpenCode SQLite database. Cost and friction only. Quality stays a human read of the sessions.
+Claude Code JSONL transcripts and the OpenCode SQLite database. Cost and
+friction only. Quality stays a human read of the sessions.
 
 A metric a client does not record is reported as `-`, never as zero.
 """
