@@ -1,6 +1,6 @@
 """Regression checks for the canonical review triage and reviewer input assembly in adversarial-review.
 
-The skill carries one JSON triage block and one JSON input block, and the probe reads its rules from them rather than a parallel copy. Outcome checks exercise the probe over nit fixes, answered questions, evidence-based reclassification, fixed blocking findings, delta-round triggers, each reviewer's information boundary, and loaded-standards evidence. Mutation checks edit a temporary copy of a block and assert the matching outcome flips, so no test restates the rules themselves.
+The skill carries one JSON triage block and one JSON input block, and the probe reads its rules from them rather than a parallel copy. Outcome checks exercise the probe over nit fixes, answered questions, evidence-based reclassification, fixed blocking findings, conformance repairs, delta-round triggers, each reviewer's information boundary, and loaded-standards evidence. Mutation checks edit a temporary copy of a block and assert the matching outcome flips. One prose check derives the skill's triage sentences from the block, so the block and the prose the agents follow cannot drift apart.
 """
 
 import importlib.util
@@ -27,14 +27,19 @@ TRIAGE_OUTCOMES = (
     "rejected_blocking_starts_no_round",
     "round_two_new_blocking_escalates",
     "cap_holds_at_two_rounds",
+    "conformance_repair_starts_delta_round",
+    "late_conformance_repair_is_disclosed",
 )
 INPUT_OUTCOMES = (
     "reviewer_a_boundary",
     "reviewer_b_boundary",
     "standards_paths_absolute",
     "missing_standards_omitted",
+    "missing_ponytail_refused",
     "named_standards_count_as_loaded",
+    "inline_standards_count_as_loaded",
     "unnamed_standards_not_loaded",
+    "loaded_line_must_be_first",
     "missing_loaded_line_is_no_evidence",
     "roles_declare_loaded_prefix",
 )
@@ -86,6 +91,8 @@ class MutationTest(unittest.TestCase):
             ("rejected_blocking_starts_no_round", lambda d: d["second_round"].update(trigger="any_blocking_finding")),
             ("round_two_new_blocking_escalates", lambda d: d.update(new_blocking_in_repaired_code="continue")),
             ("cap_holds_at_two_rounds", lambda d: d.update(max_rounds=3)),
+            ("conformance_repair_starts_delta_round", lambda d: d.update(conformance_repair="not_reviewed")),
+            ("late_conformance_repair_is_disclosed", lambda d: d.update(conformance_repair_after_cap="escalate")),
         ]
         for key, edit in mutations:
             with self.subTest(key):
@@ -96,10 +103,12 @@ class MutationTest(unittest.TestCase):
             ("reviewer_a_boundary", lambda d: d["inputs"]["reviewer-a"].append("implementation_rationale")),
             ("reviewer_a_boundary", lambda d: d["standards"]["reviewer-a"].clear()),
             ("reviewer_b_boundary", lambda d: d["inputs"]["reviewer-b"].append("requirements")),
-            ("standards_paths_absolute", lambda d: d.update(standards_paths="any")),
             ("reviewer_b_boundary", lambda d: d["standards"]["reviewer-b"].remove("ponytail")),
+            ("missing_standards_omitted", lambda d: d.update(optional_standards=[])),
+            ("missing_ponytail_refused", lambda d: d["optional_standards"].append("ponytail")),
             ("named_standards_count_as_loaded", lambda d: d.update(loaded_prefix="read: ")),
-            ("roles_declare_loaded_prefix", lambda d: d.update(loaded_prefix="read: ")),
+            ("inline_standards_count_as_loaded", lambda d: d.update(inline_prefix="pasted:")),
+            ("roles_declare_loaded_prefix", lambda d: d.update(inline_prefix="pasted:")),
         ]
         for key, edit in mutations:
             with self.subTest(key):
@@ -111,15 +120,20 @@ class ProseTest(unittest.TestCase):
         rules, skill = T.block(), _SKILL.read_text()
         tick = lambda names: [f"`{name}:`" for name in names]
         blocking = [name for name, severity in rules["severities"].items() if severity["blocking"]]
-        numbers = {1: "one", 2: "two", 3: "three"}
+        word = {1: "one", 2: "two", 3: "three"}.get(rules["max_rounds"])
+        self.assertIsNotNone(word, "the skill has no prose for this round cap")
         sentences = [f"Only {' and '.join(tick(blocking))} block."]
         sentences.append(f"It becomes a {' or '.join(tick(rules['reclassify_to']))} only when evidence exposes a defect")
         if "fix_when_smaller_than_argument" in rules["severities"]["nit"]["actions"]:
             sentences.append("A `nit:` is fixed only when the fix is smaller than the argument, and otherwise dropped.")
         if rules["second_round"] == {"trigger": "fixed_blocking_finding", "scope": "repair_delta"}:
             sentences.append("A second round runs only after a fixed blocking finding, and it reviews the repair delta alone.")
-        sentences.append(f"At most {numbers[rules['max_rounds']]} rounds.")
-        self.assertEqual(len(sentences), 5, "the block no longer matches any prose the skill states")
+        if rules["conformance_repair"] == "counts_as_fixed_blocking_finding":
+            sentences.append("A conformance repair counts as a fixed blocking finding for the second-round trigger.")
+        if rules["conformance_repair_after_cap"] == "recheck_and_disclose":
+            sentences.append("After round two, a conformance repair is rechecked by the conformance pass alone and disclosed under `## Checks`, never given a third round.")
+        sentences.append(f"At most {word} rounds.")
+        self.assertEqual(len(sentences), 7, "the block no longer matches any prose the skill states")
         for sentence in sentences:
             with self.subTest(sentence[:50]):
                 self.assertIn(sentence, skill)

@@ -12,7 +12,7 @@ Assume this diff is wrong. Find the bug.
 
 ## Inputs
 
-The parent names a diff file and your review standards by their absolute paths: the `ponytail` body and the project's instruction file. Read the whole diff file, and open each standards file before judging the diff against it.
+The parent names a diff file and gives you your review standards: the `ponytail` body and, when the project has one, its instruction file, each by absolute path or with its text pasted in. Read the whole diff file, and open each named standards file before judging the diff against it.
 
 When you cannot read the whole diff file, return exactly `unreadable: <path>` and nothing else, so the parent can supply the same diff inline. Never review part of a diff.
 
@@ -30,7 +30,7 @@ On added or modified lines, add one more lens: a comment restating the line it s
 
 ## Output
 
-Begin with one line naming every standards file you actually opened with a tool during this review, as `loaded: <absolute path>, <absolute path>`, or `loaded: none`. A path you were given but did not open, or a standard you recall without opening, does not belong on it.
+Begin with one line naming every standards file you actually opened with a tool during this review, as `loaded: <absolute path>, <absolute path>`, or `loaded: none`. Name a standard whose full text the parent pasted into your prompt as `inline:<absolute path>`. A path you were given but did not open, or a standard you recall without opening, does not belong on it.
 
 Then one line per finding:
 

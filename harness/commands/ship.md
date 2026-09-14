@@ -59,7 +59,7 @@ Inspect `git status --short` before creating anything. A worktree holding pre-ex
 
    Triage every finding by `adversarial-review`'s canonical triage block: only `bug:` and `risk:` block, a `nit:` is fixed only when the fix is smaller than the argument and is otherwise dropped, a `q:` is answered and blocks only once evidence reclassifies it, and a second adversarial round runs only after a fixed blocking finding, over the repair delta alone.
 
-   Repair every conformance finding; a conformance repair counts as a fixed blocking finding for the second-round trigger. Conformance rechecks the criteria and test seams the repair touched; it repeats the complete pass only when the contract or broad behavior changed.
+   Repair every conformance finding; the triage block's conformance rule decides whether that repair gets a delta round. Conformance rechecks the criteria and test seams the repair touched; it repeats the complete pass only when the contract or broad behavior changed.
 
 4. Push, then create or update a draft pull request with a Conventional Commit title. Write the body to this skeleton, in this order, and add nothing it does not name:
 

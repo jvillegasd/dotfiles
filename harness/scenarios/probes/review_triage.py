@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the canonical review triage and reviewer input assembly declared by `adversarial-review`.
 
-The skill carries one triage block and one input block, and this probe reads every rule from them rather than a parallel copy, so a change to a block changes the probe's behavior. It applies the triage block to nit fixes, answered questions, evidence-based reclassification, fixed and rejected blocking findings, and the second-round trigger and cap. It applies the input block to each reviewer's information boundary, absolute standards paths, and the `loaded:` line that is the only evidence a standard was read. Outcomes land in `artifacts/review.json` in the disposable repository the scenario runner provides.
+The skill carries one triage block and one input block, and this probe reads every rule from them rather than a parallel copy, so a change to a block changes the probe's behavior. It applies the triage block to nit fixes, answered questions, evidence-based reclassification, fixed and rejected blocking findings, conformance repairs, and the second-round trigger and cap. It applies the input block to each reviewer's information boundary, required and optional standards, and the `loaded:` line that is the only evidence a standard was read. Outcomes land in `artifacts/review.json` in the disposable repository the scenario runner provides.
 """
 
 from __future__ import annotations
@@ -59,19 +59,25 @@ def decide(severity: str, action: str | None = None, *, fix_smaller: bool = Fals
     return {"severity": severity, "action": action, "blocking": blocking, "second_round": starts}
 
 
-def next_round(completed: int, decisions: list, new_blocking_in_repaired: bool = False) -> str:
-    """Return what follows a completed review round: none, the delta round's scope, or the cap's action."""
+def next_round(completed: int, decisions: list, new_blocking_in_repaired: bool = False, conformance_repair: bool = False) -> str:
+    """Return what follows a completed review round: none, the delta round's scope, or an action the cap names."""
     rules = block()
     if completed >= rules["max_rounds"]:
-        return rules["new_blocking_in_repaired_code"] if new_blocking_in_repaired else "none"
-    return rules["second_round"]["scope"] if any(d["second_round"] for d in decisions) else "none"
+        if new_blocking_in_repaired:
+            return rules["new_blocking_in_repaired_code"]
+        return rules["conformance_repair_after_cap"] if conformance_repair else "none"
+    counts = conformance_repair and rules["conformance_repair"] == "counts_as_fixed_blocking_finding"
+    return rules["second_round"]["scope"] if counts or any(d["second_round"] for d in decisions) else "none"
 
 
 def assemble(role: str, available: dict, paths: dict) -> dict:
     """Return exactly what the input block lets one reviewer receive: its listed inputs plus absolute standards paths."""
     rules = inputs_block()
+    missing = {name for name in rules["standards"][role] if name not in paths}
+    if missing - set(rules["optional_standards"]):
+        raise ValueError(f"required standards missing: {sorted(missing)}")
     standards = [paths[name] for name in rules["standards"][role] if name in paths]
-    if rules["standards_paths"] == "absolute" and not all(Path(path).is_absolute() for path in standards):
+    if not all(Path(path).is_absolute() for path in standards):
         raise ValueError("standards paths must be absolute")
     given = {key: available[key] for key in rules["inputs"][role] if key in available}
     given["standards_paths"] = standards
@@ -79,12 +85,21 @@ def assemble(role: str, available: dict, paths: dict) -> dict:
 
 
 def loaded(output: str, supplied: list) -> list:
-    """Return the supplied standards paths that the reviewer's `loaded:` line names; every other path counts as unread."""
-    prefix = inputs_block()["loaded_prefix"]
+    """Return the supplied standards paths that the first-line `loaded:` report names, opened or pasted; every other path counts as unread."""
+    rules = inputs_block()
     first = output.splitlines()[:1]
-    line = first[0] if first and first[0].startswith(prefix) else None
-    named = {name.strip() for name in line[len(prefix):].split(",")} if line is not None else set()
+    if not first or not first[0].startswith(rules["loaded_prefix"]):
+        return []
+    named = {name.strip().removeprefix(rules["inline_prefix"]) for name in first[0][len(rules["loaded_prefix"]):].split(",")}
     return [path for path in supplied if path in named]
+
+
+def refused(call) -> bool:
+    try:
+        call()
+    except ValueError:
+        return True
+    return False
 
 
 def run() -> dict:
@@ -105,6 +120,8 @@ def run() -> dict:
         "rejected_blocking_starts_no_round": next_round(1, [decide("risk", "reject")]) == "none",
         "round_two_new_blocking_escalates": next_round(2, [bug_fix], new_blocking_in_repaired=True) == "escalate",
         "cap_holds_at_two_rounds": next_round(2, [bug_fix]) == "none",
+        "conformance_repair_starts_delta_round": next_round(1, [], conformance_repair=True) == "repair_delta",
+        "late_conformance_repair_is_disclosed": next_round(2, [], conformance_repair=True) == "recheck_and_disclose",
     }
 
     available = {
@@ -115,14 +132,9 @@ def run() -> dict:
     }
     paths = {"ponytail": "/home/u/.claude/skills/ponytail/SKILL.md", "project_instruction_file": "/repo/AGENTS.md"}
     a, b = assemble("reviewer-a", available, paths), assemble("reviewer-b", available, paths)
-    try:
-        assemble("reviewer-a", available, {**paths, "project_instruction_file": "AGENTS.md"})
-        relative_refused = False
-    except ValueError:
-        relative_refused = True
     supplied = b["standards_paths"]
     finding = "x.py:L1: nit: `x` is unused. Delete it."
-    prefix = inputs_block()["loaded_prefix"]
+    rules = inputs_block()
     outcomes.update(
         {
             "reviewer_a_boundary": a
@@ -136,14 +148,23 @@ def run() -> dict:
                 "diff_snapshot_path": available["diff_snapshot_path"],
                 "standards_paths": [paths["ponytail"], paths["project_instruction_file"]],
             },
-            "standards_paths_absolute": relative_refused,
-            "missing_standards_omitted": assemble("reviewer-a", available, {"ponytail": paths["ponytail"]})["standards_paths"] == [],
+            "standards_paths_absolute": refused(
+                lambda: assemble("reviewer-a", available, {**paths, "project_instruction_file": "AGENTS.md"})
+            ),
+            "missing_standards_omitted": not refused(lambda: assemble("reviewer-a", available, {"ponytail": paths["ponytail"]}))
+            and assemble("reviewer-a", available, {"ponytail": paths["ponytail"]})["standards_paths"] == [],
+            "missing_ponytail_refused": refused(
+                lambda: assemble("reviewer-b", available, {"project_instruction_file": paths["project_instruction_file"]})
+            ),
             "named_standards_count_as_loaded": loaded(f"loaded: /repo/AGENTS.md\n{finding}", supplied) == ["/repo/AGENTS.md"],
+            "inline_standards_count_as_loaded": loaded(f"loaded: /repo/AGENTS.md, inline:{paths['ponytail']}", supplied) == supplied,
             "unnamed_standards_not_loaded": paths["ponytail"] not in loaded("loaded: /repo/AGENTS.md", supplied)
             and loaded("loaded: none", supplied) == [],
+            "loaded_line_must_be_first": loaded(f"{finding}\nloaded: /repo/AGENTS.md", supplied) == [],
             "missing_loaded_line_is_no_evidence": loaded(finding, supplied) == [],
             "roles_declare_loaded_prefix": all(
-                f"`{prefix}" in (_ROLES / f"{name}.md").read_text() for name in ("reviewer-a", "reviewer-b")
+                f"`{rules['loaded_prefix']}" in text and f"`{rules['inline_prefix']}" in text
+                for text in ((_ROLES / f"{name}.md").read_text() for name in ("reviewer-a", "reviewer-b"))
             ),
         }
     )

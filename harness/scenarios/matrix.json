@@ -481,6 +481,14 @@
           },
           {
             "path": "artifacts/review.json",
+            "text": "\"conformance_repair_starts_delta_round\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"late_conformance_repair_is_disclosed\": true"
+          },
+          {
+            "path": "artifacts/review.json",
             "text": "\"reviewer_a_boundary\": true"
           },
           {
@@ -494,6 +502,18 @@
           {
             "path": "artifacts/review.json",
             "text": "\"missing_standards_omitted\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"missing_ponytail_refused\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"loaded_line_must_be_first\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"inline_standards_count_as_loaded\": true"
           },
           {
             "path": "artifacts/review.json",

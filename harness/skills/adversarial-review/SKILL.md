@@ -1,6 +1,6 @@
 ---
 name: adversarial-review
-description: Review a diff with a requirements-aware reviewer and a diff-only reviewer before pushing, then triage their findings.
+description: Review a diff with a requirements-aware reviewer and a reviewer that sees only the diff and standards before pushing, then triage their findings.
 disable-model-invocation: true
 metadata:
   opencode/autoinvoke: "false"
@@ -20,7 +20,7 @@ When a named agent is unavailable, say so, launch a general agent with the match
 
 The named agents' restrictions are best effort: each client enforces what its own controls support, and `clients/agents.py` reports the gaps.
 
-Reviewer A holds the requirements but never that rationale; Reviewer B holds only the diff. Each also gets the standards it judges against, which are neither. Requirements are what let a reviewer check conformance; rationale only biases it.
+Reviewer A holds the requirements and its standards but never that rationale; Reviewer B holds only the diff and its standards. Requirements are what let a reviewer check conformance; rationale only biases it.
 
 Give Reviewer A the requirements, the diff snapshot path, and the exact absolute path of the project's own instruction file as its standards, never the implementation rationale. Nothing else.
 
@@ -28,7 +28,7 @@ Give Reviewer B only the diff snapshot path and the exact absolute paths of its 
 
 Standards are paths, never requirements or rationale, so supplying them leaves each reviewer's information boundary where it was. Count a standards file as read only when the reviewer's `loaded:` line names it: supplying a path, or a reviewer recalling what a standard says, is not evidence that it was read.
 
-The project's own instruction file is `AGENTS.md` or `CLAUDE.md` at the repository root, both when both exist, and is left out when neither does. When a supplied standards file is missing from a reviewer's `loaded:` line, including one its client refused to read, relaunch that reviewer once with that file's text inline; if it is still unread, disclose that in the pull request's `## Checks`.
+The project's own instruction file is `AGENTS.md` at the repository root, or `CLAUDE.md` there when no `AGENTS.md` exists, and is left out when neither does. Where the client is known to refuse a standards path, such as OpenCode for a file outside the project, paste that file's text into the first launch instead of its path. When a supplied standards file is missing from a reviewer's `loaded:` line, relaunch that reviewer once with that file's text pasted in; the relaunch replaces that reviewer's output for the same round and never counts toward the cap. A reviewer names a pasted standard as `inline:<absolute path>`. If a standard is still unread, disclose it under the pull request's `## Checks`, or in the requirements ledger under `/proto`.
 
 This block is the one definition of what each reviewer is given. Anything it does not list is withheld, and every standards path is absolute.
 
@@ -42,8 +42,9 @@ This block is the one definition of what each reviewer is given. Anything it doe
     "reviewer-a": ["project_instruction_file"],
     "reviewer-b": ["ponytail", "project_instruction_file"]
   },
+  "optional_standards": ["project_instruction_file"],
   "loaded_prefix": "loaded: ",
-  "standards_paths": "absolute"
+  "inline_prefix": "inline:"
 }
 ```
 
@@ -73,6 +74,8 @@ This block is the one definition of triage. Every workflow that runs this review
   },
   "reclassify_to": ["bug", "risk"],
   "second_round": {"trigger": "fixed_blocking_finding", "scope": "repair_delta"},
+  "conformance_repair": "counts_as_fixed_blocking_finding",
+  "conformance_repair_after_cap": "recheck_and_disclose",
   "max_rounds": 2,
   "new_blocking_in_repaired_code": "escalate"
 }
@@ -90,4 +93,6 @@ A `q:` is answered. It becomes a `bug:` or `risk:` only when evidence exposes a 
 
 ## Loop cap
 
-At most two rounds. A second round runs only after a fixed blocking finding, and it reviews the repair delta alone. A new blocking finding in round two, in code that round one's fixes touched, is a rabbit-hole trip: stop and escalate rather than starting round three. Round two's other findings are still triaged, without a third round.
+At most two rounds. A second round runs only after a fixed blocking finding, and it reviews the repair delta alone. A new blocking finding in round two, in code that round one's fixes touched, is a rabbit-hole trip: stop and escalate rather than starting round three.
+
+A conformance repair counts as a fixed blocking finding for the second-round trigger. After round two, a conformance repair is rechecked by the conformance pass alone and disclosed under `## Checks`, never given a third round.

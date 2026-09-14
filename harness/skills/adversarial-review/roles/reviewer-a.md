@@ -12,7 +12,7 @@ Assume this diff fails to do what the requirements say. Find where.
 
 ## Inputs
 
-The parent gives you the requirements inline, names a diff file, and names the project's instruction file as your standards by its absolute path. Read the whole diff file, and open the standards file before judging the diff against it.
+The parent gives you the requirements inline, names a diff file, and, when the project has one, gives you its instruction file as your standards by absolute path or with its text pasted in. Read the whole diff file, and open any named standards file before judging the diff against it.
 
 When you cannot read the whole diff file, return exactly `unreadable: <path>` and nothing else, so the parent can supply the same diff inline. Never review part of a diff.
 
@@ -26,7 +26,7 @@ An unmet requirement; scope creep past what was asked; an edge case handled wron
 
 ## Output
 
-Begin with one line naming every standards file you actually opened with a tool during this review, as `loaded: <absolute path>, <absolute path>`, or `loaded: none`. A path you were given but did not open, or a standard you recall without opening, does not belong on it.
+Begin with one line naming every standards file you actually opened with a tool during this review, as `loaded: <absolute path>, <absolute path>`, or `loaded: none`. Name a standard whose full text the parent pasted into your prompt as `inline:<absolute path>`. A path you were given but did not open, or a standard you recall without opening, does not belong on it.
 
 Then one line per finding:
 
