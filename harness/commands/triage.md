@@ -23,9 +23,17 @@ The input is a tracker item, a pasted ticket, or a production error signal. It m
 
 3. Supplement from the tracker only when the input is an id or URL with no pasted body. Where the tracker is local markdown, load the `local-tracker` skill: the id resolves to a ticket file, and reading it means reading its `## Comments` too.
 
-4. Investigate the code to ground the analysis, citing `path:line`. Delegate the recon to read-only subagents by default so file contents stay out of this context and only `path:line` plus mechanism come back; read directly only when the item already names the file. Then confirm or refute the root-cause hypothesis with at most two further evidence queries.
+4. Investigate the code to ground the analysis, citing `path:line`. Delegate the recon to read-only subagents by default so file contents stay out of this context and only citations in the `## Recon citations` shape come back, each verified there before reuse; read directly only when the item already names the file. Then confirm or refute the root-cause hypothesis with at most two further evidence queries.
 
 5. Only now, if something load-bearing is still unresolved, run `grilling` in self-grill mode before escalating: it resolves what precedent, history, and `evidence` can settle, and kills the triage outright if the premise is refuted. Stop and ask only what survives that, under the policy's escalation contract. Most vague symptoms resolve into a stack trace and a `path:line`, so asking before investigating wastes a round trip. Batch every question into one stop.
+
+## Recon citations
+
+A recon subagent's final message is text, one finding per line in the shape `path:line | symbol | mechanism`: the cited location, the named symbol that location carries, and the mechanism it is claimed to show. A trailing tool result is not the report and grounds nothing.
+
+Before reusing a citation, confirm the path exists and the cited line carries the named symbol. That check grounds the location only, never the claimed runtime mechanism: a load-bearing mechanism claim still goes through `evidence`.
+
+Drop a citation whose path is missing, whose line does not carry the named symbol, or that lacks any of the three fields. Record it as refuted, as a verdict row in `/triage`'s evidence ledger or an entry under `/research`'s `Contradictions and unknowns`, and never reuse it as grounded evidence.
 
 ## Output
 
