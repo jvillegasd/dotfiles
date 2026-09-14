@@ -19,7 +19,7 @@ Resolve the effective input:
 
 Load and follow the `ponytail` skill for every code change.
 
-1. Resolve the implementation contract from the pull request body. Prefer the inline `## Contract` when present; otherwise fall back to the ticket from its closing reference. If neither exists, continue in legacy mode and report that contract conformance cannot be reconstructed rather than blocking review or CI repair. Locate and reuse the pull request's existing Orca worktree when running inside Orca; otherwise read its `headRefName` with `gh pr view`, find that exact branch in `wt list --format=json`, and switch to it with `wt switch <branch> --no-cd --format=json --yes`. Escalate if the retained worktree is missing. Do not use the `pr:<number>` shortcut here, because Worktrunk creates a worktree when none exists. Load `workflow-checkpoint`, derive the topic key from the branch, and retrieve the checkpoint; reuse only what validates against current Git, tracker, and pull request state, and ask about a needed requirement missing from both rather than inferring it.
+1. Resolve the implementation contract from the pull request body. Prefer the inline `## Contract` when present; otherwise fall back to the ticket from its closing reference. If neither exists, continue in legacy mode and report that contract conformance cannot be reconstructed rather than blocking review or CI repair. Locate and reuse the pull request's existing Orca worktree when running inside Orca; otherwise read its `headRefName` with `gh pr view`, find that exact branch in `wt list --format=json`, and switch to it with `wt switch <branch> --no-cd --format=json --yes`. Escalate if the retained worktree is missing. Do not use the `pr:<number>` shortcut here, because Worktrunk creates a worktree when none exists. Read `workflow-checkpoint`, derive the topic key from the branch, and retrieve the checkpoint; reuse only what validates against current Git, tracker, and pull request state, and ask about a needed requirement missing from both rather than inferring it.
 
 2. Fetch every review thread through `gh api graphql` with its resolution state and its existing comment ids, plus every failing required check. Process only unresolved existing threads: ignore resolved threads, review summaries, and top-level conversation comments unless the user explicitly includes them. Group by root cause and distinguish owned failures from unchanged external failures. Inspect `git status --short`; stop and ask if the worktree holds pre-existing changes unrelated to this review. Never absorb unrelated changes.
 
@@ -33,7 +33,7 @@ Load and follow the `ponytail` skill for every code change.
 
    Commit as you go. Do not push and do not reply yet; every external write is batched behind step 5.
 
-4. Review the new diff the way `/ship` does: `adversarial-review` first, then your own spec-conformance pass against the resolved contract and the repository's documented standards. After a repair, conformance rechecks the affected criteria and test seams, repeating the complete pass only when the contract or broad behavior changed. In legacy mode, report that contract conformance is unavailable and check the explicit review requests, CI failures, and documented standards instead. Repair every conformance finding, or in legacy mode every unmet review request, CI failure, and standards break; the triage block's conformance rule decides whether each such repair gets a delta round. Make coherent Conventional Commits.
+4. Review the new diff the way `/ship` does: read and run `adversarial-review` first, then your own spec-conformance pass against the resolved contract and the repository's documented standards. After a repair, conformance rechecks the affected criteria and test seams, repeating the complete pass only when the contract or broad behavior changed. In legacy mode, report that contract conformance is unavailable and check the explicit review requests, CI failures, and documented standards instead. Repair every conformance finding, or in legacy mode every unmet review request, CI failure, and standards break; the triage block's conformance rule decides whether each such repair gets a delta round. Make coherent Conventional Commits.
 
    Triage every finding by `adversarial-review`'s canonical triage block: only `bug:` and `risk:` block, a `nit:` is fixed only when the fix is smaller than the argument and is otherwise dropped, a `q:` is answered and blocks only once evidence reclassifies it, a contested `bug:` or `risk:` is rejected only on the refuter's `refuted` verdict or a human decision on its escalation, and a second adversarial round runs only after a fixed blocking finding, over the repair delta alone.
 
@@ -51,7 +51,7 @@ Load and follow the `ponytail` skill for every code change.
 
 7. Keep the pull request body's `## Checks`, `## Assumptions`, `## Refuted evidence`, and `## Rejected review findings` sections current with anything this pass decided or rejected, under `/ship` step 4's body shape and caps. When an approved clarification changes agreed behavior, acceptance criteria, or verification and a complete contract resolved in step 1, update the inline `## Contract` before landing. Never reconstruct a contract from review threads in legacy mode; retain the unavailable-conformance report unless the human explicitly approves a complete reconstruction.
 
-8. Repeat until feedback, required CI, and all applicable review passes are green. In legacy mode the conformance pass remains explicitly unavailable rather than green. Apply the escalation contract's rabbit-hole detector unchanged. Then keep the pull request ready and, when ticket-bound, keep the ticket mapped `ready_for_human`, following `local-tracker` where the tracker is local markdown; skip the ticket transition for trackerless work. Load `workflow-checkpoint` and refresh the branch checkpoint for the pushed tip with the contract references, the resolved ladder results, and the next action, then retrieve it back and confirm it matches.
+8. Repeat until feedback, required CI, and all applicable review passes are green. In legacy mode the conformance pass remains explicitly unavailable rather than green. Apply the escalation contract's rabbit-hole detector unchanged. Then keep the pull request ready and, when ticket-bound, keep the ticket mapped `ready_for_human`, following `local-tracker` where the tracker is local markdown; skip the ticket transition for trackerless work. Read `workflow-checkpoint` and refresh the branch checkpoint for the pushed tip with the contract references, the resolved ladder results, and the next action, then retrieve it back and confirm it matches.
 
 Never merge the pull request or remove its worktree. Never force-push or rebase a shared branch without explicit approval, and never resolve a conflict by dropping changes.
 
@@ -60,7 +60,7 @@ Never merge the pull request or remove its worktree. Never force-push or rebase 
 - `ponytail`
 - `tdd`
 - `diagnosing-bugs`
-- `adversarial-review`
-- `workflow-checkpoint`
-- `local-tracker` only when ticket-bound and `docs/agents/harness.json` sets `"tracker": "local-markdown"`
+- `adversarial-review`, read from its path
+- `workflow-checkpoint`, read from its path
+- `local-tracker`, read from its path, only when ticket-bound and `docs/agents/harness.json` sets `"tracker": "local-markdown"`
 - `resolving-merge-conflicts` only when already conflicted
