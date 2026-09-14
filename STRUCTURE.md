@@ -47,7 +47,9 @@ harness/
 │   └── claude.sh               # → ~/.claude/statusline.sh; the renderer Claude Code runs
 ├── clients/                    # the client settings the harness owns, reconciled not symlinked
 │   ├── claude.json             # tracked keys install.sh merges into ~/.claude/settings.json
-│   └── agents.py               # renders the reviewer roles into linked, untracked client agents
+│   ├── assignments.json        # every role's definition plus per-client model and effort
+│   └── agents.py               # renders the assigned roles into linked, untracked client agents
+├── roles/                      # canonical roles no skill owns: the executor
 ├── aliases.sh                  # yolo-mode launchers, sourced from ~/.zshrc
 ├── commands/                   # canonical workflows, invoked as /name
 ├── skills/
