@@ -373,6 +373,65 @@
         "harness/scenarios/probes/harness_audit.py",
         "harness/scenarios/runner.py"
       ]
+    },
+    {
+      "id": "recon-citations",
+      "title": "A recon citation is reused only when its cited line carries the named symbol",
+      "command": "triage",
+      "prompt": "Apply the /triage and /research recon citation check: ground a citation whose line carries its symbol, and refute a missing file, path outside the repository, stale line, wrong or partial symbol, or absent field, and record a trailing tool result as no data.",
+      "mode": "offline",
+      "check": "python3 \"$HARNESS_ROOT/harness/scenarios/probes/recon_citations.py\"",
+      "artifacts": {
+        "tree_unchanged": false,
+        "present": [
+          "artifacts/recon.json"
+        ],
+        "absent": [],
+        "contains": [
+          {
+            "path": "artifacts/recon.json",
+            "text": "\"valid_citation_grounded\": true"
+          },
+          {
+            "path": "artifacts/recon.json",
+            "text": "\"missing_file_refuted\": true"
+          },
+          {
+            "path": "artifacts/recon.json",
+            "text": "\"outside_repository_refuted\": true"
+          },
+          {
+            "path": "artifacts/recon.json",
+            "text": "\"stale_line_refuted\": true"
+          },
+          {
+            "path": "artifacts/recon.json",
+            "text": "\"wrong_symbol_refuted\": true"
+          },
+          {
+            "path": "artifacts/recon.json",
+            "text": "\"partial_symbol_refuted\": true"
+          },
+          {
+            "path": "artifacts/recon.json",
+            "text": "\"absent_field_refuted\": true"
+          },
+          {
+            "path": "artifacts/recon.json",
+            "text": "\"refuted_never_grounded\": true"
+          },
+          {
+            "path": "artifacts/recon.json",
+            "text": "\"trailing_tool_result_no_data\": true"
+          }
+        ]
+      },
+      "harness_inputs": [
+        "harness/commands/triage.md",
+        "harness/commands/research.md",
+        "harness/scenarios/probes/recon_citations.py",
+        "harness/scenarios/runner.py"
+      ]
     }
   ]
 }

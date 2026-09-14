@@ -28,10 +28,16 @@ flowchart TD
         ask -.->|unclear requirements or a tradeoff| plan
 
         research_in["a question or a claim"] --> research["/research"]
-        research --> ledger["finding ledger<br>planning input, not a contract"]
+        research -->|direct reads| ledger["finding ledger<br>planning input, not a contract"]
 
         triage_in["a ticket or a production error"] --> triage["/triage"]
-        triage --> brief["plan brief<br>evidence-backed, path:line"]
+        triage -->|direct reads| brief["plan brief<br>evidence-backed, path:line"]
+
+        research -.->|recon subagents| recon
+        triage -.->|recon subagents| recon
+        recon["recon citation check<br>path:line, symbol, mechanism<br>the cited line must carry the symbol,<br>a mismatch is dropped as refuted,<br>evidence still owns mechanism claims"]
+        recon -.->|grounded citations only| ledger
+        recon -.->|grounded citations only| brief
 
         doc_in["work worth documenting"] --> spec["/spec<br>the only approval gate<br>before publication"]
         spec --> createticket["/create-ticket"]
