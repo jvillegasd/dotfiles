@@ -11,7 +11,8 @@ One committed source for Claude Code and OpenCode.
 | `locked-skills.sh` | Adds, updates, removes, and validates third-party skill locks. |
 | `bench/measure.py` | Compares the session population before and after a change. Manual in `bench/README.md`. |
 | `statusline/` | One file per provider that has a status line. |
-| `clients/` | The client settings this harness owns: `claude.json` declares them and `agents.py` renders the reviewer agents. |
+| `clients/` | The client settings this harness owns: `claude.json` declares them, `assignments.json` gives every role its definition, model, and effort, and `agents.py` renders the role agents. |
+| `roles/` | Canonical roles no skill owns, currently the executor. |
 
 `clients/` declares rather than symlinks, because the live file is mostly machine state: hook manifests and generated absolute paths. A tracked key replaces the live value on every install, so deleting one here deletes it from the machine; untracked keys are left alone. `permissions` merges a level down, so `deny` stays owned while the Engram allowlist survives. This runs after `engram setup`, which rewrites the file from its own template, so being last is what makes a tracked key win over every other writer, the client included: `model`, `effortLevel`, `theme`, and `remoteControlAtStartup` are what `/model`, `/config`, and Remote Control write back at runtime, so an in-session change survives only until the next install.
 
@@ -101,9 +102,9 @@ Every command that ingests text written elsewhere, a ticket body, a review comme
 
 A locally authored skill carries both invocation guards in its frontmatter: `disable-model-invocation: true` and `metadata."opencode/autoinvoke": "false"`. A locked body gets none, because its frontmatter is upstream content and `computedHash` covers the whole directory, so anything written inside it is clobbered by the next update with the lockfile recording the loss as correct. The only control that survives an update is not installing the body at all.
 
-## Reviewer agents
+## Role agents
 
-`adversarial-review` launches Reviewer A and Reviewer B as named agents. Their standing instructions, lenses, output format, and read-search intent live once, in `skills/adversarial-review/roles/`; the skill keeps orchestration, scaling, diff delivery, triage, and the loop cap. `clients/agents.py <roles> <output>` renders one definition per reviewer per client and rewrites nothing that already matches; `--check` reports a missing, drifted, unmanaged, or widened definition.
+`adversarial-review` launches Reviewer A and Reviewer B as named agents, and a workflow that chooses to delegate implementation launches the `executor`. The reviewers' standing instructions, lenses, output format, and read-search intent live once, in `skills/adversarial-review/roles/`; the skill keeps orchestration, scaling, diff delivery, triage, and the loop cap. The executor lives in `roles/executor.md` and keeps implementation access: it edits and runs commands inside the slice it was handed, while the delegating workflow keeps scope, commits, review, conformance, and every gate. `clients/agents.py <assignments> <output>` renders one definition per role per client and rewrites nothing that already matches; `--check` reports a missing, drifted, unmanaged, or widened definition.
 
 The installer generates into `harness/.generated/agents/`, gitignored machine state owned by this checkout, and links each definition into its client's agent directory. The only links it claims are ones whose text points into that directory: an install removes a link whose definition was retired, an uninstall removes every such link and the generated directory, and a private agent or another checkout's link beside them is left alone. `check_links` fails on a missing link or on a definition that lost its restrictions.
 
@@ -111,14 +112,17 @@ The installer generates into `harness/.generated/agents/`, gitignored machine st
 | --- | --- | --- | --- | --- |
 | Claude Code | `reviewer-a`, `reviewer-b` | `~/.claude/agents/` | `tools: Read, Grep, Glob`, so writes, shell, web, MCP tools, and `Agent` are absent | nothing documented; reading a diff or standards file outside the project without a prompt is unverified |
 | OpenCode | `reviewer-a`, `reviewer-b` | `$XDG_CONFIG_HOME/opencode/agents/` | `mode: subagent` with every permission denied and only `read`, `grep`, `glob`, and `list` re-allowed, `.env` reads still denied | reading a diff or standards file outside the project, which the deny refuses, so the inline fallbacks cover it; whether MCP tools fall under the deny is unverified |
+| Claude Code | `executor` | `~/.claude/agents/` | `disallowedTools: Agent`, so it cannot delegate, and every other tool the session allows stays | commit, push, pull request, merge, and tracker limits are instructions only, because a `disallowedTools` specifier removes the whole `Bash` tool |
+| OpenCode | `executor` | `$XDG_CONFIG_HOME/opencode/agents/` | `task` denied, plus `git commit*`, `git push*`, `git worktree remove*`, `wt remove*`, `wt merge*`, `wt step commit*`, and `gh *` shell commands, appended after the defaults | the same action spelled another way, since the denies match command prefixes |
 
-Every restriction is best effort: the table is what each client documents, the generator prints the same gaps on every install, and no row is runtime-verified until a probe runs against an installed client. Probe during an intentional installation, never as a validation shortcut: in each client, launch each named agent, ask it to write a file, run a command, fetch a URL, and delegate, and record each result as enforced, not enforced, or unverified. The unverified rows are whether Claude Code loads a symlinked definition, whether a Claude Code reviewer reads a diff or standards file outside the project without a prompt, whether OpenCode's deny covers MCP tools, whether the `ccyolo` and `ocyolo` launchers leave agent restrictions in force, and diff delivery's inline fallback and escalation.
+Every restriction is best effort: the table is what each client documents, the generator prints the same gaps on every install, and no row is runtime-verified until a probe runs against an installed client. Probe during an intentional installation, never as a validation shortcut: in each client, launch each named agent, ask it to write a file, run a command, fetch a URL, and delegate, and record each result as enforced, not enforced, or unverified. The unverified rows are whether Claude Code loads a symlinked definition, whether a Claude Code reviewer reads a diff or standards file outside the project without a prompt, whether OpenCode's deny covers MCP tools, whether the `ccyolo` and `ocyolo` launchers leave agent restrictions in force, diff delivery's inline fallback and escalation, whether Claude Code runs a subagent on its `model` and `effort` and on the session's effort when `effort` is absent, whether OpenCode sends an agent's `reasoningEffort` with its requests, and whether the executor's delegation denies hold.
 
-Reviewer A receives the requirements, the diff, and the absolute path of the project's own instruction file, never the implementation rationale; Reviewer B receives only the diff and the absolute paths of its review standards, the `ponytail` body and that instruction file. Each reviewer's output opens with a `loaded:` line, and a standards file counts as read only when that line names it. The parent writes one complete diff snapshot per round to a temporary file outside the worktree. A reviewer that cannot read it answers `unreadable: <path>` and gets the same snapshot inline, and when neither transport can carry the whole diff the review escalates instead of truncating. When a named agent is unavailable, the parent says so and launches a general agent with the role file as its instructions, disclosing that the fallback enforces only that agent's own permissions. Review is never skipped. Nothing here claims model diversity: both reviewers run whatever model their client assigns.
+Reviewer A receives the requirements, the diff, and the absolute path of the project's own instruction file, never the implementation rationale; Reviewer B receives only the diff and the absolute paths of its review standards, the `ponytail` body and that instruction file. Each reviewer's output opens with a `loaded:` line, and a standards file counts as read only when that line names it. The parent writes one complete diff snapshot per round to a temporary file outside the worktree. A reviewer that cannot read it answers `unreadable: <path>` and gets the same snapshot inline, and when neither transport can carry the whole diff the review escalates instead of truncating. When a named agent is unavailable, the parent says so and launches a general agent with the role file as its instructions, disclosing that the fallback enforces only that agent's own permissions. Review is never skipped. Nothing here claims model diversity: both reviewers run what `clients/assignments.json` assigns them, which may be the same model.
 
 ```mermaid
 flowchart TD
-    roles["roles/reviewer-a.md, roles/reviewer-b.md<br>rendered per client by clients/agents.py"] --> a["Reviewer A<br>does it do the job"]
+    assign["clients/assignments.json<br>model and effort per role and client"] --> roles["roles/reviewer-a.md, roles/reviewer-b.md<br>rendered per client by clients/agents.py"]
+    roles --> a["Reviewer A<br>does it do the job"]
     roles --> b["Reviewer B<br>is it wrong"]
     req["requirements"] --> a
     snap["diff snapshot<br>one file per round"] --> a
@@ -141,6 +145,35 @@ flowchart TD
     blocking -->|new blocking finding in round two,<br>in code round one repaired| escalate(["escalate: rabbit-hole trip,<br>never a third round"])
 ```
 
+### Assignments
+
+`clients/assignments.json` is the one place a role's model and effort are chosen. `clients` sets each client's default model and effort, and each role names its definition and may override either field for either client. A field resolves from the role's override, else the client default, and every install prints each resolution with its source as `assignment: <client> <role> model=<value> (<source>) effort=<value> (<source>)`. `inherit` is explicit session inheritance and the tracked default: nothing selects a cheaper tier, reviewer assignments may match, and a different effort is never presented as a different model. In Claude Code the session's choice is `claude.json`'s tracked `model` and `effortLevel` unless changed in the session; in OpenCode it is the invoking agent's. Claude Code still lets a `model` parameter passed at launch override an agent's frontmatter, and an organization `availableModels` allowlist substitute a blocked model with a warning, so the policy never passes one and the generator reports both as a gap.
+
+| Client | Model | Effort | `inherit` |
+| --- | --- | --- | --- |
+| Claude Code | `model:` an alias, `sonnet`, `opus`, `haiku`, or `fable`, or a `claude-` model ID | `effort:` `low`, `medium`, `high`, `xhigh`, or `max` | `model: inherit` and no `effort:` line, so the session's model and effort apply |
+| OpenCode | `model:` a `provider/model` ID | `reasoningEffort:` `none`, `minimal`, `low`, `medium`, `high`, or `xhigh`, only beside an `openai/` model, since OpenCode passes it to the provider | neither line, so the invoking agent's model applies |
+
+A value outside those sets, an unknown or duplicate key, a missing client default, or effort beside a non-OpenAI OpenCode model fails generation before anything is written, and nothing is substituted. A set model or effort prints as `unverified:` until that account is observed running it, because a client's documentation is not proof of access. A role with an assignment and no definition, today `review-refuter`, is validated and prints as `pending:`, and no agent is generated until its definition lands. Change an assignment by editing its entry and rerunning `./harness/install.sh --links-only`; never edit a generated file, which `--check` reports as changed.
+
+Acceptance on 2026-09-14 made no model request. `claude plugin validate` in Claude Code 2.1.270 parsed generated agents carrying `model: sonnet`, `effort: high`, and `disallowedTools: Agent`, which proves the frontmatter parses, not that Claude Code applies those fields. `opencode debug agent` in OpenCode 1.18.30 resolved `openai/gpt-5.5` with `reasoningEffort` from both a client default and a role override, and resolved the reviewer and executor denies. Neither proves a request runs on the assigned model or that the account can reach it.
+
+OpenCode is the preferred main client, for OpenAI model access, subject to the separate subscription-access test under OpenAI models through OpenCode below. Nothing here links a subscription, copies or tracks a credential, or delegates between clients. Whether any assignment improves review quality or cost stays unmeasured until evaluated.
+
+```mermaid
+flowchart TD
+    config["clients/assignments.json"] --> role{"does the role set this field<br>for this client?"}
+    role -->|yes| override["role override"]
+    role -->|no| default["client default"]
+    override --> supported{"a value that client supports?"}
+    default --> supported
+    supported -->|no| refused(["exit 4: nothing written,<br>nothing substituted"])
+    supported -->|yes| defined{"does the role have a definition?"}
+    defined -->|no| pending["pending: assignment validated,<br>no agent generated"]
+    defined -->|yes, inherit| session["session inheritance<br>Claude Code: model: inherit, no effort line<br>OpenCode: neither line"]
+    defined -->|yes, a model or effort| written["written to the agent frontmatter<br>account availability reported unverified"]
+```
+
 ## Install
 
 The root `../macos.sh` and `../linux.sh` install the harness by default. To reconcile only policy, commands, and skills:
@@ -153,14 +186,14 @@ The root `../macos.sh` and `../linux.sh` install the harness by default. To reco
 | --- | --- |
 | `--links-only` | Reconcile links without installing packages. Engram and agent-browser are still reconciled, so both must already be installed. |
 | `--no-backup` | Delete what is in the way instead of archiving it. Destructive and unrecoverable. |
-| `--uninstall` | Remove every managed link, the generated reviewer agents, the alias block, the tracked client keys, Engram, and agent-browser. Keeps `~/.engram` and `~/.agent-browser`. |
+| `--uninstall` | Remove every managed link, the generated role agents, the alias block, the tracked client keys, Engram, and agent-browser. Keeps `~/.engram` and `~/.agent-browser`. |
 | `--clear-backups` | Delete every archive under `~/.dotfiles-backups/harness/`. Runs on its own. |
 
 Reconciliation removes as well as adds. A symlink in a managed root is backed up and removed when its target is gone, points into `harness/` at something no longer installed, or carries a name differing from its target's, so a retired entry cannot outlive the change that retired it. A real directory shadowing a managed name is backed up too, since the sweep cannot see it. One defect is left in place and tracked separately: the dangling branch removes a dangling symlink whoever wrote it, because a target resolving to nothing cannot be tested for ownership.
 
 Managed roots are real directories, so harness links and your private entries sit side by side; a symlink standing in for one is moved aside under `.previous-link`. The OpenCode skills root is normalized but never created, since OpenCode reads `~/.agents/skills`. OpenCode's own three paths follow `XDG_CONFIG_HOME` when set, the same default `../lib/common.sh` resolves. Anything in the way is moved to a timestamped directory under `~/.dotfiles-backups/harness/`, or deleted with `--no-backup`, which the root installer forwards. Each removal is logged.
 
-Both run modes verify what they wrote. `check_links` asserts every skill, command, policy, status line, and reviewer agent link on every run; `check_tools` adds the client, plugin, and interpreter assertions only a full run can satisfy. Its OpenCode assertion reads `opencode debug config` through a temporary file rather than a pipe: that command stops at the 64 KiB pipe capacity whenever stdout is not a regular file, and this config passed 64 KiB once the harness's own command templates went into it, so the piped form failed on a JSON parse error instead of on the assertion. Both run after Engram, which rewrites `settings.json` and `opencode.json`.
+Both run modes verify what they wrote. `check_links` asserts every skill, command, policy, status line, and role agent link on every run; `check_tools` adds the client, plugin, and interpreter assertions only a full run can satisfy. Its OpenCode assertion reads `opencode debug config` through a temporary file rather than a pipe: that command stops at the 64 KiB pipe capacity whenever stdout is not a regular file, and this config passed 64 KiB once the harness's own command templates went into it, so the piped form failed on a JSON parse error instead of on the assertion. Both run after Engram, which rewrites `settings.json` and `opencode.json`.
 
 ### MCP servers
 

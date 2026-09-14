@@ -56,7 +56,7 @@ Some changes cannot be settled by the checks above, because they act on machine 
 
 `macos.sh`, `linux.sh`, and `harness/install.sh` are provisioning surfaces. Run them when the intent is to change machine state, never merely to validate a change. `--no-backup` deletes collisions instead of archiving them and is unrecoverable.
 
-`./harness/install.sh --links-only` is the same provisioning surface with the package step removed. It reconciles the policy, command, skill, and reviewer agent links, but it still rewrites the Engram and agent-browser MCP registrations and the tracked client settings, so `engram`, `agent-browser`, and `claude` must already be installed. Run it when links need reconciling, not as a validation step.
+`./harness/install.sh --links-only` is the same provisioning surface with the package step removed. It reconciles the policy, command, skill, and role agent links, but it still rewrites the Engram and agent-browser MCP registrations and the tracked client settings, so `engram`, `agent-browser`, and `claude` must already be installed. Run it when links need reconciling, not as a validation step.
 
 Neovim health is read through `:checkhealth`, `:Lazy`, `:Mason`, and `:LspInfo` inside the editor. Session-population measurement for a harness change is `python3 harness/bench/measure.py --split <commit-date> --since <window-start>`, documented in `harness/bench/README.md`.
 
