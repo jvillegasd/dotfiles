@@ -68,7 +68,8 @@ flowchart TD
         ship --> ladder["resolve the oracle ladder<br>project instructions, else task runner,<br>else the toolchain"]
         ladder --> implement["implement<br>loading ponytail"]
         implement --> rungs["local rungs green:<br>types, lint, tests, build"]
-        rungs --> commit["commit"] --> review["adversarial-review<br>named reviewer agents, requirements-aware<br>and diff-only, disclosed fallback"]
+        rungs --> commit["commit"] --> review["adversarial-review<br>named agents rendered from role files,<br>A: requirements, diff, project standards<br>B: diff, review standards<br>disclosed fallback, only bug and risk block"]
+        review -->|fixed bug or risk:<br>one delta round| review
         review --> conform["spec-conformance pass<br>diff against the contract"]
         conform --> push["push"] --> pr["open the draft pull request<br>capped body: what changed, contract,<br>checks, assumptions, refuted, rejected"]
         pr --> checks(["remote required checks<br>and both review passes green"])
@@ -108,12 +109,37 @@ The installer generates into `harness/.generated/agents/`, gitignored machine st
 
 | Client | Agents | Path | Control | Not enforced |
 | --- | --- | --- | --- | --- |
-| Claude Code | `reviewer-a`, `reviewer-b` | `~/.claude/agents/` | `tools: Read, Grep, Glob`, so writes, shell, web, MCP tools, and `Agent` are absent | nothing documented; reading a diff file outside the project without a prompt is unverified |
-| OpenCode | `reviewer-a`, `reviewer-b` | `$XDG_CONFIG_HOME/opencode/agents/` | `mode: subagent` with every permission denied and only `read`, `grep`, `glob`, and `list` re-allowed, `.env` reads still denied | reading a diff file outside the project, which the deny refuses, so the inline fallback covers it; whether MCP tools fall under the deny is unverified |
+| Claude Code | `reviewer-a`, `reviewer-b` | `~/.claude/agents/` | `tools: Read, Grep, Glob`, so writes, shell, web, MCP tools, and `Agent` are absent | nothing documented; reading a diff or standards file outside the project without a prompt is unverified |
+| OpenCode | `reviewer-a`, `reviewer-b` | `$XDG_CONFIG_HOME/opencode/agents/` | `mode: subagent` with every permission denied and only `read`, `grep`, `glob`, and `list` re-allowed, `.env` reads still denied | reading a diff or standards file outside the project, which the deny refuses, so the inline fallbacks cover it; whether MCP tools fall under the deny is unverified |
 
-Every restriction is best effort: the table is what each client documents, the generator prints the same gaps on every install, and no row is runtime-verified until a probe runs against an installed client. Probe during an intentional installation, never as a validation shortcut: in each client, launch each named agent, ask it to write a file, run a command, fetch a URL, and delegate, and record each result as enforced, not enforced, or unverified. The unverified rows are whether Claude Code loads a symlinked definition, whether a Claude Code reviewer reads a diff outside the project without a prompt, whether OpenCode's deny covers MCP tools, whether the `ccyolo` and `ocyolo` launchers leave agent restrictions in force, and diff delivery's inline fallback and escalation.
+Every restriction is best effort: the table is what each client documents, the generator prints the same gaps on every install, and no row is runtime-verified until a probe runs against an installed client. Probe during an intentional installation, never as a validation shortcut: in each client, launch each named agent, ask it to write a file, run a command, fetch a URL, and delegate, and record each result as enforced, not enforced, or unverified. The unverified rows are whether Claude Code loads a symlinked definition, whether a Claude Code reviewer reads a diff or standards file outside the project without a prompt, whether OpenCode's deny covers MCP tools, whether the `ccyolo` and `ocyolo` launchers leave agent restrictions in force, and diff delivery's inline fallback and escalation.
 
-Reviewer A receives the requirements and the diff, never the implementation rationale; Reviewer B receives only the diff. The parent writes one complete diff snapshot per round to a temporary file outside the worktree. A reviewer that cannot read it answers `unreadable: <path>` and gets the same snapshot inline, and when neither transport can carry the whole diff the review escalates instead of truncating. When a named agent is unavailable, the parent says so and launches a general agent with the role file as its instructions, disclosing that the fallback enforces only that agent's own permissions. Review is never skipped. Nothing here claims model diversity: both reviewers run whatever model their client assigns.
+Reviewer A receives the requirements, the diff, and the absolute path of the project's own instruction file, never the implementation rationale; Reviewer B receives only the diff and the absolute paths of its review standards, the `ponytail` body and that instruction file. Each reviewer's output opens with a `loaded:` line, and a standards file counts as read only when that line names it. The parent writes one complete diff snapshot per round to a temporary file outside the worktree. A reviewer that cannot read it answers `unreadable: <path>` and gets the same snapshot inline, and when neither transport can carry the whole diff the review escalates instead of truncating. When a named agent is unavailable, the parent says so and launches a general agent with the role file as its instructions, disclosing that the fallback enforces only that agent's own permissions. Review is never skipped. Nothing here claims model diversity: both reviewers run whatever model their client assigns.
+
+```mermaid
+flowchart TD
+    roles["roles/reviewer-a.md, roles/reviewer-b.md<br>rendered per client by clients/agents.py"] --> a["Reviewer A<br>does it do the job"]
+    roles --> b["Reviewer B<br>is it wrong"]
+    req["requirements"] --> a
+    snap["diff snapshot<br>one file per round"] --> a
+    snap --> b
+    project["project instruction file<br>absolute path"] --> a
+    project --> b
+    ponytail["ponytail body<br>absolute path"] --> b
+    rationale["implementation rationale"] --x|withheld| a
+    rationale --x|withheld| b
+    req --x|withheld| b
+    a --> findings["findings, opening with a loaded: line<br>a standard counts as read only when named"]
+    b --> findings
+    findings --> triage{"canonical triage block"}
+    triage -->|bug or risk: blocking| blocking["fix, reject with a reason,<br>or escalate a product decision"]
+    triage -->|nit| nit["fix when smaller than the argument,<br>else drop; never starts a round"]
+    triage -->|q| question["answer it"]
+    question -.->|evidence exposes a defect| blocking
+    blocking -->|fixed in round one| delta["second round<br>repair delta only"]
+    delta --> findings
+    blocking -->|new blocking finding in round two,<br>in code round one repaired| escalate(["escalate: rabbit-hole trip,<br>never a third round"])
+```
 
 ## Install
 

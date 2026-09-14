@@ -33,7 +33,9 @@ Load and follow the `ponytail` skill for every code change.
 
    Commit as you go. Do not push and do not reply yet; every external write is batched behind step 5.
 
-4. Review the new diff the way `/ship` does: `adversarial-review` first, then your own spec-conformance pass against the resolved contract and the repository's documented standards. A second adversarial round reviews only the repair delta, and conformance rechecks the affected criteria and test seams, repeating the complete pass only when the contract or broad behavior changed. In legacy mode, report that contract conformance is unavailable and check the explicit review requests, CI failures, and documented standards instead. Repair all findings and make coherent Conventional Commits.
+4. Review the new diff the way `/ship` does: `adversarial-review` first, then your own spec-conformance pass against the resolved contract and the repository's documented standards. After a repair, conformance rechecks the affected criteria and test seams, repeating the complete pass only when the contract or broad behavior changed. In legacy mode, report that contract conformance is unavailable and check the explicit review requests, CI failures, and documented standards instead. Repair every conformance finding, or in legacy mode every unmet review request, CI failure, and standards break; the triage block's conformance rule decides whether each such repair gets a delta round. Make coherent Conventional Commits.
+
+   Triage every finding by `adversarial-review`'s canonical triage block: only `bug:` and `risk:` block, a `nit:` is fixed only when the fix is smaller than the argument and is otherwise dropped, a `q:` is answered and blocks only once evidence reclassifies it, and a second adversarial round runs only after a fixed blocking finding, over the repair delta alone.
 
    If `mergeStateStatus` is `BEHIND` or the base has moved, prepare the update plan without applying it. Default to merging the actual base branch into the pull request branch, to preserve history and avoid rewriting pushed commits. Never assume the base is `main`.
 

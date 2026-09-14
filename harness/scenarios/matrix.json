@@ -432,6 +432,114 @@
         "harness/scenarios/probes/recon_citations.py",
         "harness/scenarios/runner.py"
       ]
+    },
+    {
+      "id": "review-triage",
+      "title": "Only bug and risk findings block, and each reviewer receives exactly its permitted inputs",
+      "command": "adversarial-review",
+      "prompt": "Apply the adversarial-review triage and input blocks: nits and questions never block or start a round, a fixed blocking finding starts one delta round, and reviewers receive only their listed inputs and absolute standards paths.",
+      "mode": "offline",
+      "check": "python3 \"$HARNESS_ROOT/harness/scenarios/probes/review_triage.py\"",
+      "artifacts": {
+        "tree_unchanged": false,
+        "present": [
+          "artifacts/review.json"
+        ],
+        "absent": [],
+        "contains": [
+          {
+            "path": "artifacts/review.json",
+            "text": "\"nit_fixed_only_when_smaller\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"nit_fix_starts_no_round\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"question_alone_never_blocks\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"question_reclassified_on_evidence\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"fixed_blocking_starts_delta_round\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"rejected_blocking_starts_no_round\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"round_two_new_blocking_escalates\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"cap_holds_at_two_rounds\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"conformance_repair_starts_delta_round\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"late_conformance_repair_is_disclosed\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"reviewer_a_boundary\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"reviewer_b_boundary\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"standards_paths_absolute\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"missing_standards_omitted\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"missing_ponytail_refused\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"loaded_line_must_be_first\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"inline_standards_count_as_loaded\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"named_standards_count_as_loaded\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"unnamed_standards_not_loaded\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"missing_loaded_line_is_no_evidence\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"roles_declare_loaded_prefix\": true"
+          }
+        ]
+      },
+      "harness_inputs": [
+        "harness/skills/adversarial-review/SKILL.md",
+        "harness/skills/adversarial-review/roles/reviewer-a.md",
+        "harness/skills/adversarial-review/roles/reviewer-b.md",
+        "harness/scenarios/probes/review_triage.py",
+        "harness/scenarios/runner.py"
+      ]
     }
   ]
 }

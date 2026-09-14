@@ -1,6 +1,6 @@
 """Regression checks for the generated reviewer agents.
 
-The canonical roles live beside adversarial-review, and clients/agents.py renders one definition per reviewer per client. These checks drive the generator through temporary directories the way install.sh calls it, and pin the protocol lines the skill, the roles, and the policy share. A pinned line is compared whole, so a deliberate paraphrase fails the pin, but a paraphrase added elsewhere beside an intact line does not.
+The canonical roles live beside adversarial-review, and clients/agents.py renders one definition per reviewer per client. These checks drive the generator through temporary directories the way install.sh calls it, and pin the protocol lines the skill, the roles, the policy, and the delivery commands share. A pinned line is compared whole, with list indentation stripped only in command files, so a deliberate paraphrase fails the pin, but a paraphrase added elsewhere beside an intact line does not.
 """
 
 import os
@@ -326,7 +326,9 @@ class Protocol(unittest.TestCase):
         self.assertNotIn("Severity is one of", skill)
 
     def test_pinned_lines(self):
-        unreadable = "When you cannot read the whole file, return exactly `unreadable: <path>` and nothing else, so the parent can supply the same diff inline. Never review part of a diff."
+        unreadable = "When you cannot read the whole diff file, return exactly `unreadable: <path>` and nothing else, so the parent can supply the same diff inline. Never review part of a diff."
+        loaded = "Begin with one line naming every standards file you actually opened with a tool during this review, as `loaded: <absolute path>, <absolute path>`, or `loaded: none`. Name a standard whose full text the parent pasted into your prompt as `inline:<absolute path>`. A path you were given but did not open, or a standard you recall without opening, does not belong on it."
+        defer = "Triage every finding by `adversarial-review`'s canonical triage block: only `bug:` and `risk:` block, a `nit:` is fixed only when the fix is smaller than the argument and is otherwise dropped, a `q:` is answered and blocks only once evidence reclassifies it, and a second adversarial round runs only after a fixed blocking finding, over the repair delta alone."
         pins = {
             _POLICY: [
                 "Use ephemeral specialist roles. Do not create persistent client-specific personas when a command, a skill, or an isolated review context is enough. Role definitions generated from one canonical source, such as the reviewer agents, are shared instructions and client capability configuration, not personas.",
@@ -334,15 +336,23 @@ class Protocol(unittest.TestCase):
             _SKILL: [
                 "Launch each reviewer as its named agent, in parallel, each with a fresh context: `reviewer-a` and `reviewer-b` in Claude Code and OpenCode. The installer generates them from `roles/reviewer-a.md` and `roles/reviewer-b.md` beside this skill, which own each reviewer's standing instructions, lenses, and output format.",
                 "When a named agent is unavailable, say so, launch a general agent with the matching role file's full text as its instructions, and report that this fallback enforces only the general agent's own permissions rather than the named agent's read-search restrictions. Never skip or silently omit a review because a named agent is missing.",
-                "Give Reviewer A the requirements and the diff, never the implementation rationale. Nothing else.",
-                "Give Reviewer B only the diff. No requirements, no rationale, no ticket.",
+                "Give Reviewer A the requirements, the diff snapshot path, and the exact absolute path of the project's own instruction file as its standards, never the implementation rationale. Nothing else.",
+                "Give Reviewer B only the diff snapshot path and the exact absolute paths of its review standards: the loaded `ponytail` body and the project's own instruction file. No requirements, no rationale, no ticket.",
+                "Standards are paths, never requirements or rationale, so supplying them leaves each reviewer's information boundary where it was. Count a standards file as read only when the reviewer's `loaded:` line names it: supplying a path, or a reviewer recalling what a standard says, is not evidence that it was read.",
+                "The project's own instruction file is `AGENTS.md` at the repository root, or `CLAUDE.md` there when no `AGENTS.md` exists, and is left out when neither does. Where the client is known to refuse a standards path, such as OpenCode for a file outside the project, paste that file's text into the first launch instead of its path. When a supplied standards file is missing from a reviewer's `loaded:` line, relaunch that reviewer once with that file's text pasted in; the relaunch replaces that reviewer's output for the same round and never counts toward the cap. A reviewer names a pasted standard as `inline:<absolute path>`. If a standard is still unread, disclose it under the pull request's `## Checks`, or in the requirements ledger under `/proto`.",
                 "Snapshot the complete diff once per round into a readable temporary file outside the worktree, and give each reviewer that path. A reviewer that answers `unreadable: <path>` gets the same snapshot inline instead. Never truncate the diff: when neither the file nor inline text can carry the complete snapshot, stop and escalate per the escalation contract.",
             ],
-            _ROLES / "reviewer-a.md": [unreadable, ACCESS],
-            _ROLES / "reviewer-b.md": [unreadable, ACCESS],
+            _ROLES / "reviewer-a.md": [unreadable, ACCESS, loaded],
+            _ROLES / "reviewer-b.md": [unreadable, ACCESS, loaded],
+            _HARNESS / "commands/ship.md": [defer],
+            _HARNESS / "commands/feedback.md": [defer],
+            _HARNESS / "commands/address-review.md": [defer],
+            _HARNESS / "commands/proto.md": [
+                "Triage that pass by `adversarial-review`'s canonical triage block within this workflow's single-pass limit: fix, reject with the reason written into the requirements ledger, or escalate each blocking finding before presenting the slice, apply the nit and question rules unchanged, and never start a second round here.",
+            ],
         }
         for path, expected in pins.items():
-            present = lines(path)
+            present = [line.strip() for line in lines(path)] if path.parent.name == "commands" else lines(path)
             for line in expected:
                 with self.subTest(path=path.name, line=line[:60]):
                     self.assertIn(line, present)

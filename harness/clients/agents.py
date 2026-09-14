@@ -34,11 +34,12 @@ OPENCODE_PERMISSION = """permission:
 # Known from each client's documentation. What no control covers is a gap; what a control should cover but only an installed client can prove is unverified.
 GAPS = (
     "gap: opencode: a diff file outside the project needs external_directory, which the agent's * deny refuses, so reviewers there take the inline fallback",
+    "gap: opencode: a standards file outside the project, such as the installed ponytail body, needs the same external_directory, so reviewers there get it inline after their loaded: line omits it",
 )
 UNVERIFIED = (
     "unverified: every restriction above is static configuration until an installed client is probed at runtime",
     "unverified: claude loading an agent definition through a symlink",
-    "unverified: claude reading a diff file outside the project without a permission prompt",
+    "unverified: claude reading a diff or standards file outside the project without a permission prompt",
     "unverified: opencode applying the * deny to MCP tools",
     "unverified: the ccyolo and ocyolo launchers leaving agent restrictions in force, since each bypasses or overrides the parent's permissions",
     "unverified: diff delivery's inline fallback and escalation, which are protocol rather than exercised behavior",
