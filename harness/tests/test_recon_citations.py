@@ -29,12 +29,12 @@ OUTCOMES = (
     "partial_symbol_refuted",
     "absent_field_refuted",
     "refuted_never_grounded",
-    "trailing_tool_result_refuted",
+    "trailing_tool_result_no_data",
 )
 
 PINS = [
-    "A recon subagent that searches the repository ends on a text message holding only its findings, one per line in the shape `path:line | symbol | mechanism`: the cited location, the named symbol that location carries, and the mechanism it is claimed to show. A trailing tool result is not the report: record that track as refuted, never as one that found nothing.",
-    "Before reusing a citation, read only the cited line and confirm the path exists inside the repository and that line carries the named symbol as a whole identifier. That check grounds the location only, never the claimed runtime mechanism: a load-bearing mechanism claim still goes through `evidence`.",
+    "A recon subagent that searches the repository ends on a text message holding only its findings, one per line in the shape `path:line | symbol | mechanism`: the cited location, the named symbol, a bare identifier, that location carries, and the mechanism it is claimed to show. A trailing tool result is not the report: re-run that track once, and if it again ends without one, record it as no data, a `no data` row in `/triage`'s evidence ledger or an entry under `/research`'s `Contradictions and unknowns`, never as refuted or as a track that found nothing.",
+    "Before reusing a citation, read only the cited line and confirm the path resolves inside the repository and that line carries the named symbol as a whole identifier. That check grounds the location only, never the claimed runtime mechanism: a load-bearing mechanism claim still goes through `evidence`.",
     "Drop a citation whose path is missing or outside the repository, whose line does not carry the named symbol, or that lacks any of the three fields. Record it as refuted, as a verdict row in `/triage`'s evidence ledger or an entry under `/research`'s `Contradictions and unknowns`, and never reuse it as grounded evidence.",
 ]
 
@@ -71,6 +71,7 @@ class CitationTest(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
         (self.root / "app.py").write_text("def load_config(path):\n    return parse(path)\n")
+        (self.root / "link.py").symlink_to("/etc/hosts")
 
     def test_probe_reads_the_shape_from_the_command(self):
         self.assertEqual(C.fields(), ["path:line", "symbol", "mechanism"])
@@ -90,6 +91,7 @@ class CitationTest(unittest.TestCase):
             "app.py:1 | load | defines the loader": "symbol not at line",
             "../app.py:1 | load_config | defines the loader": "outside repository",
             "/etc/hosts:1 | localhost | resolves host names": "outside repository",
+            "link.py:1 | localhost | resolves host names": "outside repository",
             "app.py:1 | load_config": "missing field",
             "app.py | load_config | defines the loader": "missing field",
             "app.py:1 |  | defines the loader": "missing field",
@@ -100,11 +102,11 @@ class CitationTest(unittest.TestCase):
                 self.assertEqual(result["grounded"], [])
                 self.assertEqual(result["refuted"], [{"citation": citation, "reason": reason}])
 
-    def test_trailing_tool_result_is_refuted(self):
+    def test_trailing_tool_result_is_no_data(self):
         report = {"type": "tool_result", "text": "app.py:1 | load_config | defines the loader"}
         self.assertEqual(
             C.verify(report, self.root),
-            {"grounded": [], "refuted": [{"citation": report["text"], "reason": "no text report"}]},
+            {"grounded": [], "refuted": [], "no_data": "no text report"},
         )
 
     def test_every_declared_outcome_holds(self):

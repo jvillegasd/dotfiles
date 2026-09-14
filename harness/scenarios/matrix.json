@@ -378,7 +378,7 @@
       "id": "recon-citations",
       "title": "A recon citation is reused only when its cited line carries the named symbol",
       "command": "triage",
-      "prompt": "Apply the /triage and /research recon citation check: ground a citation whose line carries its symbol, and refute a missing file, path outside the repository, stale line, wrong or partial symbol, absent field, or trailing tool result.",
+      "prompt": "Apply the /triage and /research recon citation check: ground a citation whose line carries its symbol, and refute a missing file, path outside the repository, stale line, wrong or partial symbol, or absent field, and record a trailing tool result as no data.",
       "mode": "offline",
       "check": "python3 \"$HARNESS_ROOT/harness/scenarios/probes/recon_citations.py\"",
       "artifacts": {
@@ -422,7 +422,7 @@
           },
           {
             "path": "artifacts/recon.json",
-            "text": "\"trailing_tool_result_refuted\": true"
+            "text": "\"trailing_tool_result_no_data\": true"
           }
         ]
       },

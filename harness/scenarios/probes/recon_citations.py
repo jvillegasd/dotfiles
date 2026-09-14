@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the recon citation check declared by `/triage` and `/research`.
 
-The commands carry the canonical `## Recon citations` section and this probe reads the finding shape's field count from `/triage`'s copy; the regression suite asserts both copies agree. It applies the check to a valid citation, a missing file, a path outside the repository, a stale line, a wrong or partial symbol, absent fields, and a subagent that ended on a tool result. A location check grounds only the location, never the claimed mechanism, so the probe verifies nothing past the cited line. Outcomes land in `artifacts/recon.json` in the disposable repository the scenario runner provides.
+The commands carry the canonical `## Recon citations` section and this probe reads the finding shape's field count from `/triage`'s copy; the regression suite asserts both copies agree. It applies the check to a valid citation, a missing file, a path outside the repository, a stale line, a wrong or partial symbol, absent fields, and a subagent that ended on a tool result, which is no data rather than a refutation. A location check grounds only the location, never the claimed mechanism, so the probe verifies nothing past the cited line. Outcomes land in `artifacts/recon.json` in the disposable repository the scenario runner provides.
 """
 
 from __future__ import annotations
@@ -25,10 +25,9 @@ def fields() -> list:
 
 def verify(final: dict, root: Path) -> dict:
     """Split a recon subagent's final message into grounded and refuted citations."""
-    result = {"grounded": [], "refuted": []}
     if final.get("type") != "text":
-        result["refuted"].append({"citation": final.get("text", ""), "reason": "no text report"})
-        return result
+        return {"grounded": [], "refuted": [], "no_data": "no text report"}
+    result = {"grounded": [], "refuted": []}
     root = root.resolve()
     count = len(fields())
     for citation in filter(str.strip, final["text"].splitlines()):
@@ -43,7 +42,7 @@ def verify(final: dict, root: Path) -> dict:
         elif not path.is_file():
             reason = "missing file"
         else:
-            lines = path.read_text(errors="replace").splitlines()
+            lines = path.read_text(errors="replace").split("\n")
             number = int(location[2])
             symbol = rf"(?<!\w){re.escape(parts[1])}(?!\w)"
             if 0 < number <= len(lines) and re.search(symbol, lines[number - 1]):
@@ -83,9 +82,10 @@ def run() -> dict:
         outcomes["refuted_never_grounded"] = mixed["grounded"] == [valid] and [
             entry["citation"] for entry in mixed["refuted"]
         ] == [c for c, _ in invalid.values()]
-        outcomes["trailing_tool_result_refuted"] = verify({"type": "tool_result", "text": valid}, root) == {
+        outcomes["trailing_tool_result_no_data"] = verify({"type": "tool_result", "text": valid}, root) == {
             "grounded": [],
-            "refuted": [{"citation": valid, "reason": "no text report"}],
+            "refuted": [],
+            "no_data": "no text report",
         }
         return outcomes
 
