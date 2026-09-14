@@ -69,7 +69,7 @@ On GitHub, create every ticket as a native sub-issue of the parent and create na
 
 For another tracker, use its native relationships where available and record textual edges otherwise. Automatic parent closure is GitHub-only. Where a tracker has no ticket surface at all, write the tickets as files in the layout the `local-tracker` skill specifies. On any spec home that is a document rather than an issue, the one-slice route writes the implementation projection into that spec artifact and marks it implementation-ready there, so it is still one artifact rather than a spec beside a child.
 
-In local markdown mode, load the `local-tracker` skill and follow it. It replaces the template's `## Blocked by` section with the `Status:` and `Blocked by:` lines it specifies, and its collapse bullet is what the one-slice route writes there: the spec file itself is promoted, so the feature directory holds one implementation-ready artifact rather than a spec beside a child.
+In local markdown mode, read the `local-tracker` skill and follow it. It replaces the template's `## Blocked by` section with the `Status:` and `Blocked by:` lines it specifies, and its collapse bullet is what the one-slice route writes there: the spec file itself is promoted, so the feature directory holds one implementation-ready artifact rather than a spec beside a child.
 
 Whatever the tracker, when a planning-only ticket returns with `Acceptance criteria` and `Test seams and checks` filled, promote it in place rather than filing a second ticket: apply mapped `blocked` or `ready_for_agent` by its edges. Promotion keeps the identifier, so every edge already pointing at it stays valid.
 

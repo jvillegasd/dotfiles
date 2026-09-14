@@ -1,9 +1,6 @@
 """Regression checks for the workflow-checkpoint protocol skill.
 
-The skill is the single definition of the checkpoint protocol. These checks
-enforce its invocation guards, its canonical protocol block, the absence of a
-second continuity store, that the scenario probe reads its rules from the
-skill, and that no command duplicates the schema.
+The skill is the single definition of the checkpoint protocol. These checks enforce its canonical protocol block, the absence of a second continuity store, that the scenario probe reads its rules from the skill, and that no command duplicates the schema.
 """
 
 import importlib.util
@@ -66,11 +63,6 @@ def duplicates_protocol(text, block):
 
 
 class GuardTest(unittest.TestCase):
-    def test_skill_carries_both_invocation_guards(self):
-        frontmatter = _SKILL.read_text()
-        self.assertIn("disable-model-invocation: true", frontmatter)
-        self.assertIn('opencode/autoinvoke: "false"', frontmatter)
-
     def test_skill_is_installable_from_the_skills_root(self):
         self.assertEqual(_SKILL.parent.parent, _HARNESS / "skills")
         self.assertEqual(_SKILL.name, "SKILL.md")
@@ -296,13 +288,13 @@ class CommandWiringTest(unittest.TestCase):
         "abandon": "finalize the checkpoint as",
     }
 
-    def test_delivery_commands_load_and_retrieve_the_checkpoint(self):
+    def test_delivery_commands_read_and_retrieve_the_checkpoint(self):
         for name in self.DELIVERY_COMMANDS:
             text = (_COMMANDS / f"{name}.md").read_text().lower()
             self.assertIn(
-                "load `workflow-checkpoint`",
+                "read `workflow-checkpoint`",
                 text,
-                f"{name}.md does not load the checkpoint skill at its boundary",
+                f"{name}.md does not read the checkpoint skill at its boundary",
             )
             self.assertIn(
                 "retrieve",

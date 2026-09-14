@@ -42,7 +42,7 @@ Read each source where it exists. Report one line per source: what it held, or w
 
 4. **Finding threshold.** One occurrence becomes a finding only when it carries concrete cost: a broken contract, a red rung, a worktree or branch with no owner, or a label that contradicts the ticket. Otherwise a pattern needs at least two occurrences. A single uncosted occurrence is an observation, not a finding.
 
-5. **Name evidence.** Every finding and every unknown cites the residue behind it: a `path:line`, a commit sha, a pull request number, a ticket reference, or a checkpoint topic key. Load `evidence` for any load-bearing claim about runtime behavior, impact, or frequency.
+5. **Name evidence.** Every finding and every unknown cites the residue behind it: a `path:line`, a commit sha, a pull request number, a ticket reference, or a checkpoint topic key. Read `evidence` for any load-bearing claim about runtime behavior, impact, or frequency.
 
 6. **Stay in bounds.** Read-only is a hard constraint. If the audit would need a write or a paid call to answer, report the gap as an unknown instead.
 
@@ -104,5 +104,5 @@ A finding with concrete cost is planning input, not a contract. Where the work s
 
 ## Skills this loads
 
-- `evidence` for any load-bearing claim about runtime behavior, impact, or frequency
-- `workflow-checkpoint` when reading a branch checkpoint's schema
+- `evidence`, read from its path, for any load-bearing claim about runtime behavior, impact, or frequency
+- `workflow-checkpoint`, read from its path, when reading a branch checkpoint's schema

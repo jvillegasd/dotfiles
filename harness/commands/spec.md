@@ -15,7 +15,7 @@ Resolve the effective input:
 
 - Non-empty `<user_input>` narrows what the spec covers.
 - Otherwise the spec covers the design this conversation already settled.
-- Ask only when no settled design exists, in which case run `grilling` first rather than interviewing here.
+- Ask only when no settled design exists, in which case read and run `grilling` first rather than interviewing here.
 
 Require `docs/agents/harness.json`; if it is missing, tell the user to invoke the `setup-harness` skill and stop.
 
@@ -25,7 +25,7 @@ Require `docs/agents/harness.json`; if it is missing, tell the user to invoke th
 2. Sketch the seams at which the feature will be tested. Prefer existing seams to new ones, and the highest seam available. The fewer seams across the codebase, the better; the ideal number is one.
 3. Produce one complete draft using the template below. Include the seams in that draft rather than approving them separately: this workflow has exactly one gate.
 4. Ask once whether the entire final contract is approved for publication.
-5. On approval, publish to the configured canonical spec home. For GitHub, create or update the parent issue and apply the mapped `in_progress` label. For a docs home, write the project-conventional spec path. For local markdown, load the `local-tracker` skill and follow it: the spec and any slices `/create-ticket` writes beside it share one feature directory.
+5. On approval, publish to the configured canonical spec home. For GitHub, create or update the parent issue and apply the mapped `in_progress` label. For a docs home, write the project-conventional spec path. For local markdown, read the `local-tracker` skill and follow it: the spec and any slices `/create-ticket` writes beside it share one feature directory.
 
 If the user changes the contract at the approval gate, revise and ask again. That is the same gate, not a second approval. Do not create tickets; that is `/create-ticket`.
 
@@ -72,5 +72,6 @@ Anything load-bearing that evidence did not settle, with the default taken and w
 ## Skills this loads
 
 - `domain-modeling` only when existing domain vocabulary needs reconciliation
+- `grilling`, read from its path, only when no settled design exists
 - `codebase-design` only when a test seam or module boundary is unresolved
-- `local-tracker` only when `docs/agents/harness.json` sets `"tracker": "local-markdown"`
+- `local-tracker`, read from its path, only when `docs/agents/harness.json` sets `"tracker": "local-markdown"`

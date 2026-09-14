@@ -23,7 +23,7 @@ Resolve the effective input:
 
 2. Investigate past the first plausible answer. Trace the code paths, state ownership, lifecycle, history, tests, docs, and external behavior until the conclusion is supported. Prefer primary sources: official docs, the source itself, specs, first-party APIs, never a secondary write-up of them. For a time-sensitive external fact, read the underlying source rather than a search snippet.
 
-   Telemetry is a primary source on the same footing as code. Load and follow `evidence` for any claim about runtime behavior, impact, frequency, or performance.
+   Telemetry is a primary source on the same footing as code. Read and follow `evidence` for any claim about runtime behavior, impact, frequency, or performance.
 
 3. Localize a suspected regression instead of theorizing about it. Bound the window with telemetry or release history, then `git bisect` across it in a throwaway worktree, never the main tree: `wt switch --create <slug>-bisect --base <sha> --no-cd --format=json --yes`, or the Orca CLI guide inside Orca. Probe each candidate with the cheapest oracle that discriminates: one test, one profile, one trace. Bisect is log2(n) rounds; where a single probe cannot give a clean verdict, report the narrowed range instead of guessing. Remove the worktree when done. This stays read-only because the main tree and the repository history are untouched.
 
@@ -64,5 +64,5 @@ Depth means stronger evidence and traced consequences, not a longer answer or un
 
 ## Skills this loads
 
-- `evidence` for any load-bearing claim about runtime behavior, impact, or frequency
+- `evidence`, read from its path, for any load-bearing claim about runtime behavior, impact, or frequency
 - `diagnosing-bugs` when the question is why something breaks and the first two evidence queries do not settle it

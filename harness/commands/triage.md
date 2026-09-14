@@ -19,13 +19,13 @@ The input is a tracker item, a pasted ticket, or a production error signal. It m
 
    Fetch a blob at most once, and only after step 2 says the work proceeds. Fetch an image only when the text refers to it as evidence, one call for exactly the images needed, never "all attachments". Record what it showed in the evidence ledger immediately, because that sentence is what every later step uses. Never re-fetch it or pass it to a subagent.
 
-2. Run the kill query before reading any code. Load and follow `evidence`: is this still happening, does any real user reach it, is the slow path ever called. A kill result ends the triage at a one-paragraph report, which is the cheapest possible outcome, so it comes before the most expensive step rather than after. Skip any capability the project has not configured and say so, per the policy's evidence rules.
+2. Run the kill query before reading any code. Read and follow `evidence`: is this still happening, does any real user reach it, is the slow path ever called. A kill result ends the triage at a one-paragraph report, which is the cheapest possible outcome, so it comes before the most expensive step rather than after. Skip any capability the project has not configured and say so, per the policy's evidence rules.
 
-3. Supplement from the tracker only when the input is an id or URL with no pasted body. Where the tracker is local markdown, load the `local-tracker` skill: the id resolves to a ticket file, and reading it means reading its `## Comments` too.
+3. Supplement from the tracker only when the input is an id or URL with no pasted body. Where the tracker is local markdown, read the `local-tracker` skill: the id resolves to a ticket file, and reading it means reading its `## Comments` too.
 
 4. Investigate the code to ground the analysis, citing `path:line`. Delegate the recon to read-only subagents by default so file contents stay out of this context and only citations in the `## Recon citations` shape come back, each verified there before reuse; read directly only when the item already names the file. Then confirm or refute the root-cause hypothesis with at most two further evidence queries.
 
-5. Only now, if something load-bearing is still unresolved, run `grilling` in self-grill mode before escalating: it resolves what precedent, history, and `evidence` can settle, and kills the triage outright if the premise is refuted. Stop and ask only what survives that, under the policy's escalation contract. Most vague symptoms resolve into a stack trace and a `path:line`, so asking before investigating wastes a round trip. Batch every question into one stop.
+5. Only now, if something load-bearing is still unresolved, read `grilling` and run its self-grill mode before escalating: it resolves what precedent, history, and `evidence` can settle, and kills the triage outright if the premise is refuted. Stop and ask only what survives that, under the policy's escalation contract. Most vague symptoms resolve into a stack trace and a `path:line`, so asking before investigating wastes a round trip. Batch every question into one stop.
 
 ## Recon citations
 
@@ -54,7 +54,7 @@ The brief is contract input, not a contract. Continue into the planning route th
 
 ## Skills this loads
 
-- `evidence`
-- `grilling`, self-grill mode only, before escalating an unresolved load-bearing question
+- `evidence`, read from its path
+- `grilling`, read from its path, self-grill mode only, before escalating an unresolved load-bearing question
 - `diagnosing-bugs` when the root cause resists the first two evidence queries
-- `local-tracker` only when the input is a ticket id or path and `docs/agents/harness.json` sets `"tracker": "local-markdown"`
+- `local-tracker`, read from its path, only when the input is a ticket id or path and `docs/agents/harness.json` sets `"tracker": "local-markdown"`
