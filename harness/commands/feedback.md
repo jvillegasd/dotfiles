@@ -44,7 +44,7 @@ Pick the type at the start of the round. If the input says to defer or that more
 
 5. Run `adversarial-review` over the accumulated delta.
 
-   Triage every finding by `adversarial-review`'s canonical triage block: only `bug:` and `risk:` block, a `nit:` is fixed only when the fix is smaller than the argument and is otherwise dropped, a `q:` is answered and blocks only once evidence reclassifies it, and a second adversarial round runs only after a fixed blocking finding, over the repair delta alone.
+   Triage every finding by `adversarial-review`'s canonical triage block: only `bug:` and `risk:` block, a `nit:` is fixed only when the fix is smaller than the argument and is otherwise dropped, a `q:` is answered and blocks only once evidence reclassifies it, a contested `bug:` or `risk:` is rejected only on the refuter's `refuted` verdict or a human decision on its escalation, and a second adversarial round runs only after a fixed blocking finding, over the repair delta alone.
 
    Then recheck the criteria and test seams this round touched against the contract, repeating the complete conformance pass only when the approved behavior, acceptance criteria, or verification changed. The triage block's conformance rule decides whether a conformance repair gets a delta round. Resolve findings in the working tree; never post them to the forge.
 

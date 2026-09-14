@@ -7,6 +7,6 @@
     "executor": {"definition": "../roles/executor.md"},
     "reviewer-a": {"definition": "../skills/adversarial-review/roles/reviewer-a.md"},
     "reviewer-b": {"definition": "../skills/adversarial-review/roles/reviewer-b.md"},
-    "review-refuter": {}
+    "review-refuter": {"definition": "../skills/adversarial-review/roles/review-refuter.md"}
   }
 }

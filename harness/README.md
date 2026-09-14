@@ -69,7 +69,7 @@ flowchart TD
         ship --> ladder["resolve the oracle ladder<br>project instructions, else task runner,<br>else the toolchain"]
         ladder --> implement["implement<br>loading ponytail"]
         implement --> rungs["local rungs green:<br>types, lint, tests, build"]
-        rungs --> commit["commit"] --> review["adversarial-review<br>named agents rendered from role files,<br>A: requirements, diff, project standards<br>B: diff, review standards<br>disclosed fallback, only bug and risk block"]
+        rungs --> commit["commit"] --> review["adversarial-review<br>named agents rendered from role files,<br>A: requirements, diff, project standards<br>B: diff, review standards<br>disclosed fallback, only bug and risk block,<br>rejected only on a refuter's refuted verdict"]
         review -->|fixed bug or risk:<br>one delta round| review
         review --> conform["spec-conformance pass<br>diff against the contract"]
         conform --> push["push"] --> pr["open the draft pull request<br>capped body: what changed, contract,<br>checks, assumptions, refuted, rejected"]
@@ -104,14 +104,14 @@ A locally authored skill carries both invocation guards in its frontmatter: `dis
 
 ## Role agents
 
-`adversarial-review` launches Reviewer A and Reviewer B as named agents, and a workflow that chooses to delegate implementation launches the `executor`. The reviewers' standing instructions, lenses, output format, and read-search intent live once, in `skills/adversarial-review/roles/`; the skill keeps orchestration, scaling, diff delivery, triage, and the loop cap. The executor lives in `roles/executor.md` and keeps implementation access: it edits and runs commands inside the slice it was handed, while the delegating workflow keeps scope, commits, review, conformance, and every gate. `clients/agents.py <assignments> <output>` renders one definition per role per client and rewrites nothing that already matches; `--check` reports a missing, drifted, unmanaged, or widened definition.
+`adversarial-review` launches Reviewer A, Reviewer B, and the review refuter as named agents, and a workflow that chooses to delegate implementation launches the `executor`. The reviewers' and the refuter's standing instructions, output format, and read-search intent live once, in `skills/adversarial-review/roles/`; the skill keeps orchestration, scaling, diff delivery, triage, refuter adjudication, and the loop cap. The executor lives in `roles/executor.md` and keeps implementation access: it edits and runs commands inside the slice it was handed, while the delegating workflow keeps scope, commits, review, conformance, and every gate. `clients/agents.py <assignments> <output>` renders one definition per role per client and rewrites nothing that already matches; `--check` reports a missing, drifted, unmanaged, or widened definition.
 
 The installer generates into `harness/.generated/agents/`, gitignored machine state owned by this checkout, and links each definition into its client's agent directory. The only links it claims are ones whose text points into that directory: an install removes a link whose definition was retired, an uninstall removes every such link and the generated directory, and a private agent or another checkout's link beside them is left alone. `check_links` fails on a missing link or on a definition that lost its restrictions.
 
 | Client | Agents | Path | Control | Not enforced |
 | --- | --- | --- | --- | --- |
-| Claude Code | `reviewer-a`, `reviewer-b` | `~/.claude/agents/` | `tools: Read, Grep, Glob`, so writes, shell, web, MCP tools, and `Agent` are absent | nothing documented; reading a diff or standards file outside the project without a prompt is unverified |
-| OpenCode | `reviewer-a`, `reviewer-b` | `$XDG_CONFIG_HOME/opencode/agents/` | `mode: subagent` with every permission denied and only `read`, `grep`, `glob`, and `list` re-allowed, `.env` reads still denied | reading a diff or standards file outside the project, which the deny refuses, so the inline fallbacks cover it; whether MCP tools fall under the deny is unverified |
+| Claude Code | `reviewer-a`, `reviewer-b`, `review-refuter` | `~/.claude/agents/` | `tools: Read, Grep, Glob`, so writes, shell, web, MCP tools, and `Agent` are absent | nothing documented; reading a diff or standards file outside the project without a prompt is unverified |
+| OpenCode | `reviewer-a`, `reviewer-b`, `review-refuter` | `$XDG_CONFIG_HOME/opencode/agents/` | `mode: subagent` with every permission denied and only `read`, `grep`, `glob`, and `list` re-allowed, `.env` reads still denied | reading a diff or standards file outside the project, which the deny refuses, so the inline fallbacks cover it; whether MCP tools fall under the deny is unverified |
 | Claude Code | `executor` | `~/.claude/agents/` | `disallowedTools: Agent`, so it cannot delegate, and every other tool the session allows stays | commit, push, pull request, merge, and tracker limits are instructions only, because a `disallowedTools` specifier removes the whole `Bash` tool |
 | OpenCode | `executor` | `$XDG_CONFIG_HOME/opencode/agents/` | `task` denied, plus `git commit*`, `git push*`, `git worktree remove*`, `wt remove*`, `wt merge*`, `wt step commit*`, and `gh *` shell commands, appended after the defaults | the same action spelled another way, since the denies match command prefixes |
 
@@ -119,9 +119,11 @@ Every restriction is best effort: the table is what each client documents, the g
 
 Reviewer A receives the requirements, the diff, and the absolute path of the project's own instruction file, never the implementation rationale; Reviewer B receives only the diff and the absolute paths of its review standards, the `ponytail` body and that instruction file. Each reviewer's output opens with a `loaded:` line, and a standards file counts as read only when that line names it. The parent writes one complete diff snapshot per round to a temporary file outside the worktree. A reviewer that cannot read it answers `unreadable: <path>` and gets the same snapshot inline, and when neither transport can carry the whole diff the review escalates instead of truncating. When a named agent is unavailable, the parent says so and launches a general agent with the role file as its instructions, disclosing that the fallback enforces only that agent's own permissions. Review is never skipped. Nothing here claims model diversity: both reviewers run what `clients/assignments.json` assigns them, which may be the same model.
 
+A `bug:` or `risk:` the implementer would reject goes to `review-refuter` first, launched once for that finding with only the finding and the diff snapshot it was raised against, never the rationale or the reason for contesting it. `corroborated` means fix it under the usual scope and safety escalation. `refuted` permits rejection, with the verdict and the refuter's `path:Lline:` evidence recorded under the pull request's `## Rejected review findings` or in the `/proto` ledger. `inconclusive`, an empty result, a result without a valid verdict line or its required evidence, or no refuter that could run escalates for evidence or a human decision, with no dismissal and no speculative fix. A finding resting on a requirement or standard the refuter was not given comes back `inconclusive`, the snapshot rather than a later worktree is the code it judges, and a human's decision on an escalation closes the finding. The refuter adds no reviewer and no round, runs on its own entry in `clients/assignments.json`, and takes the same disclosed fallback. How often findings are contested, what adjudication costs, and whether its verdicts are right stay unmeasured; session cost and friction metrics do not establish refuter correctness.
+
 ```mermaid
 flowchart TD
-    assign["clients/assignments.json<br>model and effort per role and client"] --> roles["roles/reviewer-a.md, roles/reviewer-b.md<br>rendered per client by clients/agents.py"]
+    assign["clients/assignments.json<br>model and effort per role and client"] --> roles["roles/reviewer-a.md, roles/reviewer-b.md,<br>roles/review-refuter.md<br>rendered per client by clients/agents.py"]
     roles --> a["Reviewer A<br>does it do the job"]
     roles --> b["Reviewer B<br>is it wrong"]
     req["requirements"] --> a
@@ -136,7 +138,15 @@ flowchart TD
     a --> findings["findings, opening with a loaded: line<br>a standard counts as read only when named"]
     b --> findings
     findings --> triage{"canonical triage block"}
-    triage -->|bug or risk: blocking| blocking["fix, reject with a reason,<br>or escalate a product decision"]
+    triage -->|bug or risk: blocking| blocking["fix, or escalate<br>a product decision"]
+    triage -->|bug or risk: contested| refuter["review-refuter, once per finding<br>the finding and its diff snapshot<br>adds no reviewer and no round"]
+    roles --> refuter
+    snap --> refuter
+    req --x|withheld| refuter
+    rationale --x|withheld| refuter
+    refuter -->|corroborated| blocking
+    refuter -->|refuted| rejected["reject, recording the verdict<br>and its path:Lline: evidence"]
+    refuter -->|inconclusive, missing,<br>malformed, or unavailable| uncertain(["escalate for evidence or a human decision<br>no dismissal, no speculative fix,<br>a human decision closes it and is recorded"])
     triage -->|nit| nit["fix when smaller than the argument,<br>else drop; never starts a round"]
     triage -->|q| question["answer it"]
     question -.->|evidence exposes a defect| blocking
@@ -154,7 +164,7 @@ flowchart TD
 | Claude Code | `model:` an alias, `sonnet`, `opus`, `haiku`, or `fable`, or a `claude-` model ID | `effort:` `low`, `medium`, `high`, `xhigh`, or `max` | `model: inherit` and no `effort:` line, so the session's model and effort apply |
 | OpenCode | `model:` a `provider/model` ID | `reasoningEffort:` `none`, `minimal`, `low`, `medium`, `high`, or `xhigh`, only beside an `openai/` model, since OpenCode passes it to the provider | neither line, so the invoking agent's model applies |
 
-A value outside those sets, an unknown or duplicate key, a missing client default, or effort beside a non-OpenAI OpenCode model fails generation before anything is written, and nothing is substituted. A set model or effort prints as `unverified:` until that account is observed running it, because a client's documentation is not proof of access. A role with an assignment and no definition, today `review-refuter`, is validated and prints as `pending:`, and no agent is generated until its definition lands. Change an assignment by editing its entry and rerunning `./harness/install.sh --links-only`; never edit a generated file, which `--check` reports as changed.
+A value outside those sets, an unknown or duplicate key, a missing client default, or effort beside a non-OpenAI OpenCode model fails generation before anything is written, and nothing is substituted. A set model or effort prints as `unverified:` until that account is observed running it, because a client's documentation is not proof of access. A role with an assignment and no definition is validated and prints as `pending:`, and no agent is generated until its definition lands. Change an assignment by editing its entry and rerunning `./harness/install.sh --links-only`; never edit a generated file, which `--check` reports as changed.
 
 Acceptance on 2026-09-14 made no model request. `claude plugin validate` in Claude Code 2.1.270 parsed generated agents carrying `model: sonnet`, `effort: high`, and `disallowedTools: Agent`, which proves the frontmatter parses, not that Claude Code applies those fields. `opencode debug agent` in OpenCode 1.18.30 resolved `openai/gpt-5.5` with `reasoningEffort` from both a client default and a role override, and resolved the reviewer and executor denies. Neither proves a request runs on the assigned model or that the account can reach it.
 

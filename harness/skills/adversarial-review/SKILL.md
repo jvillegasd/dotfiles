@@ -1,6 +1,6 @@
 ---
 name: adversarial-review
-description: Review a diff with a requirements-aware reviewer and a reviewer that sees only the diff and standards before pushing, then triage their findings.
+description: Review a diff with a requirements-aware reviewer and a reviewer that sees only the diff and standards before pushing, then triage their findings, with a refuter adjudicating any contested blocking finding.
 disable-model-invocation: true
 metadata:
   opencode/autoinvoke: "false"
@@ -30,21 +30,25 @@ Standards are paths, never requirements or rationale, so supplying them leaves e
 
 The project's own instruction file is `AGENTS.md` at the repository root, or `CLAUDE.md` there when no `AGENTS.md` exists, and is left out when neither does. Where the client is known to refuse a standards path, such as OpenCode for a file outside the project, paste that file's text into the first launch instead of its path. When a supplied standards file is missing from a reviewer's `loaded:` line, relaunch that reviewer once with that file's text pasted in; the relaunch replaces that reviewer's output for the same round and never counts toward the cap. A reviewer names a pasted standard as `inline:<absolute path>`. If a standard is still unread, disclose it under the pull request's `## Checks`, or in the requirements ledger under `/proto`.
 
-This block is the one definition of what each reviewer is given. Anything it does not list is withheld, and every standards path is absolute.
+This block is the one definition of what each reviewer and the refuter is given. Anything it does not list is withheld, and every standards path is absolute.
 
 ```json
 {
   "inputs": {
     "reviewer-a": ["requirements", "diff_snapshot_path"],
-    "reviewer-b": ["diff_snapshot_path"]
+    "reviewer-b": ["diff_snapshot_path"],
+    "review-refuter": ["contested_finding", "diff_snapshot_path"]
   },
   "standards": {
     "reviewer-a": ["project_instruction_file"],
-    "reviewer-b": ["ponytail", "project_instruction_file"]
+    "reviewer-b": ["ponytail", "project_instruction_file"],
+    "review-refuter": []
   },
   "optional_standards": ["project_instruction_file"],
   "loaded_prefix": "loaded: ",
-  "inline_prefix": "inline:"
+  "inline_prefix": "inline:",
+  "verdict_prefix": "verdict: ",
+  "unreadable_prefix": "unreadable: "
 }
 ```
 
@@ -58,7 +62,7 @@ Scale to blast radius:
 
 Snapshot the complete diff once per round into a readable temporary file outside the worktree, and give each reviewer that path. A reviewer that answers `unreadable: <path>` gets the same snapshot inline instead. Never truncate the diff: when neither the file nor inline text can carry the complete snapshot, stop and escalate per the escalation contract.
 
-Reviewers never edit files, and findings never reach the forge.
+Reviewers and the refuter never edit files, and neither findings nor verdicts reach the forge.
 
 ## Triage, by the implementer
 
@@ -77,19 +81,55 @@ This block is the one definition of triage. Every workflow that runs this review
   "conformance_repair": "counts_as_fixed_blocking_finding",
   "conformance_repair_after_cap": "recheck_and_disclose",
   "max_rounds": 2,
-  "new_blocking_in_repaired_code": "escalate"
+  "new_blocking_in_repaired_code": "escalate",
+  "refuter": {
+    "applies_to": ["bug", "risk"],
+    "required_before": "reject",
+    "invocations_per_finding": 1,
+    "counts_as_round": false,
+    "escalation_closes_on": "human_decision",
+    "evidence_required": ["corroborated", "refuted"],
+    "verdicts": {
+      "corroborated": "fix",
+      "refuted": "reject",
+      "inconclusive": "escalate",
+      "missing": "escalate",
+      "malformed": "escalate",
+      "unavailable": "escalate"
+    }
+  }
 }
 ```
 
 Only `bug:` and `risk:` block. For each, exactly one of:
 
 - Fix it, with the smallest change that resolves it, per `ponytail`.
-- Reject it, with a specific reason recorded in the pull request body under `## Rejected review findings`. A rejection you cannot justify in one line is a fix you are avoiding.
+- Reject it, only on the refuter's `refuted` verdict or a human decision on its escalation, recording that verdict and its evidence, or that decision, in the pull request body under `## Rejected review findings`, or in the requirements ledger under `/proto`.
 - Escalate it, per the escalation contract, when it is a product decision.
 
 A `nit:` is fixed only when the fix is smaller than the argument, and otherwise dropped. A nit fix never starts another review round.
 
 A `q:` is answered. It becomes a `bug:` or `risk:` only when evidence exposes a defect, and is then triaged as one. A question alone never blocks delivery.
+
+## Refuter
+
+Before rejecting a contested `bug:` or `risk:`, launch the named `review-refuter` agent once for that finding, with a fresh context. The installer generates it from `roles/review-refuter.md` beside this skill, and it runs on its central assignment. When it is unavailable, the general-agent fallback above applies to it unchanged, with the same disclosure.
+
+Give the refuter only the contested finding, verbatim, and the path of the diff snapshot that finding was raised against. Never the implementation rationale, the requirements, your reason for contesting it, or the conversation. A refuter that answers `unreadable: <path>` gets that snapshot inline under Diff delivery, and the relaunch completes the same invocation rather than adding one.
+
+Its verdict decides the finding:
+
+- `corroborated`: fix it, subject to the escalation contract's scope and safety rules.
+- `refuted`: reject it, recording the verdict and the refuter's `path:Lline:` evidence.
+- `inconclusive`, `missing`, `malformed`, or `unavailable`: escalate for evidence or a human decision. Never dismiss the finding, and never make a speculative fix.
+
+A finding that rests on a requirement or standard the refuter was not given comes back `inconclusive`, so it escalates rather than being refuted by code alone. The snapshot, not a later worktree, is the code the refuter judges. A human's decision on an escalated finding closes it, recorded the same way a rejection is.
+
+A result is `missing` when the refuter returned nothing, `malformed` when its first line is not a `verdict:` line naming `corroborated`, `refuted`, or `inconclusive`, or when a `corroborated` or `refuted` verdict carries no `path:Lline:` evidence line, and `unavailable` when neither the named agent nor the fallback could run, or when the inline relaunch after an `unreadable:` answer could not carry the snapshot. Only one `unreadable:` answer, before the answer it retries, is part of the invocation.
+
+The refuter is not a reviewer and not a round: it leaves the reviewer count and the loop cap where they were, never starts or counts toward a round, and runs once per contested finding, never again for a second opinion. A fix after a `corroborated` verdict is a fixed blocking finding like any other.
+
+How often a finding is contested, what an adjudication costs, and how accurate a verdict is stay unmeasured until evidence exists. Session cost and friction metrics do not establish that a verdict was correct.
 
 ## Loop cap
 
