@@ -14,7 +14,7 @@ python3 harness/bench/measure.py --split <commit-date> --since <window-start>
 | --- | --- |
 | `--split` | Required. Commit date of the change under test, `YYYY-MM-DD`. Sessions before it are `before`, on or after it `after`. |
 | `--since` | Ignore sessions older than this. Cuts off a period whose harness bears no resemblance to today's. |
-| `--client` | Limit to `claude`, `codex`, or `opencode`. Repeatable. |
+| `--client` | Limit to `claude` or `opencode`. Repeatable. |
 | `--home` | Session-store root. Defaults to the current home; point it at any directory laid out like a home to read a captured or another machine's session stores. |
 | `--rows` | One JSON object per session instead of the report, honouring `--since`, for the distribution behind a median. |
 
@@ -43,12 +43,11 @@ A hard week at work moves every metric without the harness changing. Copy `cohor
 
 Case-insensitive substrings, anything unmatched is personal, and the report splits only once a pattern matches something. `cohorts.json` is gitignored, since naming a client is the whole job of it.
 
-Each client records a project differently: a dashed slug, a `cwd`, a `directory` column. Pattern and project are both folded by running every `-` and `/` into one separator, so one `acme` reaches all three. Name a path segment, not a span across one.
+Each client records a project differently: a dashed slug or a `directory` column. Pattern and project are both folded by running every `-` and `/` into one separator, so one `acme` reaches both. Name a path segment, not a span across one.
 
 ## Where the sessions come from
 
 - **Claude Code**, `~/.claude/projects/<slug>/<session>.jsonl`. The only client recording all eight metrics. Interrupts and denials come from matching `CLAUDE_INTERRUPT` and `CLAUDE_DENIALS` in `measure.py`.
-- **Codex**, `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`. Records no declined call, slash command, subagent, or distinguishable failed result, so those four are absent. Codex is no longer a harness client, and its rollouts stay readable so sessions from before its retirement remain measurable.
 - **OpenCode**, `~/.local/share/opencode/opencode.db`, opened read-only and immutable because a client may be running. No interrupt, denial, failed result, or slash command, so those four are absent.
 
 **A subagent is delegation, not a session.** Claude Code writes `<session-id>/subagents/*.jsonl` beside the session file, and OpenCode gives a subagent a `session` row carrying the parent's id, so a recursive glob or an unfiltered query counts them as sessions: on this machine, 273 sidecars against 209 real sessions, and 77 against 36. Both are excluded and counted as the parent's `delegation`. The inline `isSidechain` flag those entries used to carry is still written and now always false, so a reader still looking there reports no delegation rather than reporting it cannot see any.

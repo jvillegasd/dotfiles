@@ -1,5 +1,0 @@
-interface:
-  display_name: "Grill With Docs"
-  short_description: "Grill a design and record the decisions in the glossary or an ADR"
-policy:
-  allow_implicit_invocation: false
