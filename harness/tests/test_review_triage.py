@@ -32,6 +32,7 @@ INPUT_OUTCOMES = (
     "reviewer_a_boundary",
     "reviewer_b_boundary",
     "standards_paths_absolute",
+    "missing_standards_omitted",
     "named_standards_count_as_loaded",
     "unnamed_standards_not_loaded",
     "missing_loaded_line_is_no_evidence",
@@ -93,7 +94,9 @@ class MutationTest(unittest.TestCase):
     def test_each_input_rule_is_read_from_the_block(self):
         mutations = [
             ("reviewer_a_boundary", lambda d: d["inputs"]["reviewer-a"].append("implementation_rationale")),
+            ("reviewer_a_boundary", lambda d: d["standards"]["reviewer-a"].clear()),
             ("reviewer_b_boundary", lambda d: d["inputs"]["reviewer-b"].append("requirements")),
+            ("standards_paths_absolute", lambda d: d.update(standards_paths="any")),
             ("reviewer_b_boundary", lambda d: d["standards"]["reviewer-b"].remove("ponytail")),
             ("named_standards_count_as_loaded", lambda d: d.update(loaded_prefix="read: ")),
             ("roles_declare_loaded_prefix", lambda d: d.update(loaded_prefix="read: ")),
@@ -101,6 +104,25 @@ class MutationTest(unittest.TestCase):
         for key, edit in mutations:
             with self.subTest(key):
                 self.assertIs(self.mutate(T.inputs_block, edit)[key], False)
+
+
+class ProseTest(unittest.TestCase):
+    def test_prose_agrees_with_the_block(self):
+        rules, skill = T.block(), _SKILL.read_text()
+        tick = lambda names: [f"`{name}:`" for name in names]
+        blocking = [name for name, severity in rules["severities"].items() if severity["blocking"]]
+        numbers = {1: "one", 2: "two", 3: "three"}
+        sentences = [f"Only {' and '.join(tick(blocking))} block."]
+        sentences.append(f"It becomes a {' or '.join(tick(rules['reclassify_to']))} only when evidence exposes a defect")
+        if "fix_when_smaller_than_argument" in rules["severities"]["nit"]["actions"]:
+            sentences.append("A `nit:` is fixed only when the fix is smaller than the argument, and otherwise dropped.")
+        if rules["second_round"] == {"trigger": "fixed_blocking_finding", "scope": "repair_delta"}:
+            sentences.append("A second round runs only after a fixed blocking finding, and it reviews the repair delta alone.")
+        sentences.append(f"At most {numbers[rules['max_rounds']]} rounds.")
+        self.assertEqual(len(sentences), 5, "the block no longer matches any prose the skill states")
+        for sentence in sentences:
+            with self.subTest(sentence[:50]):
+                self.assertIn(sentence, skill)
 
 
 class ScenarioTest(unittest.TestCase):

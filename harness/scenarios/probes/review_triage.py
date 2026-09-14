@@ -70,8 +70,8 @@ def next_round(completed: int, decisions: list, new_blocking_in_repaired: bool =
 def assemble(role: str, available: dict, paths: dict) -> dict:
     """Return exactly what the input block lets one reviewer receive: its listed inputs plus absolute standards paths."""
     rules = inputs_block()
-    standards = [paths[name] for name in rules["standards"][role]]
-    if not all(Path(path).is_absolute() for path in standards):
+    standards = [paths[name] for name in rules["standards"][role] if name in paths]
+    if rules["standards_paths"] == "absolute" and not all(Path(path).is_absolute() for path in standards):
         raise ValueError("standards paths must be absolute")
     given = {key: available[key] for key in rules["inputs"][role] if key in available}
     given["standards_paths"] = standards
@@ -81,7 +81,8 @@ def assemble(role: str, available: dict, paths: dict) -> dict:
 def loaded(output: str, supplied: list) -> list:
     """Return the supplied standards paths that the reviewer's `loaded:` line names; every other path counts as unread."""
     prefix = inputs_block()["loaded_prefix"]
-    line = next((line for line in output.splitlines() if line.startswith(prefix)), None)
+    first = output.splitlines()[:1]
+    line = first[0] if first and first[0].startswith(prefix) else None
     named = {name.strip() for name in line[len(prefix):].split(",")} if line is not None else set()
     return [path for path in supplied if path in named]
 
@@ -136,6 +137,7 @@ def run() -> dict:
                 "standards_paths": [paths["ponytail"], paths["project_instruction_file"]],
             },
             "standards_paths_absolute": relative_refused,
+            "missing_standards_omitted": assemble("reviewer-a", available, {"ponytail": paths["ponytail"]})["standards_paths"] == [],
             "named_standards_count_as_loaded": loaded(f"loaded: /repo/AGENTS.md\n{finding}", supplied) == ["/repo/AGENTS.md"],
             "unnamed_standards_not_loaded": paths["ponytail"] not in loaded("loaded: /repo/AGENTS.md", supplied)
             and loaded("loaded: none", supplied) == [],

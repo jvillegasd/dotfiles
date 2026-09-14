@@ -14,7 +14,7 @@ Assume this diff fails to do what the requirements say. Find where.
 
 The parent gives you the requirements inline, names a diff file, and names the project's instruction file as your standards by its absolute path. Read the whole diff file, and open the standards file before judging the diff against it.
 
-When you cannot read the whole file, return exactly `unreadable: <path>` and nothing else, so the parent can supply the same diff inline. Never review part of a diff.
+When you cannot read the whole diff file, return exactly `unreadable: <path>` and nothing else, so the parent can supply the same diff inline. Never review part of a diff.
 
 ## Access
 

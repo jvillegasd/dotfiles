@@ -28,6 +28,8 @@ Give Reviewer B only the diff snapshot path and the exact absolute paths of its 
 
 Standards are paths, never requirements or rationale, so supplying them leaves each reviewer's information boundary where it was. Count a standards file as read only when the reviewer's `loaded:` line names it: supplying a path, or a reviewer recalling what a standard says, is not evidence that it was read.
 
+The project's own instruction file is `AGENTS.md` or `CLAUDE.md` at the repository root, both when both exist, and is left out when neither does. When a supplied standards file is missing from a reviewer's `loaded:` line, including one its client refused to read, relaunch that reviewer once with that file's text inline; if it is still unread, disclose that in the pull request's `## Checks`.
+
 This block is the one definition of what each reviewer is given. Anything it does not list is withheld, and every standards path is absolute.
 
 ```json
@@ -40,7 +42,8 @@ This block is the one definition of what each reviewer is given. Anything it doe
     "reviewer-a": ["project_instruction_file"],
     "reviewer-b": ["ponytail", "project_instruction_file"]
   },
-  "loaded_prefix": "loaded: "
+  "loaded_prefix": "loaded: ",
+  "standards_paths": "absolute"
 }
 ```
 
@@ -87,4 +90,4 @@ A `q:` is answered. It becomes a `bug:` or `risk:` only when evidence exposes a 
 
 ## Loop cap
 
-At most two rounds. A second round runs only after a fixed blocking finding, and it reviews the repair delta alone. A new blocking finding in round two, in code that round one's fixes touched, is a rabbit-hole trip: stop and escalate rather than starting round three.
+At most two rounds. A second round runs only after a fixed blocking finding, and it reviews the repair delta alone. A new blocking finding in round two, in code that round one's fixes touched, is a rabbit-hole trip: stop and escalate rather than starting round three. Round two's other findings are still triaged, without a third round.

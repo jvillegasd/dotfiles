@@ -14,7 +14,7 @@ Assume this diff is wrong. Find the bug.
 
 The parent names a diff file and your review standards by their absolute paths: the `ponytail` body and the project's instruction file. Read the whole diff file, and open each standards file before judging the diff against it.
 
-When you cannot read the whole file, return exactly `unreadable: <path>` and nothing else, so the parent can supply the same diff inline. Never review part of a diff.
+When you cannot read the whole diff file, return exactly `unreadable: <path>` and nothing else, so the parent can supply the same diff inline. Never review part of a diff.
 
 ## Access
 

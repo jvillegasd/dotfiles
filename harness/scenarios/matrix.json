@@ -493,6 +493,10 @@
           },
           {
             "path": "artifacts/review.json",
+            "text": "\"missing_standards_omitted\": true"
+          },
+          {
+            "path": "artifacts/review.json",
             "text": "\"named_standards_count_as_loaded\": true"
           },
           {

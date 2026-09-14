@@ -1,6 +1,6 @@
 """Regression checks for the generated reviewer agents.
 
-The canonical roles live beside adversarial-review, and clients/agents.py renders one definition per reviewer per client. These checks drive the generator through temporary directories the way install.sh calls it, and pin the protocol lines the skill, the roles, and the policy share. A pinned line is compared whole, so a deliberate paraphrase fails the pin, but a paraphrase added elsewhere beside an intact line does not.
+The canonical roles live beside adversarial-review, and clients/agents.py renders one definition per reviewer per client. These checks drive the generator through temporary directories the way install.sh calls it, and pin the protocol lines the skill, the roles, the policy, and the delivery commands share. A pinned line is compared whole after stripping list indentation, so a deliberate paraphrase fails the pin, but a paraphrase added elsewhere beside an intact line does not.
 """
 
 import os
@@ -326,7 +326,7 @@ class Protocol(unittest.TestCase):
         self.assertNotIn("Severity is one of", skill)
 
     def test_pinned_lines(self):
-        unreadable = "When you cannot read the whole file, return exactly `unreadable: <path>` and nothing else, so the parent can supply the same diff inline. Never review part of a diff."
+        unreadable = "When you cannot read the whole diff file, return exactly `unreadable: <path>` and nothing else, so the parent can supply the same diff inline. Never review part of a diff."
         loaded = "Begin with one line naming every standards file you actually opened with a tool during this review, as `loaded: <absolute path>, <absolute path>`, or `loaded: none`. A path you were given but did not open, or a standard you recall without opening, does not belong on it."
         defer = "Triage every finding by `adversarial-review`'s canonical triage block: only `bug:` and `risk:` block, a `nit:` is fixed only when the fix is smaller than the argument and is otherwise dropped, a `q:` is answered and blocks only once evidence reclassifies it, and a second adversarial round runs only after a fixed blocking finding, over the repair delta alone."
         pins = {
@@ -347,11 +347,11 @@ class Protocol(unittest.TestCase):
             _HARNESS / "commands/feedback.md": [defer],
             _HARNESS / "commands/address-review.md": [defer],
             _HARNESS / "commands/proto.md": [
-                "Triage that pass by `adversarial-review`'s canonical triage block within this workflow's single-pass limit: fix or record each blocking finding before presenting the slice, apply the nit and question rules unchanged, and never start a second round here.",
+                "Triage that pass by `adversarial-review`'s canonical triage block within this workflow's single-pass limit: fix, reject with the reason written into the requirements ledger, or escalate each blocking finding before presenting the slice, apply the nit and question rules unchanged, and never start a second round here.",
             ],
         }
         for path, expected in pins.items():
-            present = [line.strip() for line in lines(path)]
+            present = [line.strip() for line in lines(path)] if path.parent.name == "commands" else lines(path)
             for line in expected:
                 with self.subTest(path=path.name, line=line[:60]):
                     self.assertIn(line, present)
