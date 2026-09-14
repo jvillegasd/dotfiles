@@ -23,17 +23,19 @@ _SPEC.loader.exec_module(C)
 OUTCOMES = (
     "valid_citation_grounded",
     "missing_file_refuted",
+    "outside_repository_refuted",
     "stale_line_refuted",
     "wrong_symbol_refuted",
+    "partial_symbol_refuted",
     "absent_field_refuted",
     "refuted_never_grounded",
-    "trailing_tool_result_grounds_nothing",
+    "trailing_tool_result_refuted",
 )
 
 PINS = [
-    "A recon subagent's final message is text, one finding per line in the shape `path:line | symbol | mechanism`: the cited location, the named symbol that location carries, and the mechanism it is claimed to show. A trailing tool result is not the report and grounds nothing.",
-    "Before reusing a citation, confirm the path exists and the cited line carries the named symbol. That check grounds the location only, never the claimed runtime mechanism: a load-bearing mechanism claim still goes through `evidence`.",
-    "Drop a citation whose path is missing, whose line does not carry the named symbol, or that lacks any of the three fields. Record it as refuted, as a verdict row in `/triage`'s evidence ledger or an entry under `/research`'s `Contradictions and unknowns`, and never reuse it as grounded evidence.",
+    "A recon subagent that searches the repository ends on a text message holding only its findings, one per line in the shape `path:line | symbol | mechanism`: the cited location, the named symbol that location carries, and the mechanism it is claimed to show. A trailing tool result is not the report: record that track as refuted, never as one that found nothing.",
+    "Before reusing a citation, read only the cited line and confirm the path exists inside the repository and that line carries the named symbol as a whole identifier. That check grounds the location only, never the claimed runtime mechanism: a load-bearing mechanism claim still goes through `evidence`.",
+    "Drop a citation whose path is missing or outside the repository, whose line does not carry the named symbol, or that lacks any of the three fields. Record it as refuted, as a verdict row in `/triage`'s evidence ledger or an entry under `/research`'s `Contradictions and unknowns`, and never reuse it as grounded evidence.",
 ]
 
 
@@ -65,7 +67,9 @@ class ProtocolTest(unittest.TestCase):
 
 class CitationTest(unittest.TestCase):
     def setUp(self):
-        self.root = Path(tempfile.mkdtemp())
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
         (self.root / "app.py").write_text("def load_config(path):\n    return parse(path)\n")
 
     def test_probe_reads_the_shape_from_the_command(self):
@@ -83,6 +87,9 @@ class CitationTest(unittest.TestCase):
             "gone.py:1 | load_config | defines the loader": "missing file",
             "app.py:9 | load_config | defines the loader": "symbol not at line",
             "app.py:2 | load_config | defines the loader": "symbol not at line",
+            "app.py:1 | load | defines the loader": "symbol not at line",
+            "../app.py:1 | load_config | defines the loader": "outside repository",
+            "/etc/hosts:1 | localhost | resolves host names": "outside repository",
             "app.py:1 | load_config": "missing field",
             "app.py | load_config | defines the loader": "missing field",
             "app.py:1 |  | defines the loader": "missing field",
@@ -93,9 +100,12 @@ class CitationTest(unittest.TestCase):
                 self.assertEqual(result["grounded"], [])
                 self.assertEqual(result["refuted"], [{"citation": citation, "reason": reason}])
 
-    def test_trailing_tool_result_grounds_nothing(self):
+    def test_trailing_tool_result_is_refuted(self):
         report = {"type": "tool_result", "text": "app.py:1 | load_config | defines the loader"}
-        self.assertEqual(C.verify(report, self.root), {"grounded": [], "refuted": []})
+        self.assertEqual(
+            C.verify(report, self.root),
+            {"grounded": [], "refuted": [{"citation": report["text"], "reason": "no text report"}]},
+        )
 
     def test_every_declared_outcome_holds(self):
         result = C.run()

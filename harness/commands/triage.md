@@ -29,11 +29,11 @@ The input is a tracker item, a pasted ticket, or a production error signal. It m
 
 ## Recon citations
 
-A recon subagent's final message is text, one finding per line in the shape `path:line | symbol | mechanism`: the cited location, the named symbol that location carries, and the mechanism it is claimed to show. A trailing tool result is not the report and grounds nothing.
+A recon subagent that searches the repository ends on a text message holding only its findings, one per line in the shape `path:line | symbol | mechanism`: the cited location, the named symbol that location carries, and the mechanism it is claimed to show. A trailing tool result is not the report: record that track as refuted, never as one that found nothing.
 
-Before reusing a citation, confirm the path exists and the cited line carries the named symbol. That check grounds the location only, never the claimed runtime mechanism: a load-bearing mechanism claim still goes through `evidence`.
+Before reusing a citation, read only the cited line and confirm the path exists inside the repository and that line carries the named symbol as a whole identifier. That check grounds the location only, never the claimed runtime mechanism: a load-bearing mechanism claim still goes through `evidence`.
 
-Drop a citation whose path is missing, whose line does not carry the named symbol, or that lacks any of the three fields. Record it as refuted, as a verdict row in `/triage`'s evidence ledger or an entry under `/research`'s `Contradictions and unknowns`, and never reuse it as grounded evidence.
+Drop a citation whose path is missing or outside the repository, whose line does not carry the named symbol, or that lacks any of the three fields. Record it as refuted, as a verdict row in `/triage`'s evidence ledger or an entry under `/research`'s `Contradictions and unknowns`, and never reuse it as grounded evidence.
 
 ## Output
 
