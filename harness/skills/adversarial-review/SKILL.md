@@ -20,11 +20,29 @@ When a named agent is unavailable, say so, launch a general agent with the match
 
 The named agents' restrictions are best effort: each client enforces what its own controls support, and `clients/agents.py` reports the gaps.
 
-Reviewer A holds the requirements but never that rationale; Reviewer B holds only the diff. Requirements are what let a reviewer check conformance; rationale only biases it.
+Reviewer A holds the requirements but never that rationale; Reviewer B holds only the diff. Each also gets the standards it judges against, which are neither. Requirements are what let a reviewer check conformance; rationale only biases it.
 
-Give Reviewer A the requirements and the diff, never the implementation rationale. Nothing else.
+Give Reviewer A the requirements, the diff snapshot path, and the exact absolute path of the project's own instruction file as its standards, never the implementation rationale. Nothing else.
 
-Give Reviewer B only the diff. No requirements, no rationale, no ticket.
+Give Reviewer B only the diff snapshot path and the exact absolute paths of its review standards: the loaded `ponytail` body and the project's own instruction file. No requirements, no rationale, no ticket.
+
+Standards are paths, never requirements or rationale, so supplying them leaves each reviewer's information boundary where it was. Count a standards file as read only when the reviewer's `loaded:` line names it: supplying a path, or a reviewer recalling what a standard says, is not evidence that it was read.
+
+This block is the one definition of what each reviewer is given. Anything it does not list is withheld, and every standards path is absolute.
+
+```json
+{
+  "inputs": {
+    "reviewer-a": ["requirements", "diff_snapshot_path"],
+    "reviewer-b": ["diff_snapshot_path"]
+  },
+  "standards": {
+    "reviewer-a": ["project_instruction_file"],
+    "reviewer-b": ["ponytail", "project_instruction_file"]
+  },
+  "loaded_prefix": "loaded: "
+}
+```
 
 Scale to blast radius:
 
@@ -40,18 +58,33 @@ Reviewers never edit files, and findings never reach the forge.
 
 ## Triage, by the implementer
 
-For each finding, exactly one of:
+This block is the one definition of triage. Every workflow that runs this review follows it, and the prose below explains it without adding rules.
+
+```json
+{
+  "severities": {
+    "bug": {"blocking": true, "actions": ["fix", "reject", "escalate"]},
+    "risk": {"blocking": true, "actions": ["fix", "reject", "escalate"]},
+    "nit": {"blocking": false, "actions": ["fix_when_smaller_than_argument", "drop"]},
+    "q": {"blocking": false, "actions": ["answer", "reclassify_on_evidence"]}
+  },
+  "reclassify_to": ["bug", "risk"],
+  "second_round": {"trigger": "fixed_blocking_finding", "scope": "repair_delta"},
+  "max_rounds": 2,
+  "new_blocking_in_repaired_code": "escalate"
+}
+```
+
+Only `bug:` and `risk:` block. For each, exactly one of:
 
 - Fix it, with the smallest change that resolves it, per `ponytail`.
-- Reject it, with a specific reason recorded in the pull request body under
-  `## Rejected review findings`. A rejection you cannot justify in one line is a
-  fix you are avoiding.
+- Reject it, with a specific reason recorded in the pull request body under `## Rejected review findings`. A rejection you cannot justify in one line is a fix you are avoiding.
 - Escalate it, per the escalation contract, when it is a product decision.
 
-Fix a `nit:` only when the fix is smaller than the argument.
+A `nit:` is fixed only when the fix is smaller than the argument, and otherwise dropped. A nit fix never starts another review round.
+
+A `q:` is answered. It becomes a `bug:` or `risk:` only when evidence exposes a defect, and is then triaged as one. A question alone never blocks delivery.
 
 ## Loop cap
 
-At most two rounds; round two re-reviews only the delta from your fixes. A new
-blocking finding in round two, in code that round one's fixes touched, is a
-rabbit-hole trip: stop and escalate rather than starting round three.
+At most two rounds. A second round runs only after a fixed blocking finding, and it reviews the repair delta alone. A new blocking finding in round two, in code that round one's fixes touched, is a rabbit-hole trip: stop and escalate rather than starting round three.
