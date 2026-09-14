@@ -118,7 +118,7 @@ COMMAND_ROOTS=(
     "$CONFIG_HOME/opencode/command"
 )
 
-# Reviewer agents are rendered into this checkout's own untracked directory and linked into each client, so a link's text is what proves this checkout wrote it. Pairs are client|root, because bash 3.2 has no associative arrays.
+# Role agents are rendered into this checkout's own untracked directory and linked into each client, so a link's text is what proves this checkout wrote it. Pairs are client|root, because bash 3.2 has no associative arrays.
 AGENT_OUT="$HARNESS_DIR/.generated/agents"
 AGENT_ROOTS=(
     "claude|$HOME/.claude/agents"
@@ -588,17 +588,17 @@ sweep_agent_links() {
 # The generator prints every enforcement gap on each run, so what a client cannot restrict is never reported as enforced.
 install_agents() {
     local pair client root entry destination status
-    "$HARNESS_DIR/clients/agents.py" "$HARNESS_DIR/skills/adversarial-review/roles" "$AGENT_OUT" && status=0 || status=$?
-    [[ "$status" == 0 || "$status" == 3 ]] || die "Generating the reviewer agents failed with status $status."
+    "$HARNESS_DIR/clients/agents.py" "$HARNESS_DIR/clients/assignments.json" "$AGENT_OUT" && status=0 || status=$?
+    [[ "$status" == 0 || "$status" == 3 ]] || die "Generating the role agents failed with status $status."
     for pair in "${AGENT_ROOTS[@]}"; do
         client="${pair%%|*}" root="${pair#*|}"
         [[ ! -L "$root" && ( ! -e "$root" || -d "$root" ) ]] ||
-            die "Unowned reviewer agent root: $root"
+            die "Unowned role agent root: $root"
         for entry in "$AGENT_OUT/$client"/*; do
             destination="$root/$(basename "$entry")"
             if [[ -e "$destination" || -L "$destination" ]]; then
                 [[ -L "$destination" && "$(readlink "$destination")" == "$entry" ]] ||
-                    die "Unowned reviewer agent collision: $destination"
+                    die "Unowned role agent collision: $destination"
             fi
         done
     done
@@ -616,13 +616,13 @@ install_agents() {
 
 check_agents() {
     local pair client root entry
-    "$HARNESS_DIR/clients/agents.py" --check "$HARNESS_DIR/skills/adversarial-review/roles" "$AGENT_OUT" ||
-        die "Reviewer agents in $AGENT_OUT are missing, drifted, or widened."
+    "$HARNESS_DIR/clients/agents.py" --check "$HARNESS_DIR/clients/assignments.json" "$AGENT_OUT" ||
+        die "Role agents in $AGENT_OUT are missing, drifted, or widened."
     for pair in "${AGENT_ROOTS[@]}"; do
         client="${pair%%|*}" root="${pair#*|}"
         for entry in "$AGENT_OUT/$client"/*; do
             [[ "$(readlink "$root/$(basename "$entry")")" == "$entry" ]] ||
-                die "Missing reviewer agent link: $root/$(basename "$entry")"
+                die "Missing role agent link: $root/$(basename "$entry")"
         done
     done
 }
@@ -641,10 +641,10 @@ check_agents_removed() {
         [[ -d "$root" ]] || continue
         for entry in "$root"/*; do
             [[ ! -L "$entry" || "$(readlink "$entry")" != "$AGENT_OUT/"* ]] ||
-                die "Reviewer agent link survived the uninstall: $entry"
+                die "Role agent link survived the uninstall: $entry"
         done
     done
-    [[ ! -e "$AGENT_OUT" ]] || die "Generated reviewer agents survived the uninstall: $AGENT_OUT"
+    [[ ! -e "$AGENT_OUT" ]] || die "Generated role agents survived the uninstall: $AGENT_OUT"
 }
 
 install_links() {
@@ -1290,7 +1290,7 @@ uninstall_summary() {
 $(printf '\033[1;32m✓ Harness AI removed.\033[0m')
 
 Gone: every managed skill and command link, both POLICY.md links, the Claude
-status line link, the reviewer agent links and their generated definitions,
+status line link, the role agent links and their generated definitions,
 the ~/.zshrc alias block, the tracked keys in ~/.claude/settings.json, Engram:
 its plugin, marketplace, and MCP registration in both clients, plus the
 formula, and agent-browser: its MCP registration in both clients, plus the

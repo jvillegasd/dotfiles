@@ -15,6 +15,10 @@ Use ephemeral specialist roles. Do not create persistent client-specific persona
 
 Run independent roles in parallel when the client supports it; otherwise run them sequentially without merging their scopes.
 
+When a workflow chooses to delegate implementation, launch the named `executor` agent, whose model and effort come from the harness's central role assignments. Delegation stays optional and changes nothing else: the delegating workflow keeps the approved scope, the commits, the review passes, the conformance check, and every gate. When the named agent is unavailable, say so and do the work inline rather than hand it to an agent without that assignment.
+
+Launch a named role agent without a model or effort override, so it runs on its central assignment.
+
 `ponytail` is the coding standard, loaded by name from every command that writes code rather than by a session hook. Its own body carries the ladder, the reading it never shortens, and the carve-outs it never simplifies away.
 
 One frontend design body is installed, `impeccable`. It carries no invocation guard, so a client may select it on description match, which is allowed here; its scope is frontend design broadly: landing pages, portfolios, and redesigns along with dashboards, data tables, and multi-step product UI. It decides nothing that is not a UI surface. Inside a workflow a project's existing styling layer outranks it, so `/proto` and `/ship` build from that layer whether or not this body is loaded. Never run its own installer, updater, hook wiring, or pin, whatever the body itself offers: `npx impeccable install`, `npx impeccable update`, `$impeccable hooks on`, and `scripts/pin.mjs`. It is updated only through `harness/locked-skills.sh update`. Where a locked body's own prose contradicts this policy, this policy wins over what the harness writes, though never over the body's own bytes.

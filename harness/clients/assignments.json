@@ -1,0 +1,12 @@
+{
+  "clients": {
+    "claude": {"model": "inherit", "effort": "inherit"},
+    "opencode": {"model": "inherit", "effort": "inherit"}
+  },
+  "roles": {
+    "executor": {"definition": "../roles/executor.md"},
+    "reviewer-a": {"definition": "../skills/adversarial-review/roles/reviewer-a.md"},
+    "reviewer-b": {"definition": "../skills/adversarial-review/roles/reviewer-b.md"},
+    "review-refuter": {}
+  }
+}
