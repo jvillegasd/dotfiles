@@ -257,13 +257,7 @@ class MetricsTest(unittest.TestCase):
     def test_cached_usage_variants_are_normalized(self):
         self.assertEqual(
             R.parse_usage(
-                [{"type": "turn.completed", "usage": {"input_tokens": 4, "output_tokens": 1, "cached_input_tokens": 2}}]
-            )["cached_input"],
-            2,
-        )
-        self.assertEqual(
-            R.parse_usage(
-                [{"type": "turn.completed", "usage": {"input_tokens": 4, "output_tokens": 1, "prompt_tokens_details": {"cached_tokens": 3}}}]
+                [{"type": "result", "usage": {"input_tokens": 4, "output_tokens": 1, "prompt_tokens_details": {"cached_tokens": 3}}}]
             )["cached_input"],
             3,
         )
@@ -302,14 +296,6 @@ class MetricsTest(unittest.TestCase):
                 },
             }
         ]
-        self.assertEqual(R.command_output_bytes(events), 3)
-
-    def test_codex_item_events_count_tool_calls_and_output(self):
-        events = [
-            {"type": "item.completed", "item": {"type": "command_execution", "aggregated_output": "abc"}},
-            {"type": "item.completed", "item": {"type": "agent_message", "text": "hi"}},
-        ]
-        self.assertEqual(R.count_tool_calls(events), 1)
         self.assertEqual(R.command_output_bytes(events), 3)
 
     def test_build_metrics_carries_every_field(self):

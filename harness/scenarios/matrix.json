@@ -171,7 +171,6 @@
       },
       "harness_inputs": [
         "harness/skills/workflow-checkpoint/SKILL.md",
-        "harness/skills/workflow-checkpoint/agents/openai.yaml",
         "harness/scenarios/probes/checkpoint_protocol.py",
         "harness/scenarios/runner.py"
       ]
@@ -220,7 +219,6 @@
       },
       "harness_inputs": [
         "harness/skills/workflow-checkpoint/SKILL.md",
-        "harness/skills/workflow-checkpoint/agents/openai.yaml",
         "harness/scenarios/probes/checkpoint_two_session.py",
         "harness/scenarios/probes/checkpoint_protocol.py",
         "harness/scenarios/runner.py"

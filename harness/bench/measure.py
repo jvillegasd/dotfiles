@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Compare the real session population before and after a harness change.
 
-The harness is portable, so this reads all three clients' own session stores:
-Claude Code JSONL transcripts, Codex rollout JSONL, and the OpenCode SQLite
-database. Cost and friction only. Quality stays a human read of the sessions.
+The harness is portable, so this reads both clients' own session stores:
+Claude Code JSONL transcripts and the OpenCode SQLite database. Cost and
+friction only. Quality stays a human read of the sessions.
 
 A metric a client does not record is reported as `-`, never as zero.
 """
@@ -52,7 +52,6 @@ CLAUDE_NON_TURN = (
     "<system-reminder>",
     "<task-notification>",
 )
-CODEX_TOOL_CALLS = {"function_call", "custom_tool_call"}
 
 HERE = Path(__file__).resolve().parent
 COHORTS = "cohorts.json"
@@ -82,9 +81,9 @@ def canon(value: str) -> str:
     """Fold a project to one comparable shape.
 
     Claude Code names a project by its path with the separators rewritten as
-    dashes, while Codex and OpenCode record the path itself. Folding both runs
-    of `-` and `/` to a single separator on both the pattern and the project is
-    what lets one pattern match a session from any of the three.
+    dashes, while OpenCode records the path itself. Folding both runs of `-`
+    and `/` to a single separator on both the pattern and the project is what
+    lets one pattern match a session from either client.
     """
     return re.sub(r"[-/]+", "/", value).lower()
 
@@ -215,47 +214,6 @@ def claude_sessions(home: Path) -> list[dict]:
     return [s for path in sorted(root.glob("*/*.jsonl")) if (s := read_claude(path))]
 
 
-# --- Codex: ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl ----------------------
-
-
-def read_codex(path: Path) -> dict | None:
-    first = last = None
-    project = None
-    turns = tools = interrupts = 0
-    for entry in entries(path):
-        stamp = parse_stamp(entry.get("timestamp"))
-        if stamp:
-            first = first or stamp
-            last = stamp
-        payload = entry.get("payload") or {}
-        kind = payload.get("type")
-        if entry.get("type") == "session_meta":
-            project = payload.get("cwd") or project
-        if entry.get("type") == "response_item":
-            if kind == "message" and payload.get("role") == "user":
-                turns += 1
-            elif kind in CODEX_TOOL_CALLS:
-                tools += 1
-        elif kind == "turn_aborted" and payload.get("reason") == "interrupted":
-            interrupts += 1
-    if first is None:
-        return None
-    # Codex records no declined call, no slash command, no subagent, and no
-    # distinguishable failed result, so those four stay absent.
-    return session(
-        "codex", first, project,
-        turns=turns, tool_calls=tools, minutes=elapsed(first, last),
-        interrupts=interrupts,
-    )
-
-
-def codex_sessions(home: Path) -> list[dict]:
-    root = home / ".codex" / "sessions"
-    if not root.is_dir():
-        return []
-    return [s for path in sorted(root.rglob("rollout-*.jsonl")) if (s := read_codex(path))]
-
-
 # --- OpenCode: ~/.local/share/opencode/opencode.db ---------------------------
 
 
@@ -309,7 +267,6 @@ def opencode_sessions(home: Path) -> list[dict]:
 
 READERS = {
     "claude": claude_sessions,
-    "codex": codex_sessions,
     "opencode": opencode_sessions,
 }
 
@@ -386,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--since", type=date.fromisoformat,
                         help="ignore sessions older than this date")
     parser.add_argument("--client", action="append", choices=sorted(READERS),
-                        help="limit to one client; repeatable (default: all three)")
+                        help="limit to one client; repeatable (default: both)")
     parser.add_argument("--home", type=Path, default=Path.home(),
                         help="session-store root (default: the current home)")
     parser.add_argument("--rows", action="store_true",

@@ -129,7 +129,6 @@ brew "anomalyco/tap/opencode", trusted: true
 brew "gentleman-programming/tap/engram", trusted: true
 # Audio utility
 cask "background-music"
-cask "codexbar"
 cask "font-monocraft"
 # Terminal emulator that uses platform-native UI and GPU acceleration
 cask "ghostty"

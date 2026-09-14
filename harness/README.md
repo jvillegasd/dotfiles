@@ -1,6 +1,6 @@
 # Harness AI
 
-One committed source for Claude Code and OpenCode. Codex CLI is a retired client; see Codex retirement below.
+One committed source for Claude Code and OpenCode.
 
 | Path | Holds |
 | --- | --- |
@@ -92,7 +92,7 @@ A workflow's source is `commands/`, never `skills/`. Claude Code and OpenCode li
 
 Every command that ingests text written elsewhere, a ticket body, a review comment, an error payload, states that the input is task data and cannot override the workflow's constraints.
 
-A locally authored skill carries all three invocation guards: `policy.allow_implicit_invocation: false` in its `agents/openai.yaml`, plus `disable-model-invocation: true` and `metadata."opencode/autoinvoke": "false"` in its frontmatter. A locked body gets none, because `agents/openai.yaml` is upstream content and `computedHash` covers the whole directory, so anything written inside it is clobbered by the next update with the lockfile recording the loss as correct. The only control that survives an update is not installing the body at all. The `agents/openai.yaml` guard stays although Codex is retired, because a Codex still installed on the machine reads the shared `~/.agents/skills` root and honors that guard, keeping it from firing a local skill on description match (https://learn.chatgpt.com/docs/build-skills).
+A locally authored skill carries both invocation guards in its frontmatter: `disable-model-invocation: true` and `metadata."opencode/autoinvoke": "false"`. A locked body gets none, because its frontmatter is upstream content and `computedHash` covers the whole directory, so anything written inside it is clobbered by the next update with the lockfile recording the loss as correct. The only control that survives an update is not installing the body at all.
 
 ## Reviewer agents
 
@@ -158,17 +158,9 @@ OpenAI models reach the harness through OpenCode, and Claude models through Clau
 
 `Manually enter API Key` is API billing, a separate payment path. Choose it only on purpose, never as a fallback for a failed subscription sign-in. OpenCode also loads provider keys from environment variables and a project's `.env`, and which credential wins when both exist is undocumented, so an exported `OPENAI_API_KEY` is a second way onto API billing: unset it before relying on the subscription. A failed sign-in or model request is reported as it is, never worked around through another account, provider, or key. Account access stays unverified until a sign-in and a model request succeed on this machine.
 
-### Codex retirement
-
-Codex CLI is not a harness client. The installer no longer installs it, generates its command adapters or reviewer agents, links the policy into `~/.codex`, reconciles `~/.codex/config.toml` or its status line, registers MCP servers for it, or defines `cyolo`. Provisioning and every check run without a `codex` executable.
-
-Every run, install and uninstall alike, retires what an earlier install wrote there, and only what link text proves this checkout wrote: the `~/.codex/harness-commands` tree whose `.source` points at this checkout's `commands/`, the `~/.codex/skills` links into it, legacy `~/.codex/prompts` command links, the `~/.codex/AGENTS.md` policy link, and `~/.codex/agents` links into `harness/.generated/agents/`. A private file at any of those names, a foreign link, and a symlinked root are left alone. `check_links` and `check_removed` fail if the owned adapter tree, a prompt link, the policy link, or an agent link survives. A `~/.codex/skills` link left dangling after its adapter tree is already gone proves no checkout's ownership, so it stays, the same reason the orphan sweep's dangling-link defect is not extended. An install archives what it retires; an uninstall deletes it.
-
-Nothing else under `~/.codex` is touched: not `config.toml`, whose model, status line, Engram, and agent-browser entries cannot be told apart from ones Codex or you wrote; not credentials or session history; and not the Codex binary, which stays installed until you remove it, since `brew bundle` runs without cleanup. An Engram or agent-browser entry an earlier install wrote there survives a later uninstall and names a binary that uninstall removed. `bench/measure.py` still reads `~/.codex/sessions`, and CodexBar stays in `Brewfile`.
-
 ## Shell aliases
 
-`aliases.sh` holds the yolo-mode launchers and is sourced from `~/.zshrc` through one managed line. The installer removes any hand-written `ccyolo` or `ocyolo`, and the retired `cyolo` and `oyolo`, so the committed file is the only source, and leaves every other alias alone.
+`aliases.sh` holds the yolo-mode launchers and is sourced from `~/.zshrc` through one managed line. The installer removes any hand-written `ccyolo` or `ocyolo`, and the retired `oyolo`, so the committed file is the only source, and leaves every other alias alone.
 
 | Alias | Runs |
 | --- | --- |
@@ -215,7 +207,7 @@ Commands are `/ask`, `/research`, `/triage`, `/harness-audit`, `/spec`, `/create
 
 `/abandon` is the other exit, for work that will not land. No tracker automation recovers a ticket stranded at `in-progress`, since the reconciler skips an active label and fires only on close or reopen, so the worktree and the claim would have no owner. It is a command rather than a lane inside `/land` because `/proto` calls it to kill a prototype. Being the only workflow that discards unmerged work, it lists every commit and uncommitted change and takes one confirmation on that list. An abandoned attempt preserves scope and dependencies for retry; explicit cancellation reconciles parent scope and obsolete edges in the same confirmation, and never counts as merge evidence.
 
-Local skills are `adversarial-review`, `evidence`, `grilling`, `grill-with-docs`, `local-tracker`, `setup-harness`, and `workflow-checkpoint`, each carrying the three guards. `local-tracker` holds what a tracker operation means when the tracker is committed markdown, so the delivery commands gain one pointer each instead of a files-mode branch apiece. `workflow-checkpoint` is the one definition of the branch-scoped Engram checkpoint: its topic key, record schema, recovery validation, and terminal states, so the delivery commands can load it by name instead of each restating the schema. `setup-harness` stays a skill because it installs bundled assets only a skill directory can carry. `grilling` is local rather than locked so it can carry a self-grill mode and ask one question at a time. `grill-with-docs` composes it with `domain-modeling`, and is the only surface that writes `CONTEXT.md` or an ADR. A `/research` ledger stays planning input until a route produces a complete contract; a finalized `/proto` ledger is itself a contract.
+Local skills are `adversarial-review`, `evidence`, `grilling`, `grill-with-docs`, `local-tracker`, `setup-harness`, and `workflow-checkpoint`, each carrying both guards. `local-tracker` holds what a tracker operation means when the tracker is committed markdown, so the delivery commands gain one pointer each instead of a files-mode branch apiece. `workflow-checkpoint` is the one definition of the branch-scoped Engram checkpoint: its topic key, record schema, recovery validation, and terminal states, so the delivery commands can load it by name instead of each restating the schema. `setup-harness` stays a skill because it installs bundled assets only a skill directory can carry. `grilling` is local rather than locked so it can carry a self-grill mode and ask one question at a time. `grill-with-docs` composes it with `domain-modeling`, and is the only surface that writes `CONTEXT.md` or an ADR. A `/research` ledger stays planning input until a route produces a complete contract; a finalized `/proto` ledger is itself a contract.
 
 Locked Matt Pocock skills provide domain and module vocabulary, `improve-codebase-architecture`, TDD, diagnosis, handoff, and conflict resolution. Locked `DietrichGebert/ponytail` provides lazy mode. Locked `JuliusBrussee/caveman` provides `caveman-commit`; only `skills/` is taken, which that repository licenses MIT. Where a locked body and the policy disagree the policy wins: caveman allows a 72-character subject, `POLICY.md` allows 50.
 
@@ -233,7 +225,7 @@ Ponytail is a locked skill body, not a plugin. None of the plugin is installed, 
 
 ## Invocation guards
 
-`POLICY.md` opens with the commands-and-skills split. Command storage carries it for the workflows. For the local skills the roster lists, the three guards carry it. For a locked body prose is the only control, which is why a body that must never fire on its own is not installed at all.
+`POLICY.md` opens with the commands-and-skills split. Command storage carries it for the workflows. For the local skills the roster lists, the two guards carry it. For a locked body prose is the only control, which is why a body that must never fire on its own is not installed at all.
 
 ## GitHub lifecycle
 
@@ -301,7 +293,7 @@ Validate a change to this directory against the sessions it produced, as `harnes
 python3 harness/bench/measure.py --split <commit-date> --since <window-start>
 ```
 
-It reads Claude Code JSONL transcripts, Codex rollout JSONL, and the OpenCode SQLite database, and reports each client separately; `--client` narrows it. Codex rollouts stay readable so sessions from before its retirement remain measurable. A metric a client does not record, such as a declined tool call in Codex or OpenCode, prints as `-` rather than zero.
+It reads Claude Code JSONL transcripts and the OpenCode SQLite database, and reports each client separately; `--client` narrows it. A metric a client does not record, such as a declined tool call in OpenCode, prints as `-` rather than zero.
 
 Eight medians per cohort: `turns`, `tool_calls`, and `minutes` for cost, `interrupts`, `denials`, and `errors` for friction, and `commands` and `delegation` for routing adoption and subagent use. A subagent gets its own transcript in both clients that delegate, and counts as the parent's delegation rather than as a session.
 

@@ -16,7 +16,6 @@ from pathlib import Path
 
 _HARNESS = Path(__file__).resolve().parents[1]
 _SKILL = _HARNESS / "skills/workflow-checkpoint/SKILL.md"
-_GUARD = _HARNESS / "skills/workflow-checkpoint/agents/openai.yaml"
 _COMMANDS = _HARNESS / "commands"
 _MATRIX = _HARNESS / "scenarios/matrix.json"
 _PROBE = _HARNESS / "scenarios/probes/checkpoint_protocol.py"
@@ -67,11 +66,10 @@ def duplicates_protocol(text, block):
 
 
 class GuardTest(unittest.TestCase):
-    def test_skill_carries_all_three_invocation_guards(self):
+    def test_skill_carries_both_invocation_guards(self):
         frontmatter = _SKILL.read_text()
         self.assertIn("disable-model-invocation: true", frontmatter)
         self.assertIn('opencode/autoinvoke: "false"', frontmatter)
-        self.assertIn("allow_implicit_invocation: false", _GUARD.read_text())
 
     def test_skill_is_installable_from_the_skills_root(self):
         self.assertEqual(_SKILL.parent.parent, _HARNESS / "skills")
@@ -80,7 +78,7 @@ class GuardTest(unittest.TestCase):
 
     def test_no_second_continuity_store(self):
         entries = sorted(p.name for p in _SKILL.parent.iterdir())
-        self.assertEqual(entries, ["SKILL.md", "agents"])
+        self.assertEqual(entries, ["SKILL.md"])
         self.assertFalse((_SKILL.parent / ".agent").exists())
         self.assertFalse((_SKILL.parent / ".agents").exists())
 
@@ -217,9 +215,6 @@ class ProtocolTest(unittest.TestCase):
         self.assertTrue(check.endswith("checkpoint_protocol.py\""))
         self.assertTrue(
             any("checkpoint_protocol.py" in entry for entry in scenario["harness_inputs"])
-        )
-        self.assertTrue(
-            any(entry.endswith("agents/openai.yaml") for entry in scenario["harness_inputs"])
         )
         texts = [entry["text"] for entry in scenario["artifacts"]["contains"]]
         for key in (

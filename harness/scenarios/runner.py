@@ -35,14 +35,6 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-CODEX_TOOL_ITEMS = (
-    "command_execution",
-    "function_call",
-    "mcp_tool_call",
-    "file_change",
-    "local_shell_call",
-)
-
 REQUIRED_EVIDENCE = (
     "provenance.json",
     "prompts.txt",
@@ -97,7 +89,6 @@ def _usage_fields(usage: dict) -> dict:
     for candidate in (
         cached,
         usage.get("cache_read_input_tokens"),
-        usage.get("cached_input_tokens"),
         details.get("cached_tokens") if isinstance(details, dict) else None,
         prompt_details.get("cached_tokens") if isinstance(prompt_details, dict) else None,
     ):
@@ -114,8 +105,8 @@ def _usage_fields(usage: dict) -> dict:
 def parse_usage(events: list) -> dict:
     """Normalize token usage, keeping an absent measurement unknown.
 
-    A summary event (`result` or `turn.completed`) carries the run totals and
-    wins; otherwise per-message usages are summed. A field nobody measured
+    A summary `result` event carries the run totals and wins; otherwise
+    per-message usages are summed. A field nobody measured
     stays `None`, never `0`, because an absent measurement and a measured zero
     are different claims.
     """
@@ -129,7 +120,7 @@ def parse_usage(events: list) -> dict:
         if not isinstance(usage, dict):
             continue
         values = _usage_fields(usage)
-        if event.get("type") in ("result", "turn.completed"):
+        if event.get("type") == "result":
             return values
         for key, value in values.items():
             if value is not None:
@@ -164,13 +155,6 @@ def count_tool_calls(events: list) -> int:
                 for part in content
                 if isinstance(part, dict) and part.get("type") == "tool_use"
             )
-        item = event.get("item")
-        if (
-            event.get("type") == "item.completed"
-            and isinstance(item, dict)
-            and item.get("type") in CODEX_TOOL_ITEMS
-        ):
-            count += 1
     return count
 
 
@@ -188,9 +172,8 @@ def _content_bytes(content: object) -> int:
 def command_output_bytes(events: list) -> int:
     """Bytes the run's tools returned across the recorded client shapes.
 
-    A recorded or offline event carries one top-level `tool_result`; a live
-    Claude stream nests the same block under a `user` message's content; a
-    codex item carries `command_execution.aggregated_output`.
+    A recorded or offline event carries one top-level `tool_result`, and a live
+    Claude stream nests the same block under a `user` message's content.
     """
     total = 0
     for event in events:
@@ -204,13 +187,6 @@ def command_output_bytes(events: list) -> int:
             for part in content:
                 if isinstance(part, dict) and part.get("type") == "tool_result":
                     total += _content_bytes(part.get("content", part.get("text", "")))
-        item = event.get("item")
-        if (
-            event.get("type") == "item.completed"
-            and isinstance(item, dict)
-            and item.get("type") == "command_execution"
-        ):
-            total += _content_bytes(item.get("aggregated_output", ""))
     return total
 
 

@@ -52,12 +52,11 @@ Usage: harness/install.sh [--links-only] [--no-backup]
                  skill or a hand-edited config sitting at a managed path is
                  gone, not archived.
   --uninstall    Remove what this installer writes: every managed link, the
-                 ~/.zshrc alias block, the tracked keys in the Claude config,
-                 and the links an earlier install left in ~/.codex. It
-                 reverses the installer, it does not uninstall your tools,
-                 with one exception: Engram, which a full install installs
-                 and registers, is removed here too, formula included. Your
-                 ~/.engram memory database is kept.
+                 ~/.zshrc alias block, and the tracked keys in the Claude
+                 config. It reverses the installer, it does not uninstall
+                 your tools, with one exception: Engram, which a full install
+                 installs and registers, is removed here too, formula
+                 included. Your ~/.engram memory database is kept.
                  The other packages, ~/.dotfiles-backups, this checkout, and
                  every untracked key in the Claude config are left alone.
                  Destructive and unrecoverable: what it removes is deleted,
@@ -118,11 +117,6 @@ COMMAND_ROOTS=(
     "$HOME/.claude/commands"
     "$CONFIG_HOME/opencode/command"
 )
-
-# Codex is a retired client. These are the paths an earlier install wrote for it, kept so every run retires what link text proves this checkout wrote there, and nothing else.
-CODEX_ADAPTERS="$HOME/.codex/harness-commands"
-CODEX_SKILLS="$HOME/.codex/skills"
-CODEX_AGENTS="$HOME/.codex/agents"
 
 # Reviewer agents are rendered into this checkout's own untracked directory and linked into each client, so a link's text is what proves this checkout wrote it. Pairs are client|root, because bash 3.2 has no associative arrays.
 AGENT_OUT="$HARNESS_DIR/.generated/agents"
@@ -412,9 +406,9 @@ import pathlib, re, sys
 rc, source = pathlib.Path(sys.argv[1]), sys.argv[2]
 remove = sys.argv[3] == "remove"
 marker = "# portable-harness aliases"
-# oyolo and cyolo are retired, not current: a name stays here after it is
-# dropped so a hand-written copy is still stripped from the shell that has one.
-managed = {"ccyolo", "cyolo", "oyolo", "ocyolo"}
+# oyolo is retired, not current: a name stays here after it is dropped so a
+# hand-written copy is still stripped from the shell that has one.
+managed = {"ccyolo", "oyolo", "ocyolo"}
 current = rc.read_text()
 kept, dropped = [], False
 for line in current.splitlines():
@@ -574,64 +568,6 @@ PY
     fi
 }
 
-# Only exact links from this checkout are retired. Private prompts, dangling foreign links, and symlinked prompt roots are not ours to sweep.
-retire_codex_prompts() {
-    local root="$HOME/.codex/prompts" entry
-    [[ -d "$root" && ! -L "$root" ]] || return 0
-    for entry in "$root"/*.md; do
-        unlink_managed "$HARNESS_DIR/commands/$(basename "$entry")" "$entry"
-    done
-}
-
-remove_codex_commands() {
-    local entry
-    retire_codex_prompts
-    [[ -d "$CODEX_ADAPTERS" && ! -L "$CODEX_ADAPTERS" &&
-       "$(readlink "$CODEX_ADAPTERS/.source")" == "$HARNESS_DIR/commands" ]] || return 0
-    # Do not unlink through a foreign directory symlink during uninstall.
-    if [[ -d "$CODEX_SKILLS" && ! -L "$CODEX_SKILLS" ]]; then
-        for entry in "$CODEX_SKILLS"/*; do
-            unlink_managed "$CODEX_ADAPTERS/$(basename "$entry")" "$entry"
-        done
-    fi
-    backup_existing "$CODEX_ADAPTERS"
-}
-
-# Codex is no longer a harness client, so every run, install and uninstall alike, retires what an earlier install wrote for it: the command adapters and legacy prompt links, the policy link, and the reviewer agent links. Ownership is link text, as everywhere else, so a private file, a foreign link, and a symlinked root are left alone. ~/.codex/config.toml is never edited, because its keys cannot be told apart from ones Codex or the user wrote.
-retire_codex() {
-    local entry
-    remove_codex_commands
-    unlink_managed "$HARNESS_DIR/POLICY.md" "$HOME/.codex/AGENTS.md"
-    [[ -d "$CODEX_AGENTS" && ! -L "$CODEX_AGENTS" ]] || return 0
-    for entry in "$CODEX_AGENTS"/*; do
-        if [[ -L "$entry" && "$(readlink "$entry")" == "$AGENT_OUT/"* ]]; then
-            backup_existing "$entry"
-        fi
-    done
-}
-
-# Scoped to what retire_codex may touch, so a symlinked root it refused to write through cannot fail every later run.
-check_codex_retired() {
-    local entry
-    if [[ -d "$CODEX_ADAPTERS" && ! -L "$CODEX_ADAPTERS" &&
-        "$(readlink "$CODEX_ADAPTERS/.source")" == "$HARNESS_DIR/commands" ]]; then
-        die "Codex command adapters survived their retirement: $CODEX_ADAPTERS"
-    fi
-    [[ "$(readlink "$HOME/.codex/AGENTS.md")" != "$HARNESS_DIR/POLICY.md" ]] ||
-        die "The Codex policy link survived its retirement: $HOME/.codex/AGENTS.md"
-    if [[ -d "$HOME/.codex/prompts" && ! -L "$HOME/.codex/prompts" ]]; then
-        for entry in "$HOME/.codex/prompts"/*.md; do
-            [[ "$(readlink "$entry")" != "$HARNESS_DIR/commands/$(basename "$entry")" ]] ||
-                die "A Codex prompt link survived its retirement: $entry"
-        done
-    fi
-    [[ -d "$CODEX_AGENTS" && ! -L "$CODEX_AGENTS" ]] || return 0
-    for entry in "$CODEX_AGENTS"/*; do
-        [[ ! -L "$entry" || "$(readlink "$entry")" != "$AGENT_OUT/"* ]] ||
-            die "A Codex reviewer agent link survived its retirement: $entry"
-    done
-}
-
 # A link is this checkout's only when its text points into AGENT_OUT, the exact-text ownership unlink_managed uses, so a private agent, a foreign link, and another checkout's dangling link are never touched. An install removes the links whose definition was retired; an uninstall removes all of them.
 sweep_agent_links() {
     local pair root entry target
@@ -723,7 +659,6 @@ install_links() {
         ensure_managed_dir "$root"
     done
     retire_shadowed_skills
-    retire_codex
 
     while IFS= read -r skill; do
         desired+="$HARNESS_DIR/skills/$skill|"
@@ -784,7 +719,6 @@ assert_plugin_count() {
 # that never confirmed a link landed.
 check_links() {
     local command skill root
-    check_codex_retired
     for skill in "$HARNESS_DIR"/skills/*; do
         local name; name="$(basename "$skill")"
         [[ -f "$skill/SKILL.md" ]] || die "Missing SKILL.md: $skill"
@@ -904,8 +838,6 @@ Status line: harness/statusline/claude.sh, which Claude Code runs on every draw.
 OpenCode exposes no status line surface, so it gets none.
 
 Commands use /name in Claude Code and OpenCode.
-Codex is not a harness client: this run retired only the links an earlier
-install wrote under ~/.codex, and left config.toml and the rest of it alone.
 Yolo aliases (ccyolo, ocyolo) are sourced from harness/aliases.sh; open a
 new shell or run: source ~/.zshrc
 
@@ -1192,7 +1124,6 @@ PY
 # them. They go through unlink_managed, which removes a path only when it is
 # still a symlink to the source the installer gave it.
 uninstall_links() {
-    retire_codex
     reconcile_orphans ""
     unlink_managed "$HARNESS_DIR/POLICY.md" "$HOME/.claude/CLAUDE.md"
     unlink_managed "$HARNESS_DIR/POLICY.md" "$CONFIG_HOME/opencode/AGENTS.md"
@@ -1207,7 +1138,6 @@ uninstall_links() {
 check_removed() {
     local root entry target
     check_agents_removed
-    check_codex_retired
     for root in "${SKILL_ROOTS[@]}" "${COMMAND_ROOTS[@]}"; do
         [[ -d "$root" ]] || continue
         for entry in "$root"/*; do
@@ -1225,7 +1155,7 @@ check_removed() {
     done
     if [[ -f "$HOME/.zshrc" ]]; then
         ! grep -q '# portable-harness aliases' "$HOME/.zshrc" || die "Harness aliases survived the uninstall in $HOME/.zshrc."
-        ! grep -qE '^\s*alias (ccyolo|cyolo|oyolo|ocyolo)=' "$HOME/.zshrc" || die "A yolo alias survived the uninstall in $HOME/.zshrc."
+        ! grep -qE '^\s*alias (ccyolo|oyolo|ocyolo)=' "$HOME/.zshrc" || die "A yolo alias survived the uninstall in $HOME/.zshrc."
     fi
     # Every tracked key is gone from the live settings, and the untracked keys
     # beside them are not. Asserted by re-running the remover, where only exit
@@ -1361,10 +1291,10 @@ $(printf '\033[1;32m✓ Harness AI removed.\033[0m')
 
 Gone: every managed skill and command link, both POLICY.md links, the Claude
 status line link, the reviewer agent links and their generated definitions,
-the links an earlier install wrote under ~/.codex, the ~/.zshrc alias block,
-the tracked keys in ~/.claude/settings.json, Engram: its plugin, marketplace,
-and MCP registration in both clients, plus the formula, and agent-browser: its
-MCP registration in both clients, plus the formula.
+the ~/.zshrc alias block, the tracked keys in ~/.claude/settings.json, Engram:
+its plugin, marketplace, and MCP registration in both clients, plus the
+formula, and agent-browser: its MCP registration in both clients, plus the
+formula.
 
 Kept: ~/.engram, which is your memory database rather than anything this
 installer wrote. Reinstalling finds it where it was. To take it with you:
@@ -1382,10 +1312,8 @@ The agent-browser formula could not be removed and is still installed; the
 warning above says so. Its configuration is gone either way.")
 
 Also left alone: the other packages (claude, opencode, worktrunk, gh, uv,
-node), every untracked key in the Claude config, ~/.dotfiles-backups, this
-checkout, and everything else under ~/.codex, config.toml included. Codex is
-not a harness client, so an Engram or agent-browser entry an earlier install
-wrote there stays and names a binary this uninstall removed.
+node), every untracked key in the Claude config, ~/.dotfiles-backups, and this
+checkout.
 
 Nothing was archived: an uninstall deletes what it removes. Everything above
 comes back from this checkout.

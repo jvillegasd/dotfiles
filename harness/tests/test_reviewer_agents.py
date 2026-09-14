@@ -145,8 +145,8 @@ class Generation(unittest.TestCase):
         self.assertIn("changed: claude/reviewer-a.md", result.stdout)
 
     def test_generation_removes_stale_outputs(self):
-        (self.out / "codex").mkdir(parents=True)
-        stale = self.out / "codex/retired.toml"
+        (self.out / "gone").mkdir(parents=True)
+        stale = self.out / "gone/retired.md"
         stale.write_text("stale\n")
         self.generate()
         self.assertFalse(stale.exists())
