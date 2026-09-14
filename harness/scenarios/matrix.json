@@ -435,9 +435,9 @@
     },
     {
       "id": "review-triage",
-      "title": "Only bug and risk findings block, and each reviewer receives exactly its permitted inputs",
+      "title": "Only bug and risk findings block, a contested one is rejected only on a refuted verdict, and each reviewer and the refuter receive exactly their permitted inputs",
       "command": "adversarial-review",
-      "prompt": "Apply the adversarial-review triage and input blocks: nits and questions never block or start a round, a fixed blocking finding starts one delta round, and reviewers receive only their listed inputs and absolute standards paths.",
+      "prompt": "Apply the adversarial-review triage and input blocks: nits and questions never block or start a round, a fixed blocking finding starts one delta round, a contested blocking finding is fixed when corroborated, rejected when refuted, and escalated on any other result, and reviewers and the refuter receive only their listed inputs.",
       "mode": "offline",
       "check": "python3 \"$HARNESS_ROOT/harness/scenarios/probes/review_triage.py\"",
       "artifacts": {
@@ -530,6 +530,62 @@
           {
             "path": "artifacts/review.json",
             "text": "\"roles_declare_loaded_prefix\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"corroborated_finding_is_fixed\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"refuted_finding_is_rejected_with_evidence\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"inconclusive_result_escalates\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"missing_result_escalates\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"malformed_result_escalates\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"unavailable_refuter_escalates\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"unreadable_relaunch_is_the_same_invocation\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"misplaced_unreadable_refused\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"human_decision_closes_escalation\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"rejection_without_refutation_refused\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"one_refuter_invocation_per_finding\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"refuter_consumes_no_round\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"refuter_boundary\": true"
+          },
+          {
+            "path": "artifacts/review.json",
+            "text": "\"refuter_declares_verdicts\": true"
           }
         ]
       },
@@ -537,6 +593,7 @@
         "harness/skills/adversarial-review/SKILL.md",
         "harness/skills/adversarial-review/roles/reviewer-a.md",
         "harness/skills/adversarial-review/roles/reviewer-b.md",
+        "harness/skills/adversarial-review/roles/review-refuter.md",
         "harness/scenarios/probes/review_triage.py",
         "harness/scenarios/runner.py"
       ]

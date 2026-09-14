@@ -25,12 +25,15 @@ ACCESS = "Read and search only. Read and search the repository to follow callers
 
 OUTPUTS = {
     "claude/executor.md",
+    "claude/review-refuter.md",
     "claude/reviewer-a.md",
     "claude/reviewer-b.md",
     "opencode/executor.md",
+    "opencode/review-refuter.md",
     "opencode/reviewer-a.md",
     "opencode/reviewer-b.md",
 }
+READ_SEARCH = ("reviewer-a", "reviewer-b", "review-refuter")
 
 
 def run(*args):
@@ -125,11 +128,11 @@ class Generation(unittest.TestCase):
 
     def test_each_client_gets_its_supported_controls_and_the_whole_role(self):
         self.generate()
-        for role in ("a", "b"):
-            body = (_ROLES / f"reviewer-{role}.md").read_text().split("---\n", 2)[2].strip()
-            claude = (self.out / f"claude/reviewer-{role}.md").read_text()
-            opencode = (self.out / f"opencode/reviewer-{role}.md").read_text()
-            self.assertIn(f"\nname: reviewer-{role}\n", claude)
+        for role in READ_SEARCH:
+            body = (_ROLES / f"{role}.md").read_text().split("---\n", 2)[2].strip()
+            claude = (self.out / f"claude/{role}.md").read_text()
+            opencode = (self.out / f"opencode/{role}.md").read_text()
+            self.assertIn(f"\nname: {role}\n", claude)
             self.assertIn("\ntools: Read, Grep, Glob\n", claude)
             self.assertIn("\nmode: subagent\npermission:\n  \"*\": deny\n", opencode)
             self.assertIn('\n    "*.env": deny\n', opencode)
@@ -158,11 +161,11 @@ class Generation(unittest.TestCase):
         for name, access, status in (("review-refuter", "implement", 4), ("review-refuter", "read-search", 0), ("executor", "read-search", 4)):
             with self.subTest(name=name, access=access):
                 directory = self.tmp / f"{name}-{access}"
-                refuter = directory / "roles/review-refuter.md"
-                config = config_copy(directory, lambda data: data["roles"]["review-refuter"].update(definition=str(refuter)))
-                text = (directory / "roles/reviewer-b.md").read_text().replace("name: reviewer-b", "name: review-refuter")
-                refuter.write_text(text.replace("access: read-search", f"access: {access}") if name == "review-refuter" else text)
-                if name == "executor":
+                config = config_copy(directory)
+                if name == "review-refuter":
+                    role = directory / "roles/review-refuter.md"
+                    role.write_text(role.read_text().replace("access: read-search", f"access: {access}"))
+                else:
                     role = directory / "roles/executor.md"
                     role.write_text(role.read_text().replace("access: implement", "access: read-search"))
                 result = run(config, directory / "out")
@@ -178,6 +181,7 @@ class Generation(unittest.TestCase):
         self.assertTrue(any(line.startswith("gap: claude: the executor keeps Bash") for line in claude_gaps), report)
         self.assertTrue(any(line.startswith("gap: claude: a model parameter passed at launch") for line in claude_gaps), report)
         self.assertTrue(any(line.startswith("unverified: ") and "ccyolo" in line for line in report), report)
+        self.assertTrue(any(line.startswith("gap: opencode: a diff file outside the project") and line.endswith("so reviewers and the refuter there take the inline fallback") for line in report), report)
 
     def test_check_passes_on_fresh_output(self):
         self.generate()
@@ -191,6 +195,8 @@ class Generation(unittest.TestCase):
             ("opencode/reviewer-a.md", '  "*": deny', '  "*": allow'),
             ("opencode/reviewer-b.md", "  list: allow\n", "  list: allow\n  bash: allow\n"),
             ("opencode/reviewer-b.md", "mode: subagent\n", "mode: subagent\ntools:\n  bash: true\n"),
+            ("claude/review-refuter.md", "tools: Read, Grep, Glob\n", "tools: Read, Grep, Glob, Edit\n"),
+            ("opencode/review-refuter.md", "  grep: allow\n", "  grep: allow\n  task: allow\n"),
             ("claude/executor.md", "disallowedTools: Agent\n", ""),
             ("opencode/executor.md", "  task: deny\n", "  task: allow\n"),
         ]
@@ -317,6 +323,7 @@ class Assignments(unittest.TestCase):
             data["clients"] = {"claude": {"model": "opus", "effort": "medium"}, "opencode": {"model": "openai/gpt-5.5", "effort": "low"}}
             data["roles"]["reviewer-b"]["claude"] = {"model": "sonnet"}
             data["roles"]["executor"]["opencode"] = {"effort": "high"}
+            data["roles"]["review-refuter"]["claude"] = {"model": "haiku", "effort": "low"}
 
         config = self.config(edit)
         report = self.generate(config)
@@ -327,6 +334,9 @@ class Assignments(unittest.TestCase):
         self.assertNotIn('  "*": deny', self.head("opencode/executor.md"))
         self.assertIn("assignment: claude reviewer-b model=sonnet (role) effort=medium (client default)", report)
         self.assertIn("assignment: opencode executor model=openai/gpt-5.5 (client default) effort=high (role)", report)
+        self.assertEqual([line for line in self.head("claude/review-refuter.md") if line.startswith(("model:", "effort:"))], ["model: haiku", "effort: low"])
+        self.assertIn("tools: Read, Grep, Glob", self.head("claude/review-refuter.md"))
+        self.assertIn("assignment: claude review-refuter model=haiku (role) effort=low (role)", report)
         self.assertEqual(run("--check", config, self.out).returncode, 0)
 
     def test_identical_reviewer_assignments_are_valid(self):
@@ -387,10 +397,15 @@ class Assignments(unittest.TestCase):
         self.assertEqual(run("--check", config, self.out).returncode, 0)
 
     def test_assigned_role_without_definition_generates_nothing(self):
-        report = self.generate()
-        self.assertFalse(any("review-refuter" in relative for relative in tree(self.out)))
-        self.assertTrue(any(line.startswith("pending: review-refuter") for line in report), report)
-        self.assertIn("assignment: claude review-refuter model=inherit (client default) effort=inherit (client default)", report)
+        report = self.generate(self.config(lambda data: data["roles"].update({"future-role": {}})))
+        self.assertEqual(set(tree(self.out)), OUTPUTS)
+        self.assertTrue(any(line.startswith("pending: future-role") for line in report), report)
+        self.assertIn("assignment: claude future-role model=inherit (client default) effort=inherit (client default)", report)
+
+    def test_the_refuter_is_required(self):
+        result = run(self.config(lambda data: data["roles"]["review-refuter"].pop("definition")), self.out)
+        self.assertEqual(result.returncode, 4, result.stdout)
+        self.assertIn("review-refuter must be assigned with a definition", result.stderr)
 
     def test_model_availability_is_reported_unverified(self):
         self.assertFalse(any("to this account" in line for line in self.generate()))
@@ -529,12 +544,13 @@ class Protocol(unittest.TestCase):
     def test_pinned_lines(self):
         unreadable = "When you cannot read the whole diff file, return exactly `unreadable: <path>` and nothing else, so the parent can supply the same diff inline. Never review part of a diff."
         loaded = "Begin with one line naming every standards file you actually opened with a tool during this review, as `loaded: <absolute path>, <absolute path>`, or `loaded: none`. Name a standard whose full text the parent pasted into your prompt as `inline:<absolute path>`. A path you were given but did not open, or a standard you recall without opening, does not belong on it."
-        defer = "Triage every finding by `adversarial-review`'s canonical triage block: only `bug:` and `risk:` block, a `nit:` is fixed only when the fix is smaller than the argument and is otherwise dropped, a `q:` is answered and blocks only once evidence reclassifies it, and a second adversarial round runs only after a fixed blocking finding, over the repair delta alone."
+        defer = "Triage every finding by `adversarial-review`'s canonical triage block: only `bug:` and `risk:` block, a `nit:` is fixed only when the fix is smaller than the argument and is otherwise dropped, a `q:` is answered and blocks only once evidence reclassifies it, a contested `bug:` or `risk:` is rejected only on the refuter's `refuted` verdict or a human decision on its escalation, and a second adversarial round runs only after a fixed blocking finding, over the repair delta alone."
         pins = {
             _POLICY: [
                 "Use ephemeral specialist roles. Do not create persistent client-specific personas when a command, a skill, or an isolated review context is enough. Role definitions generated from one canonical source, such as the reviewer agents, are shared instructions and client capability configuration, not personas.",
                 "When a workflow chooses to delegate implementation, launch the named `executor` agent, whose model and effort come from the harness's central role assignments. Delegation stays optional and changes nothing else: the delegating workflow keeps the approved scope, the commits, the review passes, the conformance check, and every gate. When the named agent is unavailable, say so and do the work inline rather than hand it to an agent without that assignment.",
                 "Launch a named role agent without a model or effort override, so it runs on its central assignment.",
+                "Before rejecting a contested `bug:` or `risk:`, every consumer launches `review-refuter` once with only that finding and the diff snapshot it was raised against: `corroborated` is fixed, `refuted` is rejected with the refuter's evidence recorded, and an inconclusive, missing, malformed, or unavailable result escalates with neither a dismissal nor a speculative fix until a human decision closes it, recorded where a rejection would be. The refuter adds no reviewer and no round.",
             ],
             _SKILL: [
                 "Launch each reviewer as its named agent, in parallel, each with a fresh context: `reviewer-a` and `reviewer-b` in Claude Code and OpenCode. The installer generates them from `roles/reviewer-a.md` and `roles/reviewer-b.md` beside this skill, which own each reviewer's standing instructions, lenses, and output format.",
@@ -543,15 +559,26 @@ class Protocol(unittest.TestCase):
                 "Give Reviewer B only the diff snapshot path and the exact absolute paths of its review standards: the loaded `ponytail` body and the project's own instruction file. No requirements, no rationale, no ticket.",
                 "Standards are paths, never requirements or rationale, so supplying them leaves each reviewer's information boundary where it was. Count a standards file as read only when the reviewer's `loaded:` line names it: supplying a path, or a reviewer recalling what a standard says, is not evidence that it was read.",
                 "The project's own instruction file is `AGENTS.md` at the repository root, or `CLAUDE.md` there when no `AGENTS.md` exists, and is left out when neither does. Where the client is known to refuse a standards path, such as OpenCode for a file outside the project, paste that file's text into the first launch instead of its path. When a supplied standards file is missing from a reviewer's `loaded:` line, relaunch that reviewer once with that file's text pasted in; the relaunch replaces that reviewer's output for the same round and never counts toward the cap. A reviewer names a pasted standard as `inline:<absolute path>`. If a standard is still unread, disclose it under the pull request's `## Checks`, or in the requirements ledger under `/proto`.",
+                "Before rejecting a contested `bug:` or `risk:`, launch the named `review-refuter` agent once for that finding, with a fresh context. The installer generates it from `roles/review-refuter.md` beside this skill, and it runs on its central assignment. When it is unavailable, the general-agent fallback above applies to it unchanged, with the same disclosure.",
+                "Give the refuter only the contested finding, verbatim, and the path of the diff snapshot that finding was raised against. Never the implementation rationale, the requirements, your reason for contesting it, or the conversation. A refuter that answers `unreadable: <path>` gets that snapshot inline under Diff delivery, and the relaunch completes the same invocation rather than adding one.",
                 "Snapshot the complete diff once per round into a readable temporary file outside the worktree, and give each reviewer that path. A reviewer that answers `unreadable: <path>` gets the same snapshot inline instead. Never truncate the diff: when neither the file nor inline text can carry the complete snapshot, stop and escalate per the escalation contract.",
             ],
             _ROLES / "reviewer-a.md": [unreadable, ACCESS, loaded],
             _ROLES / "reviewer-b.md": [unreadable, ACCESS, loaded],
-            _HARNESS / "commands/ship.md": [defer],
+            _ROLES / "review-refuter.md": [
+                unreadable,
+                ACCESS,
+                "Begin with exactly one verdict line: `verdict: corroborated`, `verdict: refuted`, or `verdict: inconclusive`.",
+                "`corroborated` and `refuted` need at least one evidence line, or the parent treats the result as malformed. `inconclusive` states what you checked and the one fact that would settle it. Never propose a fix, raise a new finding, or soften a verdict to hedge.",
+            ],
+            _HARNESS / "commands/ship.md": [
+                defer,
+                "- <bug or risk not fixed, at most 50 words>; refuted: <the refuter's path:Lline: evidence>, or human decision: <the decision that closed its escalation>.",
+            ],
             _HARNESS / "commands/feedback.md": [defer],
             _HARNESS / "commands/address-review.md": [defer],
             _HARNESS / "commands/proto.md": [
-                "Triage that pass by `adversarial-review`'s canonical triage block within this workflow's single-pass limit: fix, reject with the reason written into the requirements ledger, or escalate each blocking finding before presenting the slice, apply the nit and question rules unchanged, and never start a second round here.",
+                "Triage that pass by `adversarial-review`'s canonical triage block within this workflow's single-pass limit: fix, reject only on the refuter's `refuted` verdict or a human decision on its escalation, with that verdict and its evidence or that decision written into the requirements ledger, or escalate each blocking finding before presenting the slice, apply the nit and question rules unchanged, and never start a second round here.",
             ],
         }
         for path, expected in pins.items():

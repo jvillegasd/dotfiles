@@ -57,7 +57,7 @@ Inspect `git status --short` before creating anything. A worktree holding pre-ex
    - Run `adversarial-review` first: Reviewer A holds the requirements and the project's standards but not the implementation rationale, Reviewer B holds only the diff and its review standards, and the small-diff single reviewer follows Reviewer A's rule, so the diff has to defend itself.
    - Then run a spec-conformance pass yourself, holding the contract. It stays separate and authoritative: walk each acceptance criterion and each agreed test seam against the diff, and name anything the contract asked for that the code does not do, anything the code does that the contract did not ask for, and any documented repository standard the diff breaks. This pass is the second axis, not a re-run: adversarial review challenges the diff, and this implementer-held pass is the authoritative walk of every criterion and seam.
 
-   Triage every finding by `adversarial-review`'s canonical triage block: only `bug:` and `risk:` block, a `nit:` is fixed only when the fix is smaller than the argument and is otherwise dropped, a `q:` is answered and blocks only once evidence reclassifies it, and a second adversarial round runs only after a fixed blocking finding, over the repair delta alone.
+   Triage every finding by `adversarial-review`'s canonical triage block: only `bug:` and `risk:` block, a `nit:` is fixed only when the fix is smaller than the argument and is otherwise dropped, a `q:` is answered and blocks only once evidence reclassifies it, a contested `bug:` or `risk:` is rejected only on the refuter's `refuted` verdict or a human decision on its escalation, and a second adversarial round runs only after a fixed blocking finding, over the repair delta alone.
 
    Repair every conformance finding; the triage block's conformance rule decides whether that repair gets a delta round. Conformance rechecks the criteria and test seams the repair touched; it repeats the complete pass only when the contract or broad behavior changed.
 
@@ -87,7 +87,7 @@ Inspect `git status --short` before creating anything. A worktree holding pre-ex
    - <claim the evidence contradicted, at most 50 words>; <what changed as a result>.
 
    ## Rejected review findings
-   - <finding not fixed, at most 50 words>; <why>.
+   - <bug or risk not fixed, at most 50 words>; refuted: <the refuter's path:Lline: evidence>, or human decision: <the decision that closed its escalation>.
    ```
 
    The `Closes` line is prose above the opening rather than a section, and is written only when tracker-bound. `## Contract` is omitted only when a tracker-bound ticket-sourced contract leaves the contract in its ticket; every other source records it here so `/land` can reconstruct conformance. It transcribes the agreed behavior, acceptance criteria, and verification from the contract source and carries nothing else, so it is never where prose goes to escape the count. The last three sections are omitted when they have no entries.
@@ -99,7 +99,7 @@ Inspect `git status --short` before creating anything. A worktree holding pre-ex
    gh pr view --json body -q .body | awk '/^ *```/{f=!f} /^## /&&!f{c=/^## Contract$/} !c' | wc -w
    ````
 
-   Over the cap, condense entries; move nothing into or out of `## Contract`. Leave a human's own additions to the body alone even when they carry the count past 500: the cap governs what this workflow writes, never what it finds.
+   Over the cap, condense entries, cutting a refuted entry's evidence to its decisive `path:Lline:` citation and a human decision to one clause, never dropping either; move nothing into or out of `## Contract`. Leave a human's own additions to the body alone even when they carry the count past 500: the cap governs what this workflow writes, never what it finds.
 
 5. Watch required remote checks. Repair owned failures, rerun local rungs, commit, push, and review again. Apply the escalation contract's do-not-escalate list before counting an attempt, and stop on any rabbit-hole trip. Where a repair changed what the pull request does, or a rung's result changed, bring its title, body, and `## Checks` back in line with the diff before moving on.
 

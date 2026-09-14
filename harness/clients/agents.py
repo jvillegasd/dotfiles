@@ -19,8 +19,8 @@ import re
 import sys
 from pathlib import Path
 
-# adversarial-review launches the reviewers and POLICY.md names the executor, so each must exist with exactly this access. Every other role is read-search: only the executor may implement.
-REQUIRED = {"executor": "implement", "reviewer-a": "read-search", "reviewer-b": "read-search"}
+# adversarial-review launches the reviewers and the refuter and POLICY.md names the executor, so each must exist with exactly this access. Every other role is read-search: only the executor may implement.
+REQUIRED = {"executor": "implement", "review-refuter": "read-search", "reviewer-a": "read-search", "reviewer-b": "read-search"}
 # Documented agent frontmatter values: https://code.claude.com/docs/en/sub-agents (model, effort) and https://opencode.ai/docs/agents/ (model, plus provider options such as OpenAI's reasoningEffort). OpenCode passes effort to the provider, so it is accepted only beside an openai/ model.
 SUPPORTED = {
     "claude": {"model": r"inherit|sonnet|opus|haiku|fable|claude-[a-z0-9.-]+", "effort": r"inherit|low|medium|high|xhigh|max"},
@@ -56,7 +56,7 @@ OPENCODE_CONTROLS = {
 
 # Known from each client's documentation. What no control covers is a gap; what a control should cover but only an installed client can prove is unverified.
 GAPS = (
-    "gap: opencode: a diff file outside the project needs external_directory, which the agent's * deny refuses, so reviewers there take the inline fallback",
+    "gap: opencode: a diff file outside the project needs external_directory, which the agent's * deny refuses, so reviewers and the refuter there take the inline fallback",
     "gap: opencode: a standards file outside the project, such as the installed ponytail body, needs the same external_directory, so reviewers there get it inline after their loaded: line omits it",
     "gap: claude: the executor keeps Bash, because a disallowedTools specifier removes the whole tool, so its commit, push, pull request, merge, and tracker limits are instructions only",
     "gap: claude: a model parameter passed at launch overrides an agent's model frontmatter, and an availableModels allowlist substitutes a blocked model with a warning, so the policy forbids the parameter and neither is enforced",

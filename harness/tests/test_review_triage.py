@@ -1,6 +1,6 @@
 """Regression checks for the canonical review triage and reviewer input assembly in adversarial-review.
 
-The skill carries one JSON triage block and one JSON input block, and the probe reads its rules from them rather than a parallel copy. Outcome checks exercise the probe over nit fixes, answered questions, evidence-based reclassification, fixed blocking findings, conformance repairs, delta-round triggers, each reviewer's information boundary, and loaded-standards evidence. Mutation checks edit a temporary copy of a block and assert the matching outcome flips. One prose check derives the skill's triage sentences from the block, so the block and the prose the agents follow cannot drift apart.
+The skill carries one JSON triage block and one JSON input block, and the probe reads its rules from them rather than a parallel copy. Outcome checks exercise the probe over nit fixes, answered questions, evidence-based reclassification, fixed blocking findings, conformance repairs, delta-round triggers, every refuter verdict for a contested finding, each reviewer's and the refuter's information boundary, and loaded-standards evidence. Mutation checks edit a temporary copy of a block and assert the matching outcome flips. One prose check derives the skill's triage sentences from the block, so the block and the prose the agents follow cannot drift apart.
 """
 
 import importlib.util
@@ -30,6 +30,20 @@ TRIAGE_OUTCOMES = (
     "conformance_repair_starts_delta_round",
     "late_conformance_repair_is_disclosed",
 )
+REFUTER_OUTCOMES = (
+    "corroborated_finding_is_fixed",
+    "refuted_finding_is_rejected_with_evidence",
+    "inconclusive_result_escalates",
+    "missing_result_escalates",
+    "malformed_result_escalates",
+    "unavailable_refuter_escalates",
+    "unreadable_relaunch_is_the_same_invocation",
+    "misplaced_unreadable_refused",
+    "human_decision_closes_escalation",
+    "rejection_without_refutation_refused",
+    "one_refuter_invocation_per_finding",
+    "refuter_consumes_no_round",
+)
 INPUT_OUTCOMES = (
     "reviewer_a_boundary",
     "reviewer_b_boundary",
@@ -42,13 +56,16 @@ INPUT_OUTCOMES = (
     "loaded_line_must_be_first",
     "missing_loaded_line_is_no_evidence",
     "roles_declare_loaded_prefix",
+    "refuter_boundary",
+    "refuter_declares_verdicts",
 )
+OUTCOMES = TRIAGE_OUTCOMES + REFUTER_OUTCOMES + INPUT_OUTCOMES
 
 
 class OutcomeTest(unittest.TestCase):
     def test_every_outcome_holds(self):
         result = T.run()
-        self.assertEqual(sorted(result), sorted(TRIAGE_OUTCOMES + INPUT_OUTCOMES))
+        self.assertEqual(sorted(result), sorted(OUTCOMES))
         for key, value in result.items():
             with self.subTest(key):
                 self.assertIs(value, True)
@@ -93,6 +110,19 @@ class MutationTest(unittest.TestCase):
             ("cap_holds_at_two_rounds", lambda d: d.update(max_rounds=3)),
             ("conformance_repair_starts_delta_round", lambda d: d.update(conformance_repair="not_reviewed")),
             ("late_conformance_repair_is_disclosed", lambda d: d.update(conformance_repair_after_cap="escalate")),
+            ("corroborated_finding_is_fixed", lambda d: d["refuter"]["verdicts"].update(corroborated="escalate")),
+            ("refuted_finding_is_rejected_with_evidence", lambda d: d["refuter"]["verdicts"].update(refuted="escalate")),
+            ("inconclusive_result_escalates", lambda d: d["refuter"]["verdicts"].update(inconclusive="fix")),
+            ("inconclusive_result_escalates", lambda d: d["refuter"]["verdicts"].update(inconclusive="reject")),
+            ("missing_result_escalates", lambda d: d["refuter"]["verdicts"].update(missing="reject")),
+            ("malformed_result_escalates", lambda d: d["refuter"]["verdicts"].update(malformed="fix")),
+            ("malformed_result_escalates", lambda d: d["refuter"]["evidence_required"].remove("refuted")),
+            ("unavailable_refuter_escalates", lambda d: d["refuter"]["verdicts"].update(unavailable="reject")),
+            ("rejection_without_refutation_refused", lambda d: d["refuter"].update(required_before="none")),
+            ("rejection_without_refutation_refused", lambda d: d["refuter"].update(applies_to=["bug"])),
+            ("one_refuter_invocation_per_finding", lambda d: d["refuter"].update(invocations_per_finding=2)),
+            ("refuter_consumes_no_round", lambda d: d["refuter"].update(counts_as_round=True)),
+            ("human_decision_closes_escalation", lambda d: d["refuter"].update(escalation_closes_on="none")),
         ]
         for key, edit in mutations:
             with self.subTest(key):
@@ -109,6 +139,11 @@ class MutationTest(unittest.TestCase):
             ("named_standards_count_as_loaded", lambda d: d.update(loaded_prefix="read: ")),
             ("inline_standards_count_as_loaded", lambda d: d.update(inline_prefix="pasted:")),
             ("roles_declare_loaded_prefix", lambda d: d.update(inline_prefix="pasted:")),
+            ("refuter_boundary", lambda d: d["inputs"]["review-refuter"].append("implementation_rationale")),
+            ("refuter_boundary", lambda d: d["standards"]["review-refuter"].append("project_instruction_file")),
+            ("refuted_finding_is_rejected_with_evidence", lambda d: d.update(verdict_prefix="result: ")),
+            ("refuter_declares_verdicts", lambda d: d.update(verdict_prefix="result: ")),
+            ("unreadable_relaunch_is_the_same_invocation", lambda d: d.update(unreadable_prefix="cannot read: ")),
         ]
         for key, edit in mutations:
             with self.subTest(key):
@@ -133,7 +168,19 @@ class ProseTest(unittest.TestCase):
         if rules["conformance_repair_after_cap"] == "recheck_and_disclose":
             sentences.append("After round two, a conformance repair is rechecked by the conformance pass alone and disclosed under `## Checks`, never given a third round.")
         sentences.append(f"At most {word} rounds.")
-        self.assertEqual(len(sentences), 7, "the block no longer matches any prose the skill states")
+        refuter = rules["refuter"]
+        if refuter["required_before"] == "reject" and refuter["invocations_per_finding"] == 1:
+            sentences.append(f"Before rejecting a contested {' or '.join(tick(refuter['applies_to']))}, launch the named `review-refuter` agent once for that finding")
+        if refuter["counts_as_round"] is False:
+            sentences.append("The refuter is not a reviewer and not a round")
+        if refuter["escalation_closes_on"] == "human_decision":
+            sentences.append("A human's decision on an escalated finding closes it")
+        phrases = {"fix": "fix it", "reject": "reject it", "escalate": "escalate"}
+        for action, phrase in phrases.items():
+            names = [f"`{verdict}`" for verdict, verdict_action in refuter["verdicts"].items() if verdict_action == action]
+            if names:
+                sentences.append(f"- {', '.join(names[:-1]) + ', or ' + names[-1] if len(names) > 1 else names[0]}: {phrase}")
+        self.assertEqual(len(sentences), 13, "the block no longer matches any prose the skill states")
         for sentence in sentences:
             with self.subTest(sentence[:50]):
                 self.assertIn(sentence, skill)
@@ -146,10 +193,10 @@ class ScenarioTest(unittest.TestCase):
         self.assertIsNotNone(scenario)
         self.assertEqual(scenario["mode"], "offline")
         self.assertTrue(scenario["check"].endswith("review_triage.py\""))
-        for input in ("adversarial-review/SKILL.md", "roles/reviewer-a.md", "roles/reviewer-b.md", "probes/review_triage.py"):
+        for input in ("adversarial-review/SKILL.md", "roles/reviewer-a.md", "roles/reviewer-b.md", "roles/review-refuter.md", "probes/review_triage.py"):
             self.assertTrue(any(entry.endswith(input) for entry in scenario["harness_inputs"]), input)
         texts = [entry["text"] for entry in scenario["artifacts"]["contains"]]
-        for key in TRIAGE_OUTCOMES + INPUT_OUTCOMES:
+        for key in OUTCOMES:
             self.assertIn(f'"{key}": true', texts)
 
 
