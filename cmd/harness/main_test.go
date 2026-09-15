@@ -30,7 +30,7 @@ func TestMain(m *testing.M) {
 
 const branch = "feat/1-x"
 
-// repo creates a throwaway git repository on branch, isolated from the user's git config.
+// repo creates a throwaway git repository on branch.
 func repo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -38,8 +38,9 @@ func repo(t *testing.T) string {
 	return dir
 }
 
-func env(t *testing.T) []string {
-	home := t.TempDir()
+// env isolates git from the user's config; each directory gets its own HOME and global config file.
+func env(dir string) []string {
+	home := filepath.Join(dir, ".home")
 	return []string{"HOME=" + home, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + filepath.Join(home, "gitconfig")}
 }
 
@@ -47,7 +48,7 @@ func git(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@t"}, args...)...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), env(t)...)
+	cmd.Env = append(os.Environ(), env(dir)...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
@@ -55,28 +56,49 @@ func git(t *testing.T, dir string, args ...string) string {
 	return string(bytes.TrimSpace(out))
 }
 
+func configHas(t *testing.T, dir, key string) bool {
+	t.Helper()
+	cmd := exec.Command("git", "config", "--local", "--get", key)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), env(dir)...)
+	return cmd.Run() == nil
+}
+
 type result struct {
 	stdout, stderr string
 	code           int
 }
 
-// harness runs the built binary in dir. wtOutput controls `wt` on PATH: "" means absent, anything else is what a fake `wt` prints.
-func harness(t *testing.T, dir, wtOutput string, args ...string) result {
+// schema1 is the shape `wt list --format=json` prints when a config pins json-schema 1, as the tracked Worktrunk config does.
+const schema1 = `[{"branch":"` + branch + `","path":"/tmp/x","kind":"worktree"}]`
+
+// harness runs the built binary in dir with only a git symlink and an optional fake `wt` on PATH. wt "" means absent; otherwise the fake prints wt when the call pins schema 2, and the schema-1 shape when it does not.
+func harness(t *testing.T, dir, wt string, args ...string) result {
 	t.Helper()
 	shims := t.TempDir()
-	if wtOutput != "" {
-		script := "#!/bin/sh\ncat <<'EOF'\n" + wtOutput + "\nEOF\n"
-		if err := os.WriteFile(filepath.Join(shims, "wt"), []byte(script), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
 	gitPath, err := exec.LookPath("git")
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Symlink(gitPath, filepath.Join(shims, "git")); err != nil {
+		t.Fatal(err)
+	}
+	path := shims + ":/usr/bin:/bin"
+	if wt == "" {
+		for _, d := range []string{"/usr/bin", "/bin"} {
+			if _, err := os.Stat(filepath.Join(d, "wt")); err == nil {
+				t.Fatalf("a real wt in %s makes the absent mode impossible", d)
+			}
+		}
+	} else {
+		script := "#!/bin/sh\ncase \"$*\" in\n*list.json-schema=2*) cat <<'EOF'\n" + wt + "\nEOF\n;;\n*) cat <<'EOF'\n" + schema1 + "\nEOF\n;;\nesac\n"
+		if err := os.WriteFile(filepath.Join(shims, "wt"), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
 	cmd := exec.Command(binary, args...)
 	cmd.Dir = dir
-	cmd.Env = append(env(t), "PATH="+shims+":"+filepath.Dir(gitPath)+":/bin:/usr/bin")
+	cmd.Env = append(env(dir), "PATH="+path)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err = cmd.Run()
@@ -89,12 +111,17 @@ func harness(t *testing.T, dir, wtOutput string, args ...string) result {
 	return result{stdout.String(), stderr.String(), code}
 }
 
-func getJSON(t *testing.T, dir, wtOutput string) map[string]any {
+func ok(t *testing.T, r result, what string) result {
 	t.Helper()
-	r := harness(t, dir, wtOutput, "state", "get", "--json")
 	if r.code != 0 {
-		t.Fatalf("get --json exited %d: %s", r.code, r.stderr)
+		t.Fatalf("%s exited %d: %s", what, r.code, r.stderr)
 	}
+	return r
+}
+
+func getJSON(t *testing.T, dir, wt string) map[string]any {
+	t.Helper()
+	r := ok(t, harness(t, dir, wt, "state", "get", "--json"), "get --json")
 	var got map[string]any
 	if err := json.Unmarshal([]byte(r.stdout), &got); err != nil {
 		t.Fatalf("get --json printed invalid JSON %q: %v", r.stdout, err)
@@ -102,11 +129,13 @@ func getJSON(t *testing.T, dir, wtOutput string) map[string]any {
 	return got
 }
 
+func listing(b string) string {
+	return `{"schema":2,"items":[{"branch":"` + b + `","worktree":{"path":"/tmp/x","main":false}}]}`
+}
+
 func TestLadderSetWithoutWorktrunkUsesHarnessKeys(t *testing.T) {
 	dir := repo(t)
-	if r := harness(t, dir, "", "state", "ladder", "set", "go test ./..."); r.code != 0 {
-		t.Fatalf("ladder set exited %d: %s", r.code, r.stderr)
-	}
+	ok(t, harness(t, dir, "", "state", "ladder", "set", "go test ./..."), "ladder set")
 	if got := git(t, dir, "config", "harness."+branch+".ladder"); got != "go test ./..." {
 		t.Fatalf("harness ladder key = %q", got)
 	}
@@ -120,9 +149,6 @@ func TestLadderSetWithoutWorktrunkUsesHarnessKeys(t *testing.T) {
 }
 
 func TestStoreFollowsWorktrunkListing(t *testing.T) {
-	listing := func(b string) string {
-		return `{"schema":2,"items":[{"branch":"` + b + `","worktree":{"path":"/tmp/x","main":false}}]}`
-	}
 	cases := []struct {
 		name, wt, store, key string
 	}{
@@ -133,9 +159,7 @@ func TestStoreFollowsWorktrunkListing(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			dir := repo(t)
-			if r := harness(t, dir, c.wt, "state", "ladder", "set", "L"); r.code != 0 {
-				t.Fatalf("ladder set exited %d: %s", r.code, r.stderr)
-			}
+			ok(t, harness(t, dir, c.wt, "state", "ladder", "set", "L"), "ladder set")
 			if got := git(t, dir, "config", c.key); got != "L" {
 				t.Fatalf("%s = %q", c.key, got)
 			}
@@ -146,27 +170,31 @@ func TestStoreFollowsWorktrunkListing(t *testing.T) {
 	}
 }
 
-func TestIncrAttemptsCountsFromZero(t *testing.T) {
+func TestIncrAttemptsCountsFromExistingInteger(t *testing.T) {
 	dir := repo(t)
 	for want := 1; want <= 2; want++ {
-		r := harness(t, dir, "", "state", "incr", "attempts")
-		if r.code != 0 {
-			t.Fatalf("incr exited %d: %s", r.code, r.stderr)
-		}
+		ok(t, harness(t, dir, "", "state", "incr", "attempts"), "incr")
 		if got := git(t, dir, "config", "harness."+branch+".attempts"); got != fmt.Sprint(want) {
 			t.Fatalf("after incr %d the key holds %q", want, got)
 		}
 	}
-	if got := getJSON(t, dir, ""); got["attempts"] != 2.0 {
-		t.Fatalf("attempts = %v, want 2", got["attempts"])
+	seeded := repo(t)
+	git(t, seeded, "config", "harness."+branch+".attempts", "4")
+	if got := getJSON(t, seeded, ""); got["attempts"] != 4.0 {
+		t.Fatalf("a stored integer should read as itself, got %v", got)
+	}
+	if r := ok(t, harness(t, seeded, "", "state", "incr", "attempts"), "incr"); strings.TrimSpace(r.stdout) != "5" || r.stderr != "" {
+		t.Fatalf("incr over 4 printed %q with stderr %q", r.stdout, r.stderr)
 	}
 }
 
-// Value shapes agents actually wrote into these keys before the typed contract.
+// Value shapes that must read as legacy: what agents wrote before the typed contract, plus integers in a non-canonical spelling.
 var legacyShapes = map[string]string{
-	"json object": `{"review_round":2,"repair_passes":1}`,
-	"empty array": `[]`,
-	"prose":       "round two raised new blocking findings; stopped before round three",
+	"json object":    `{"review_round":2,"repair_passes":1}`,
+	"empty array":    `[]`,
+	"prose":          "round two raised new blocking findings in round-one code.\nStopped before round three.",
+	"signed integer": "+5",
+	"padded integer": "007",
 }
 
 func TestLegacyCounterReadsRawAndIncrReplacesIt(t *testing.T) {
@@ -182,9 +210,8 @@ func TestLegacyCounterReadsRawAndIncrReplacesIt(t *testing.T) {
 			if r := harness(t, dir, "", "state", "get"); !strings.Contains(r.stdout, "attempts: legacy: "+raw) {
 				t.Fatalf("text get = %q", r.stdout)
 			}
-			r := harness(t, dir, "", "state", "incr", "attempts")
-			if r.code != 0 || !strings.Contains(r.stderr, raw) {
-				t.Fatalf("incr exited %d, stderr %q should name the replaced text", r.code, r.stderr)
+			if r := ok(t, harness(t, dir, "", "state", "incr", "attempts"), "incr"); !strings.Contains(r.stderr, raw) {
+				t.Fatalf("incr stderr %q should name the replaced text", r.stderr)
 			}
 			if got := git(t, dir, "config", "harness."+branch+".attempts"); got != "1" {
 				t.Fatalf("incr over legacy wrote %q, want 1", got)
@@ -199,9 +226,7 @@ func TestEscalateRequiresReasonAndKeepsTheLatest(t *testing.T) {
 		t.Fatalf("escalate without --reason exited %d with stderr %q, want non-zero and one line", r.code, r.stderr)
 	}
 	for i, reason := range []string{"round two found a new bug", "loop cap tripped"} {
-		if r := harness(t, dir, "", "state", "escalate", "--reason", reason); r.code != 0 {
-			t.Fatalf("escalate exited %d: %s", r.code, r.stderr)
-		}
+		ok(t, harness(t, dir, "", "state", "escalate", "--reason", reason), "escalate")
 		if got := git(t, dir, "config", "harness."+branch+".escalations"); got != fmt.Sprint(i+1) {
 			t.Fatalf("escalations = %q, want %d", got, i+1)
 		}
@@ -211,12 +236,46 @@ func TestEscalateRequiresReasonAndKeepsTheLatest(t *testing.T) {
 	}
 }
 
-func configHas(t *testing.T, dir, key string) bool {
-	t.Helper()
-	cmd := exec.Command("git", "config", "--get", key)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), env(t)...)
-	return cmd.Run() == nil
+func TestEscalateOverLegacyNamesReplacedText(t *testing.T) {
+	dir := repo(t)
+	raw := legacyShapes["prose"]
+	git(t, dir, "config", "harness."+branch+".escalations", raw)
+	r := ok(t, harness(t, dir, "", "state", "escalate", "--reason", "cap"), "escalate")
+	if !strings.Contains(r.stderr, raw) {
+		t.Fatalf("escalate stderr %q should name the replaced text", r.stderr)
+	}
+	if got := getJSON(t, dir, ""); got["escalations"] != 1.0 || got["reason"] != "cap" {
+		t.Fatalf("get --json = %v", got)
+	}
+}
+
+func TestStateSurvivesAStoreFlip(t *testing.T) {
+	dir := repo(t)
+	listed := listing(branch)
+	ok(t, harness(t, dir, listed, "state", "incr", "attempts"), "incr with wt")
+	ok(t, harness(t, dir, listed, "state", "incr", "attempts"), "incr with wt")
+	if r := ok(t, harness(t, dir, "", "state", "incr", "attempts"), "incr without wt"); strings.TrimSpace(r.stdout) != "3" {
+		t.Fatalf("incr after the store flipped printed %q, want 3", r.stdout)
+	}
+	if got := getJSON(t, dir, listed); got["attempts"] != 2.0 {
+		t.Fatalf("worktrunk store still reads its own key, got %v", got)
+	}
+}
+
+func TestUnscopedCounterShowsAsLegacy(t *testing.T) {
+	dir := repo(t)
+	git(t, dir, "config", "harness.attempts", "4")
+	got := getJSON(t, dir, "")
+	legacy, _ := got["legacy"].(map[string]any)
+	if got["attempts"] != nil || legacy["attempts"] != "4" {
+		t.Fatalf("get --json = %v, want the unscoped value as legacy", got)
+	}
+	if r := ok(t, harness(t, dir, "", "state", "incr", "attempts"), "incr"); !strings.Contains(r.stderr, "4") {
+		t.Fatalf("incr stderr %q should name the replaced unscoped value", r.stderr)
+	}
+	if got := git(t, dir, "config", "harness."+branch+".attempts"); got != "1" {
+		t.Fatalf("scoped key = %q, want 1", got)
+	}
 }
 
 func TestPruneRemovesOnlyGoneBranches(t *testing.T) {
@@ -228,11 +287,12 @@ func TestPruneRemovesOnlyGoneBranches(t *testing.T) {
 	for _, key := range append(append([]string{}, kept...), gone...) {
 		git(t, dir, "config", key, "1")
 	}
-	r := harness(t, dir, "", "state", "prune")
-	if r.code != 0 {
-		t.Fatalf("prune exited %d: %s", r.code, r.stderr)
+	if err := os.MkdirAll(filepath.Join(dir, ".home"), 0o755); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(r.stdout, "gone/one") || !strings.Contains(r.stdout, "gone/two") || strings.Contains(r.stdout, "live") {
+	git(t, dir, "config", "--global", "worktrunk.state.gone/global.vars.attempts", "1")
+	r := ok(t, harness(t, dir, "", "state", "prune"), "prune")
+	if !strings.Contains(r.stdout, "gone/one") || !strings.Contains(r.stdout, "gone/two") || strings.Contains(r.stdout, "live") || strings.Contains(r.stdout, "global") {
 		t.Fatalf("prune reported %q", r.stdout)
 	}
 	for _, key := range kept {
@@ -247,23 +307,21 @@ func TestPruneRemovesOnlyGoneBranches(t *testing.T) {
 	}
 }
 
-func TestHelpAndUnknownCommands(t *testing.T) {
+func TestHelpAndUsageErrors(t *testing.T) {
 	outside := t.TempDir()
 	if r := harness(t, outside, "", "--help"); r.code != 0 || !strings.Contains(r.stdout, "state") {
 		t.Fatalf("--help exited %d: %q", r.code, r.stdout)
 	}
-	r := harness(t, outside, "", "state", "--help")
-	if r.code != 0 {
-		t.Fatalf("state --help outside a repository exited %d: %s", r.code, r.stderr)
-	}
-	for _, op := range []string{"ladder set", "incr", "escalate", "get", "prune"} {
+	r := ok(t, harness(t, outside, "", "state", "--help"), "state --help outside a repository")
+	for _, op := range []string{"ladder set", "incr attempts", "escalate", "get", "prune"} {
 		if !strings.Contains(r.stdout, op) {
 			t.Errorf("state --help does not list %q", op)
 		}
 	}
-	for _, args := range [][]string{{"bogus"}, {"state", "bogus"}} {
-		if r := harness(t, repo(t), "", args...); r.code == 0 || strings.Count(r.stderr, "\n") != 1 {
-			t.Errorf("%v exited %d with stderr %q, want non-zero and one line", args, r.code, r.stderr)
+	for _, args := range [][]string{{"bogus"}, {"state", "bogus"}, {"state", "incr", "escalations"}, {"state", "get", "--jsn"}, {"state", "prune", "extra"}} {
+		r := harness(t, outside, "", args...)
+		if r.code == 0 || strings.Count(r.stderr, "\n") != 1 || strings.Contains(r.stderr, "not on a branch") {
+			t.Errorf("%v exited %d with stderr %q, want a one-line usage error", args, r.code, r.stderr)
 		}
 	}
 }

@@ -25,7 +25,7 @@ const stateUsage = `Usage: harness state <operation>
 
 Operations:
   ladder set <text>          Record the resolved oracle ladder
-  incr attempts|escalations  Add one to a counter and print it
+  incr attempts              Add one to attempts and print it
   escalate --reason <text>   Add one to escalations and record the trip's reason
   get [--json]               Print this branch's state
   prune                      Remove state for branches with no local ref
@@ -62,11 +62,12 @@ func runState(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stderr, stateUsage)
 		return 2
 	}
-	switch args[0] {
-	case "-h", "--help", "help":
+	op, n := args[0], len(args)
+	switch {
+	case n == 1 && (op == "-h" || op == "--help" || op == "help"):
 		fmt.Fprint(stdout, stateUsage)
 		return 0
-	case "prune":
+	case n == 1 && op == "prune":
 		removed, err := state.Prune(".")
 		for _, section := range removed {
 			fmt.Fprintln(stdout, "removed", section)
@@ -75,53 +76,55 @@ func runState(args []string, stdout, stderr io.Writer) int {
 			return fail(err)
 		}
 		return 0
+	case op == "escalate" && (n != 3 || args[1] != "--reason"):
+		return misuse("escalate needs --reason <text>")
+	case !(op == "ladder" && n >= 3 && args[1] == "set") &&
+		!(op == "incr" && n == 2 && args[1] == "attempts") &&
+		op != "escalate" &&
+		!(op == "get" && (n == 1 || n == 2 && args[1] == "--json")):
+		return misuse(fmt.Sprintf("unknown operation %q", strings.Join(args, " ")))
 	}
 
 	b, err := state.Open(".")
 	if err != nil {
 		return fail(err)
 	}
-	switch {
-	case args[0] == "ladder" && len(args) >= 3 && args[1] == "set":
+	switch op {
+	case "ladder":
 		if err := b.SetLadder(strings.Join(args[2:], " ")); err != nil {
 			return fail(err)
 		}
-	case args[0] == "incr" && len(args) == 2:
-		n, replaced, err := b.Incr(args[1])
-		return counted(n, args[1], replaced, err, stdout, stderr, fail)
-	case args[0] == "escalate":
-		if len(args) != 3 || args[1] != "--reason" {
-			return misuse("escalate needs --reason <text>")
-		}
-		n, replaced, err := b.Escalate(args[2])
-		return counted(n, "escalations", replaced, err, stdout, stderr, fail)
-	case args[0] == "get" && len(args) <= 2:
+	case "incr":
+		next, replaced, err := b.Incr("attempts")
+		return counted(next, "attempts", replaced, err, stdout, stderr, fail)
+	case "escalate":
+		next, replaced, err := b.Escalate(args[2])
+		return counted(next, "escalations", replaced, err, stdout, stderr, fail)
+	case "get":
 		s, err := b.Get()
 		if err != nil {
 			return fail(err)
 		}
-		if len(args) == 2 && args[1] == "--json" {
+		if n == 2 {
 			out, _ := json.Marshal(s)
 			fmt.Fprintln(stdout, string(out))
 			break
 		}
 		fmt.Fprintf(stdout, "branch: %s (%s)\nladder: %s\nattempts: %s\nescalations: %s\nreason: %s\n",
 			s.Branch, s.Store, s.Ladder, counter(s.Attempts, s.Legacy["attempts"]), counter(s.Escalations, s.Legacy["escalations"]), s.Reason)
-	default:
-		return misuse(fmt.Sprintf("unknown operation %q", strings.Join(args, " ")))
 	}
 	return 0
 }
 
 // counted reports a counter write, naming any legacy text it replaced.
-func counted(n int, name string, replaced *string, err error, stdout, stderr io.Writer, fail func(error) int) int {
+func counted(next int, name string, replaced *string, err error, stdout, stderr io.Writer, fail func(error) int) int {
 	if err != nil {
 		return fail(err)
 	}
 	if replaced != nil {
 		fmt.Fprintf(stderr, "harness state: replaced legacy %s value: %s\n", name, *replaced)
 	}
-	fmt.Fprintln(stdout, n)
+	fmt.Fprintln(stdout, next)
 	return 0
 }
 
