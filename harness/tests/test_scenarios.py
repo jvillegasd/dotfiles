@@ -8,7 +8,6 @@ shipped matrix runs offline through recorded fixtures.
 import importlib.util
 import json
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -195,15 +194,15 @@ class ReportTest(unittest.TestCase):
 
 
 class BenchTest(unittest.TestCase):
-    def test_measure_stays_green_on_an_empty_home(self):
+    def test_bench_stays_green_on_an_empty_home(self):
         home = Path(tempfile.mkdtemp())
         result = subprocess.run(
             [
-                sys.executable, str(_HARNESS / "bench/measure.py"),
+                "go", "run", "./cmd/harness", "bench",
                 "--split", "2026-01-01", "--since", "2026-01-01",
                 "--home", str(home), "--client", "claude",
             ],
-            capture_output=True, text=True,
+            cwd=_HARNESS.parent, capture_output=True, text=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("no sessions found", result.stdout)

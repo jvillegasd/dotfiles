@@ -1,0 +1,5 @@
+{"type": "user", "timestamp": "2026-09-01T10:00:00.000Z", "message": {"content": "hello"}}
+{"type": "assistant", "timestamp": "2026-09-01T10:00:05.000Z", "message": {"content": [{"type": "text", "text": "hi"}, {"type": "tool_use", "name": "Read"}]}}
+{"type": "user", "timestamp": "2026-09-01T10:00:10.000Z", "message": {"content": [{"type": "tool_result", "content": "The user doesn't want to proceed with this tool use", "is_error": true}]}}
+{"type": "user", "timestamp": "2026-09-01T10:00:15.000Z", "message": {"content": [{"type": "text", "text": "[Request interrupted by user"}]}}
+{"type": "user", "timestamp": "2026-09-01T10:00:20.000Z", "message": {"content": [{"type": "text", "text": "<command-name>/ask</command-name>"}]}}

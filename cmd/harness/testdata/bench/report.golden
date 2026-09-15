@@ -1,0 +1,53 @@
+split 2026-09-05  since 2026-09-01
+
+claude  work
+  metric          before     after     delta
+  sessions             2         1
+  turns              1.0       1.0      +0.0
+  tool_calls         1.5       1.0      -0.5
+  minutes            0.7       0.5      -0.2
+  commands           0.5       0.0      -0.5
+  delegation         1.0       0.0      -1.0
+  interrupts         0.5       0.0      -0.5
+  denials            0.5       0.0      -0.5
+  errors             0.5       0.0      -0.5
+  warning: a cohort has fewer than 20 sessions; noise, not a result.
+
+claude  personal
+  metric          before     after     delta
+  sessions             1         0
+  turns              1.0         -         -
+  tool_calls         1.0         -         -
+  minutes            2.0         -         -
+  commands           0.0         -         -
+  delegation         0.0         -         -
+  interrupts         0.0         -         -
+  denials            0.0         -         -
+  errors             0.0         -         -
+  warning: a cohort has fewer than 20 sessions; noise, not a result.
+
+opencode  work
+  metric          before     after     delta
+  sessions             1         0
+  turns              2.0         -         -
+  tool_calls         3.0         -         -
+  minutes            0.8         -         -
+  commands             -         -         -
+  delegation         2.0         -         -
+  interrupts           -         -         -
+  denials              -         -         -
+  errors               -         -         -
+  warning: a cohort has fewer than 20 sessions; noise, not a result.
+
+opencode  personal
+  metric          before     after     delta
+  sessions             0         1
+  turns                -       1.0         -
+  tool_calls           -       0.0         -
+  minutes              -       0.2         -
+  commands             -         -         -
+  delegation           -       0.0         -
+  interrupts           -         -         -
+  denials              -         -         -
+  errors               -         -         -
+  warning: a cohort has fewer than 20 sessions; noise, not a result.

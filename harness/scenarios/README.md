@@ -1,6 +1,6 @@
 # scenarios
 
-`runner.py` answers a different question than `bench/measure.py`. `measure.py` reports whether a harness change moved cost and friction across real sessions. It cannot see whether a workflow preserved its requirements or produced the intended artifacts. A scenario does: it declares the artifacts and assertions it expects up front, runs in a disposable repository, and retains every attempt for review. `compare` then puts two retained batches side by side, correctness before cost.
+`runner.py` answers a different question than `harness bench`. The bench reports whether a harness change moved cost and friction across real sessions. It cannot see whether a workflow preserved its requirements or produced the intended artifacts. A scenario does: it declares the artifacts and assertions it expects up front, runs in a disposable repository, and retains every attempt for review. `compare` then puts two retained batches side by side, correctness before cost.
 
 ## Usage
 

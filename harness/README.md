@@ -9,7 +9,7 @@ One committed source for Claude Code and OpenCode.
 | `skills/` | Protocol, vocabulary, and locked third-party bodies. |
 | `../internal/install/` | The installer behind `harness install`: installs clients and integrations, reconciles links, preserves mutable client state. |
 | `../internal/locks/` | The third-party skill locks behind `harness locks`: add, update, remove, check, and offline verify. |
-| `bench/measure.py` | Compares the session population before and after a change. Manual in `bench/README.md`. |
+| `../internal/bench/` | The session-population comparison behind `harness bench`. Cohort config and manual in `bench/`. |
 | `statusline/` | One file per provider that has a status line. |
 | `clients/` | The client settings this harness owns: `claude.json` declares them, `assignments.json` gives every role its definition, model, and effort, and `agents.py` renders the role agents. |
 | `roles/` | Canonical roles no skill owns, currently the executor. |
@@ -366,7 +366,7 @@ Contract source and tracker binding are independent: the source controls conform
 Validate a change to this directory against the sessions it produced, as `harness/bench/README.md` explains:
 
 ```sh
-python3 harness/bench/measure.py --split <commit-date> --since <window-start>
+harness bench --split <commit-date> --since <window-start>
 ```
 
 It reads Claude Code JSONL transcripts and the OpenCode SQLite database, and reports each client separately; `--client` narrows it. A metric a client does not record, such as a declined tool call in OpenCode, prints as `-` rather than zero.

@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jvillegasd/dotfiles/internal/bench"
 	"github.com/jvillegasd/dotfiles/internal/install"
 	"github.com/jvillegasd/dotfiles/internal/locks"
 	"github.com/jvillegasd/dotfiles/internal/state"
@@ -22,6 +23,7 @@ const usage = `Usage: harness <command> [arguments]
 Commands:
   bootstrap  Link the tracked configs, build harness into ~/.local/bin, and install the harness
   install    Install, reconcile, or remove the harness on this machine
+  bench      Compare the session population before and after a harness change
   locks      Manage the reviewed third-party skill locks
   state      Read and write this branch's oracle ladder and rabbit-hole counters
 `
@@ -48,6 +50,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return install.Bootstrap(args[1:], stdout, stderr)
 	case "install":
 		return install.Command(args[1:], stdout, stderr)
+	case "bench":
+		return bench.Command(args[1:], stdout, stderr)
 	case "locks":
 		return locks.Command(args[1:], stdout, stderr)
 	case "state":

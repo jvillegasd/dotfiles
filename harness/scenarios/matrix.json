@@ -5,7 +5,7 @@
       "id": "ask-read-only",
       "title": "A read-only command must not write",
       "command": "ask",
-      "prompt": "Explain what harness/bench/measure.py measures. Change nothing.",
+      "prompt": "Explain what harness bench measures. Change nothing.",
       "mode": "live",
       "client": "claude",
       "artifacts": {

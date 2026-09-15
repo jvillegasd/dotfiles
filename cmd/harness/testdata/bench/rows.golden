@@ -1,0 +1,6 @@
+{"client": "claude", "date": "2026-09-01", "project": "-tmp-acme-app", "turns": 1, "tool_calls": 1, "minutes": 0.3, "commands": 1, "delegation": 0, "interrupts": 1, "denials": 1, "errors": 0, "cohort": "work"}
+{"client": "opencode", "date": "2026-09-01", "project": "/tmp/acme/app", "turns": 2, "tool_calls": 3, "minutes": 0.8, "commands": null, "delegation": 2, "interrupts": null, "denials": null, "errors": null, "cohort": "work"}
+{"client": "claude", "date": "2026-09-02", "project": "-tmp-acme-app", "turns": 1, "tool_calls": 2, "minutes": 1.0, "commands": 0, "delegation": 2, "interrupts": 0, "denials": 0, "errors": 1, "cohort": "work"}
+{"client": "claude", "date": "2026-09-03", "project": "-tmp-home-lab", "turns": 1, "tool_calls": 1, "minutes": 2.0, "commands": 0, "delegation": 0, "interrupts": 0, "denials": 0, "errors": 0, "cohort": "personal"}
+{"client": "claude", "date": "2026-09-10", "project": "-tmp-acme-app", "turns": 1, "tool_calls": 1, "minutes": 0.5, "commands": 0, "delegation": 0, "interrupts": 0, "denials": 0, "errors": 0, "cohort": "work"}
+{"client": "opencode", "date": "2026-09-11", "project": "/tmp/home/lab", "turns": 1, "tool_calls": 0, "minutes": 0.2, "commands": null, "delegation": 0, "interrupts": null, "denials": null, "errors": null, "cohort": "personal"}
