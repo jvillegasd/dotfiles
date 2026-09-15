@@ -305,7 +305,7 @@ Ponytail is a locked skill body, not a plugin. None of the plugin is installed, 
 
 ## GitHub lifecycle
 
-In GitHub mode, `setup-harness` writes `docs/agents/harness.json`, creates the four labels, writes the tracker compatibility file, and copies the bundled workflow and reconciler. The workflow becomes active when that reviewed change reaches the default branch. GitHub native sub-issue and dependency relationships remain the source of truth. A blocker satisfies the frontier only when a merged pull request closed it, which is why `blocker_satisfied` walks `closedByPullRequestsReferences` rather than trusting the closed state; closing an issue by hand does not open the frontier behind it. The parent closes only after every child has that same evidence.
+In GitHub mode, `setup-harness` writes `docs/agents/harness.json`, creates the four labels, writes the tracker compatibility file, and copies the bundled workflow and reconciler. The workflow becomes active when that reviewed change reaches the default branch. GitHub native sub-issue and dependency relationships remain the source of truth. A blocker satisfies the frontier only when a merged pull request closed it, which is why `blockerSatisfied` walks `closedByPullRequestsReferences` rather than trusting the closed state; closing an issue by hand does not open the frontier behind it. The parent closes only after every child has that same evidence.
 
 The other mode is local markdown, where `setup-harness` writes the config and compatibility file and nothing else: no labels, no workflow, no reconciler. Lifecycle state is a `Status:` line and a `Blocked by:` line committed beside the code, and the `local-tracker` skill holds what each operation means there.
 
@@ -314,7 +314,7 @@ flowchart TD
     setup["setup-harness<br>invoked by hand, per repository"] --> config["docs/agents/harness.json<br>tracker, spec home, label mapping"]
     setup --> labels["gh label create --force<br>blocked · ready-for-agent<br>in-progress · ready-for-human"]
     setup --> trackerdoc["docs/agents/issue-tracker.md<br>compatibility contract for locked skills"]
-    setup --> files[".github/workflows/agent-lifecycle.yml<br>.github/scripts/reconcile-agent-lifecycle.py"]
+    setup --> files[".github/workflows/agent-lifecycle.yml<br>.github/scripts/reconcile-agent-lifecycle.go"]
     files --> active(["active once that reviewed change<br>reaches the default branch"])
 
     subgraph GRAPH["issue graph, GitHub native"]
@@ -324,10 +324,10 @@ flowchart TD
 
     subgraph RUN["reconciler, on issues closed or reopened"]
         active --> trigger["workflow run"]
-        trigger --> frontier["reconcile_frontier<br>on the event issue and everything it blocks"]
+        trigger --> frontier["reconcileFrontier<br>on the event issue and everything it blocks"]
         frontier -->|any blocker unsatisfied| blocked["label: blocked<br>in-progress and ready-for-human cleared"]
         frontier -->|every blocker satisfied,<br>nothing active| ready["label: ready-for-agent"]
-        trigger --> parentstate["reconcile_parent"]
+        trigger --> parentstate["reconcileParent"]
         parentstate -->|every child closed by a merged PR| closeparent["parent closed"]
         parentstate -->|a child reopened| reopenparent["parent reopened,<br>label: in-progress"]
         parentstate -->|state changed| parentqueue["parent queued for<br>a full reconcile pass"]

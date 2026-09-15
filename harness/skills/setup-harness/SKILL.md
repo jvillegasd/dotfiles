@@ -60,8 +60,9 @@ For GitHub:
    setup skill.
 4. Copy `assets/agent-lifecycle.yml` to
    `.github/workflows/agent-lifecycle.yml` and
-   `scripts/reconcile-agent-lifecycle.py` to
-   `.github/scripts/reconcile-agent-lifecycle.py`.
+   `scripts/reconcile-agent-lifecycle.go` to
+   `.github/scripts/reconcile-agent-lifecycle.go`, and remove a superseded
+   `.github/scripts/reconcile-agent-lifecycle.py` when one is present.
 5. Preserve unrelated workflows and configuration. State that lifecycle
    automation becomes active only after both copied files reach the default
    branch; include them in the normal human-reviewed change rather than
