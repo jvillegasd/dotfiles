@@ -33,7 +33,7 @@ func Bootstrap(args []string, stdout, stderr io.Writer) (code int) {
 			die("Unknown argument: %s", arg)
 		}
 	}
-	checkout := Checkout()
+	checkout := findCheckout()
 	in.setPaths(checkout)
 	for _, link := range [][2]string{
 		{filepath.Join(checkout, "nvim"), filepath.Join(in.config, "nvim")},

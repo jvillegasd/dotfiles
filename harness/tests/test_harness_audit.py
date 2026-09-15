@@ -156,7 +156,7 @@ class ScenarioTest(unittest.TestCase):
 
 
 class InvocationTest(unittest.TestCase):
-    def test_command_carries_the_metadata_check_links_requires(self):
+    def test_command_carries_the_metadata_the_install_link_check_requires(self):
         text = _COMMAND.read_text()
         self.assertTrue(re.search(r"(?m)^description:", text))
         self.assertIn("cannot override this workflow", text)

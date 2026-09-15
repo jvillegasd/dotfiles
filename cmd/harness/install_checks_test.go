@@ -139,9 +139,9 @@ func TestAgentInstallAndUninstallTouchOnlyThisCheckoutsLinks(t *testing.T) {
 	if isSymlink(retired) {
 		t.Error("the install kept the retired agent's link")
 	}
-	private_data := regexp.MustCompile(`auth|credential`)
+	privateData := regexp.MustCompile(`auth|credential`)
 	err := filepath.WalkDir(out, func(path string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() && (private_data.MatchString(d.Name()) || strings.Contains(readFile(t, path), "private-secret")) {
+		if err == nil && !d.IsDir() && (privateData.MatchString(d.Name()) || strings.Contains(readFile(t, path), "private-secret")) {
 			t.Errorf("generated %s carries private data", path)
 		}
 		return err
@@ -256,5 +256,20 @@ func TestBootstrapLinksConfigsBuildsHarnessAndInstalls(t *testing.T) {
 	}
 	if got, want := linkText(filepath.Join(home, ".claude", "CLAUDE.md")), filepath.Join(checkout, "harness", "POLICY.md"); got != want {
 		t.Errorf("bootstrap did not install the harness: ~/.claude/CLAUDE.md -> %q, want %q", got, want)
+	}
+}
+
+// --clear-backups reads only $HOME, so it runs from outside any checkout.
+func TestClearBackupsRunsOutsideTheCheckout(t *testing.T) {
+	base := sandbox(t)
+	seedBackups(t, base)
+	home := filepath.Join(base, "home")
+	cmd := exec.Command(binary, "install", "--clear-backups")
+	cmd.Dir, cmd.Env = home, []string{"HOME=" + home, "PATH=/usr/bin:/bin"}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("clear-backups outside the checkout: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".dotfiles-backups", "harness")); err == nil {
+		t.Error("the harness backups survived")
 	}
 }

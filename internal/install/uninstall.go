@@ -44,7 +44,7 @@ Nothing was archived: an uninstall deletes what it removes. Everything above
 comes back from this checkout.
 
 Open a new shell to drop the aliases from the one you are in.
-Reinstall with: harness install
+Reinstall from this checkout with: go run ./cmd/harness install
 `
 
 func (in *installer) uninstallAll() {
@@ -142,7 +142,6 @@ func (in *installer) removeAgentBrowserConfig() {
 	must(os.WriteFile(path, render(doc), 0o644))
 }
 
-// str reads a JSON string value.
 func str(raw json.RawMessage) (string, bool) {
 	var s string
 	return s, len(raw) > 0 && raw[0] == '"' && json.Unmarshal(raw, &s) == nil

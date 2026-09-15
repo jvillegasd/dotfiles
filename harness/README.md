@@ -164,7 +164,7 @@ flowchart TD
 | Claude Code | `model:` an alias, `sonnet`, `opus`, `haiku`, or `fable`, or a `claude-` model ID | `effort:` `low`, `medium`, `high`, `xhigh`, or `max` | `model: inherit` and no `effort:` line, so the session's model and effort apply |
 | OpenCode | `model:` a `provider/model` ID | `reasoningEffort:` `none`, `minimal`, `low`, `medium`, `high`, or `xhigh`, only beside an `openai/` model, since OpenCode passes it to the provider | neither line, so the invoking agent's model applies |
 
-A value outside those sets, an unknown or duplicate key, a missing client default, or effort beside a non-OpenAI OpenCode model fails generation before anything is written, and nothing is substituted. A set model or effort prints as `unverified:` until that account is observed running it, because a client's documentation is not proof of access. A role with an assignment and no definition is validated and prints as `pending:`, and no agent is generated until its definition lands. Change an assignment by editing its entry and rerunning `harness install --links-only`; never edit a generated file, which `--check` reports as changed.
+A value outside those sets, an unknown or duplicate key, a missing client default, or effort beside a non-OpenAI OpenCode model fails generation before anything is written, and nothing is substituted. A set model or effort prints as `unverified:` until that account is observed running it, because a client's documentation is not proof of access. A role with an assignment and no definition is validated and prints as `pending:`, and no agent is generated until its definition lands. Change an assignment by editing its entry and rerunning `go run ./cmd/harness install --links-only`; never edit a generated file, which `--check` reports as changed.
 
 Acceptance on 2026-09-14 made no model request. `claude plugin validate` in Claude Code 2.1.270 parsed generated agents carrying `model: sonnet`, `effort: high`, and `disallowedTools: Agent`, which proves the frontmatter parses, not that Claude Code applies those fields. `opencode debug agent` in OpenCode 1.18.30 resolved `openai/gpt-5.5` with `reasoningEffort` from both a client default and a role override, and resolved the reviewer and executor denies. Neither proves a request runs on the assigned model or that the account can reach it.
 
@@ -186,10 +186,10 @@ flowchart TD
 
 ## Install
 
-The root `../macos.sh` and `../linux.sh` install the harness by default: after their package step they run `harness bootstrap` through `go run`, which links the tracked configs, builds `harness` into `~/.local/bin`, and runs a full install. `harness install` installs the harness of the checkout it runs from, so run it from inside this checkout. To reconcile only policy, commands, and skills:
+The root `../macos.sh` and `../linux.sh` install the harness by default: after their package step they run `harness bootstrap` through `go run`, which links the tracked configs, builds `harness` into `~/.local/bin`, and runs a full install. `harness install` installs the harness of the checkout it runs from, so run it from inside this checkout, and through `go run` so the install code matches that checkout: the `harness` on PATH is whatever `harness bootstrap` last built. To reconcile only policy, commands, and skills:
 
 ```sh
-harness install --links-only
+go run ./cmd/harness install --links-only
 ```
 
 | Flag | Effect |
@@ -296,7 +296,7 @@ It arrives only through `locked-skills.sh`. Four of its own routes are forbidden
 
 ### Ponytail
 
-Ponytail is a locked skill body, not a plugin. None of the plugin is installed, and `check_links` asserts the body is present. What replaces its `SessionStart` hook is one line in each command that writes code, `/ship`, `/proto`, `/feedback`, and `/address-review`, plus `adversarial-review` using ponytail violations as a review lens. Lazy mode then applies where code is written rather than to every conversation, and delivers the full `SKILL.md` instead of the hook's level-filtered condensation. The trade is that `/ponytail lite|ultra` switching and the auxiliary skills are gone, and in exchange the body changes only through a reviewed update, where the plugin once moved 4.7.0 to 4.9.0 mid-install with six agent-steering bodies changing unread.
+Ponytail is a locked skill body, not a plugin. None of the plugin is installed, and the install's link check asserts the body is present. What replaces its `SessionStart` hook is one line in each command that writes code, `/ship`, `/proto`, `/feedback`, and `/address-review`, plus `adversarial-review` using ponytail violations as a review lens. Lazy mode then applies where code is written rather than to every conversation, and delivers the full `SKILL.md` instead of the hook's level-filtered condensation. The trade is that `/ponytail lite|ultra` switching and the auxiliary skills are gone, and in exchange the body changes only through a reviewed update, where the plugin once moved 4.7.0 to 4.9.0 mid-install with six agent-steering bodies changing unread.
 
 ## Invocation guards
 

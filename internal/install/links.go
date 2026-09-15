@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -124,7 +125,14 @@ func (in *installer) backupExisting(path, suffix string) {
 	in.ensureBackupRoot()
 	backup := filepath.Join(in.backupRoot, strings.TrimPrefix(path, in.home+"/")+suffix)
 	must(os.MkdirAll(filepath.Dir(backup), 0o755))
-	must(os.Rename(path, backup))
+	if err := os.Rename(path, backup); errors.Is(err, syscall.EXDEV) {
+		// A rename cannot cross filesystems, and mv copies then deletes.
+		if out, err := exec.Command("mv", path, backup).CombinedOutput(); err != nil {
+			die("mv %s %s: %v: %s", path, backup, err, out)
+		}
+	} else {
+		must(err)
+	}
 	in.log("Backed up %s -> %s", path, backup)
 }
 

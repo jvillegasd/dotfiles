@@ -355,10 +355,12 @@ func (in *installer) installAgentBrowser() {
 		must(err)
 	}
 	servers := newObject()
-	if current, ok := doc.get("mcp"); ok {
-		if parsed, err := parseObject(current); err == nil {
-			servers = parsed
+	if current, ok := doc.get("mcp"); ok && string(current) != "null" {
+		parsed, err := parseObject(current)
+		if err != nil {
+			die("%s: mcp is not a JSON object; fix it and re-run.", path)
 		}
+		servers = parsed
 	}
 	servers.set("agent-browser", encode(struct {
 		Command []string `json:"command"`

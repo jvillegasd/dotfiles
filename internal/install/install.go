@@ -73,7 +73,7 @@ Standalone third-party skills were not downloaded or updated. Their committed
 bodies and skills-lock.json are the reviewed source of truth.
 `
 
-// fatal is what die panics with. Command recovers it into the one red line and exit 1 the shell installer's die gave, which keeps every step a direct port instead of threading an error through each call.
+// fatal is what die panics with, and only recoverFatal recovers it, so any step can stop the run with one message instead of threading an error through each call.
 type fatal string
 
 func die(format string, args ...any) {
@@ -101,7 +101,7 @@ func (in *installer) warn(format string, args ...any) {
 	fmt.Fprintf(in.stderr, "\033[1;33m[warn]\033[0m "+format+"\n", args...)
 }
 
-// recoverFatal turns a die into the one red line and exit 1 the shell installer's die gave. It works only when deferred directly.
+// recoverFatal turns a die into one red error line and exit 1. It works only when deferred directly.
 func recoverFatal(stderr io.Writer, code *int) {
 	if r := recover(); r != nil {
 		msg, ok := r.(fatal)
@@ -152,21 +152,23 @@ func Command(args []string, stdout, stderr io.Writer) (code int) {
 		die("--clear-backups runs on its own; it neither installs nor uninstalls.")
 	}
 	in.noBackup = in.noBackup || in.uninstall
-	in.setPaths(Checkout())
-
-	switch {
-	case clearBackups:
+	if clearBackups {
+		// It reads only $HOME, so it runs from anywhere.
+		in.setPaths("")
 		in.clearBackups()
-	case in.uninstall:
+		return 0
+	}
+	in.setPaths(findCheckout())
+	if in.uninstall {
 		in.uninstallAll()
-	default:
+	} else {
 		in.install()
 	}
 	return 0
 }
 
-// Checkout finds the dotfiles checkout holding the working directory. Its harness is the one installed, so running from another worktree installs that worktree, as running its own install script did.
-func Checkout() string {
+// findCheckout finds the dotfiles checkout holding the working directory. Its harness is the one installed, so running from another worktree installs that worktree.
+func findCheckout() string {
 	dir, err := os.Getwd()
 	must(err)
 	for {
@@ -181,7 +183,6 @@ func Checkout() string {
 	}
 }
 
-// install is a full or links-only run.
 func (in *installer) install() {
 	// First, so the warning precedes the two steps it is about.
 	in.warnUnlessZsh()
@@ -205,7 +206,7 @@ func (in *installer) install() {
 	in.summary()
 }
 
-// run executes a command on the installer's own output and dies when it fails, as set -e did.
+// run executes a command on the installer's own output and dies when it fails.
 func (in *installer) run(stdin io.Reader, name string, args ...string) {
 	cmd := exec.Command(name, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, in.stdout, in.stderr
