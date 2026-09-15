@@ -68,7 +68,7 @@ func TestInstallerGolden(t *testing.T) {
 // runInstaller runs the installer under test from the sandbox checkout, with only the shims and the system directories on PATH.
 func runInstaller(t *testing.T, base string, args ...string) result {
 	t.Helper()
-	cmd := exec.Command(filepath.Join(base, "checkout", "harness", "install.sh"), args...)
+	cmd := exec.Command(binary, append([]string{"install"}, args...)...)
 	cmd.Dir = filepath.Join(base, "checkout")
 	cmd.Env = []string{"HOME=" + filepath.Join(base, "home"), "PATH=" + filepath.Join(base, "shims") + ":/usr/bin:/bin", "SHELL=/bin/zsh"}
 	var stdout, stderr strings.Builder
