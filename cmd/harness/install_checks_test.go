@@ -273,3 +273,21 @@ func TestClearBackupsRunsOutsideTheCheckout(t *testing.T) {
 		t.Error("the harness backups survived")
 	}
 }
+
+// A non-object mcp in opencode.json stops the run before either client is registered, and leaves the file as it was.
+func TestAgentBrowserRefusesANonObjectOpenCodeMCP(t *testing.T) {
+	base := sandbox(t)
+	config := filepath.Join(base, "home", ".config", "opencode", "opencode.json")
+	const text = `{"mcp": ["x"]}` + "\n"
+	writeMode(t, config, text, 0o644)
+	r := runInstaller(t, base, "--links-only")
+	if r.code == 0 || !strings.Contains(r.stderr, "mcp is not a JSON object") {
+		t.Fatalf("exit %d, stderr %q; want the mcp refusal", r.code, r.stderr)
+	}
+	if got := readFile(t, config); got != text {
+		t.Errorf("the refused config changed: %q", got)
+	}
+	if strings.Contains(readFile(t, filepath.Join(base, "shims.log")), "claude mcp add") {
+		t.Error("Claude Code was registered before the refusal")
+	}
+}

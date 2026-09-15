@@ -154,7 +154,7 @@ func Command(args []string, stdout, stderr io.Writer) (code int) {
 	in.noBackup = in.noBackup || in.uninstall
 	if clearBackups {
 		// It reads only $HOME, so it runs from anywhere.
-		in.setPaths("")
+		in.home = os.Getenv("HOME")
 		in.clearBackups()
 		return 0
 	}

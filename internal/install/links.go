@@ -38,7 +38,7 @@ func readlink(path string) string {
 	return target
 }
 
-// entries lists a directory the way the shell's nullglob "$dir"/* did: full paths, sorted, hidden names skipped, and nothing for a missing directory.
+// entries lists a directory as full paths, sorted, hidden names skipped, and nothing for a missing directory.
 func entries(dir string) []string {
 	list, err := os.ReadDir(dir)
 	if err != nil {
@@ -126,7 +126,10 @@ func (in *installer) backupExisting(path, suffix string) {
 	backup := filepath.Join(in.backupRoot, strings.TrimPrefix(path, in.home+"/")+suffix)
 	must(os.MkdirAll(filepath.Dir(backup), 0o755))
 	if err := os.Rename(path, backup); errors.Is(err, syscall.EXDEV) {
-		// A rename cannot cross filesystems, and mv copies then deletes.
+		// A rename cannot cross filesystems, and mv copies then deletes. mv would move path inside a backup that already exists, where a rename refuses, so it refuses too.
+		if exists(backup) {
+			die("Backup path already exists: %s", backup)
+		}
 		if out, err := exec.Command("mv", path, backup).CombinedOutput(); err != nil {
 			die("mv %s %s: %v: %s", path, backup, err, out)
 		}

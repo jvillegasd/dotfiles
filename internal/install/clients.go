@@ -27,7 +27,7 @@ func newObject() *object {
 	return &object{vals: map[string]json.RawMessage{}}
 }
 
-// parseObject reads a JSON object in key order. A repeated key keeps its first position and its last value, as Python's json module did.
+// parseObject reads a JSON object in key order. A repeated key keeps its first position and its last value.
 func parseObject(data []byte) (*object, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	tok, err := dec.Token()
@@ -95,7 +95,7 @@ func (o *object) MarshalJSON() ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// encode marshals without Go's HTML escaping, which Python never applied.
+// encode marshals without HTML escaping, so <, >, and & stay as the user wrote them.
 func encode(v any) json.RawMessage {
 	var b bytes.Buffer
 	enc := json.NewEncoder(&b)
@@ -104,7 +104,7 @@ func encode(v any) json.RawMessage {
 	return bytes.TrimSuffix(b.Bytes(), []byte("\n"))
 }
 
-// render formats a document as Python's json.dumps(indent=2) did, non-ASCII escaped, with one trailing newline.
+// render formats a document with two-space indents and non-ASCII escaped as \uXXXX, matching the configs earlier installs wrote, with one trailing newline.
 func render(v any) []byte {
 	var b bytes.Buffer
 	must(json.Indent(&b, encode(v), "", "  "))
@@ -280,7 +280,7 @@ func (in *installer) reconcileAliases(remove bool) {
 	}
 	current := string(data)
 	source := filepath.Join(in.harness, "aliases.sh")
-	// Python's splitlines: no empty entry after a final line break.
+	// No empty entry after a final line break.
 	lines := lineBreak.Split(current, -1)
 	if lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
@@ -338,13 +338,7 @@ func (in *installer) installAgentBrowser() {
 	if _, err := exec.LookPath("claude"); err != nil {
 		die("Claude Code is missing; run without --links-only to install it.")
 	}
-	_ = exec.Command("claude", "mcp", "remove", "--scope", "user", "agent-browser").Run()
-	add := exec.Command("claude", "mcp", "add", "--scope", "user", "agent-browser", "--", binary, "mcp")
-	add.Stderr = in.stderr
-	if err := add.Run(); err != nil {
-		die("claude mcp add agent-browser failed: %v", err)
-	}
-
+	// OpenCode's config is read and validated before either client is touched, so a config this run refuses leaves both registrations as they were.
 	path := filepath.Join(in.config, "opencode", "opencode.json")
 	doc := newObject()
 	if data, err := os.ReadFile(path); err == nil {
@@ -361,6 +355,12 @@ func (in *installer) installAgentBrowser() {
 			die("%s: mcp is not a JSON object; fix it and re-run.", path)
 		}
 		servers = parsed
+	}
+	_ = exec.Command("claude", "mcp", "remove", "--scope", "user", "agent-browser").Run()
+	add := exec.Command("claude", "mcp", "add", "--scope", "user", "agent-browser", "--", binary, "mcp")
+	add.Stderr = in.stderr
+	if err := add.Run(); err != nil {
+		die("claude mcp add agent-browser failed: %v", err)
 	}
 	servers.set("agent-browser", encode(struct {
 		Command []string `json:"command"`

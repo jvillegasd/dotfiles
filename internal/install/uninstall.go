@@ -44,7 +44,6 @@ Nothing was archived: an uninstall deletes what it removes. Everything above
 comes back from this checkout.
 
 Open a new shell to drop the aliases from the one you are in.
-Reinstall from this checkout with: go run ./cmd/harness install
 `
 
 func (in *installer) uninstallAll() {
@@ -67,6 +66,7 @@ func (in *installer) uninstallAll() {
 		fmt.Fprint(in.stdout, "\nThe agent-browser formula could not be removed and is still installed; the\nwarning above says so. Its configuration is gone either way.\n")
 	}
 	fmt.Fprint(in.stdout, uninstallLeft)
+	fmt.Fprintf(in.stdout, "Reinstall with: cd %s && go run ./cmd/harness install\n", filepath.Dir(in.harness))
 }
 
 func removeFile(path string) {
@@ -297,7 +297,7 @@ func (in *installer) pruneTUI(path string) {
 	fmt.Fprintf(in.stdout, "Removed the engram entries from %s\n", path)
 }
 
-// realpath resolves a link as far as it resolves, as Python's os.path.realpath did: a dangling link yields the path it names, so a dangling link into the harness still counts as the harness's.
+// realpath resolves a link as far as it resolves: a dangling link yields the path it names, so a dangling link into the harness still counts as the harness's.
 func realpath(path string) string {
 	if resolved, err := filepath.EvalSymlinks(path); err == nil {
 		return resolved

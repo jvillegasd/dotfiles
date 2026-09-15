@@ -186,7 +186,7 @@ flowchart TD
 
 ## Install
 
-The root `../macos.sh` and `../linux.sh` install the harness by default: after their package step they run `harness bootstrap` through `go run`, which links the tracked configs, builds `harness` into `~/.local/bin`, and runs a full install. `harness install` installs the harness of the checkout it runs from, so run it from inside this checkout, and through `go run` so the install code matches that checkout: the `harness` on PATH is whatever `harness bootstrap` last built. To reconcile only policy, commands, and skills:
+The root `../macos.sh` and `../linux.sh` install the harness by default: after their package step they run `harness bootstrap` through `go run`, which links the tracked configs, builds `harness` into `~/.local/bin`, and runs a full install. `harness install` installs the harness of the checkout it runs from, so run it from the checkout root, and through `go run` so the install code matches that checkout: the `harness` on PATH is whatever `harness bootstrap` last built. To reconcile only policy, commands, and skills:
 
 ```sh
 go run ./cmd/harness install --links-only
