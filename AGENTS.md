@@ -32,7 +32,7 @@ Personal dotfiles plus the one Harness AI installation that serves Claude Code a
 
 ## Prerequisites
 
-macOS or Linux with zsh, Homebrew, Go 1.26 or newer (from the `Brewfile`), Python 3 (the tests run on the system `python3`), Neovim 0.10 or newer, and a Nerd Font. The GitHub tracker operations need the `gh` CLI authenticated with issue write permission. Branch worktrees use Worktrunk (`wt`); Orca is optional. Managed Python interpreters come from `uv`.
+macOS or Linux with zsh, Homebrew, Go 1.26 or newer (from the `Brewfile`), Python 3 (the tests run on the system `python3`), Neovim 0.10 or newer, and a Nerd Font. The GitHub tracker operations need the `gh` CLI authenticated with issue write permission. Branch worktrees use Worktrunk (`wt`) 0.61 or newer, the first release with the `--config-set` flag `harness state` passes; Orca is optional. Managed Python interpreters come from `uv`.
 
 ## Task runners
 

@@ -72,7 +72,7 @@ type result struct {
 // schema1 is the shape `wt list --format=json` prints when a config pins json-schema 1, as the tracked Worktrunk config does.
 const schema1 = `[{"branch":"` + branch + `","path":"/tmp/x","kind":"worktree"}]`
 
-// harness runs the built binary in dir with only a git symlink and an optional fake `wt` on PATH. wt "" means absent; otherwise the fake prints wt when the call pins schema 2, and the schema-1 shape when it does not.
+// harness runs the built binary in dir. wt "" means absent; otherwise a fake wt prints wt for schema 2 and schema1 otherwise.
 func harness(t *testing.T, dir, wt string, args ...string) result {
 	t.Helper()
 	shims := t.TempDir()
@@ -249,32 +249,31 @@ func TestEscalateOverLegacyNamesReplacedText(t *testing.T) {
 	}
 }
 
-func TestStateSurvivesAStoreFlip(t *testing.T) {
+func TestStateSurvivesStoreFlipsBothWays(t *testing.T) {
 	dir := repo(t)
 	listed := listing(branch)
-	ok(t, harness(t, dir, listed, "state", "incr", "attempts"), "incr with wt")
-	ok(t, harness(t, dir, listed, "state", "incr", "attempts"), "incr with wt")
-	if r := ok(t, harness(t, dir, "", "state", "incr", "attempts"), "incr without wt"); strings.TrimSpace(r.stdout) != "3" {
-		t.Fatalf("incr after the store flipped printed %q, want 3", r.stdout)
+	worktrunkKey, harnessKey := "worktrunk.state."+branch+".vars.attempts", "harness."+branch+".attempts"
+	for want, wt := range []string{listed, listed, "", listed} {
+		r := ok(t, harness(t, dir, wt, "state", "incr", "attempts"), "incr")
+		if strings.TrimSpace(r.stdout) != fmt.Sprint(want+1) {
+			t.Fatalf("incr %d printed %q, want %d", want+1, r.stdout, want+1)
+		}
+		if configHas(t, dir, worktrunkKey) == configHas(t, dir, harnessKey) {
+			t.Fatalf("after incr %d exactly one store should hold attempts", want+1)
+		}
 	}
-	if got := getJSON(t, dir, listed); got["attempts"] != 2.0 {
-		t.Fatalf("worktrunk store still reads its own key, got %v", got)
+	for _, wt := range []string{listed, ""} {
+		if got := getJSON(t, dir, wt); got["attempts"] != 4.0 {
+			t.Fatalf("after flipping back, get with wt=%q reads %v, want 4", wt, got["attempts"])
+		}
 	}
 }
 
-func TestUnscopedCounterShowsAsLegacy(t *testing.T) {
+func TestUnscopedCounterIsIgnored(t *testing.T) {
 	dir := repo(t)
-	git(t, dir, "config", "harness.attempts", "4")
-	got := getJSON(t, dir, "")
-	legacy, _ := got["legacy"].(map[string]any)
-	if got["attempts"] != nil || legacy["attempts"] != "4" {
-		t.Fatalf("get --json = %v, want the unscoped value as legacy", got)
-	}
-	if r := ok(t, harness(t, dir, "", "state", "incr", "attempts"), "incr"); !strings.Contains(r.stderr, "4") {
-		t.Fatalf("incr stderr %q should name the replaced unscoped value", r.stderr)
-	}
-	if got := git(t, dir, "config", "harness."+branch+".attempts"); got != "1" {
-		t.Fatalf("scoped key = %q, want 1", got)
+	git(t, dir, "config", "harness.attempts", "round two stopped")
+	if got := getJSON(t, dir, ""); got["attempts"] != 0.0 || got["legacy"] != nil {
+		t.Fatalf("an unscoped key belongs to no branch, got %v", got)
 	}
 }
 

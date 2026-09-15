@@ -69,28 +69,43 @@ func key(store, branch, name string) string {
 	return "harness." + branch + "." + name
 }
 
-// read finds a key in this branch's store, then in the other store, so state survives a run where `wt` detection flipped. A counter found only under the unscoped key the policy used before typed state is reported as unscoped.
-func (b *Branch) read(name string) (raw string, found, unscoped bool, err error) {
-	for _, store := range []string{b.Store, map[string]string{"worktrunk": "harness", "harness": "worktrunk"}[b.Store]} {
-		if raw, found, err = get(b.Dir, key(store, b.Name, name)); err != nil || found {
-			return raw, found, false, err
-		}
+func (b *Branch) other() string {
+	if b.Store == "worktrunk" {
+		return "harness"
 	}
-	if name == "attempts" || name == "escalations" {
-		raw, found, err = get(b.Dir, "harness."+name)
-		return raw, found, found, err
-	}
-	return "", false, false, nil
+	return "worktrunk"
 }
 
-// counter reads a counter: absent is 0, a canonical non-negative integer is itself, and anything else, including an unscoped value that may belong to another branch, is legacy.
+// read finds a key in this branch's store, then in the other one, so state written before `wt` detection flipped is still found. Every write removes the other store's copy, so at most one exists.
+func (b *Branch) read(name string) (raw string, found bool, err error) {
+	for _, store := range []string{b.Store, b.other()} {
+		if raw, found, err = get(b.Dir, key(store, b.Name, name)); err != nil || found {
+			return raw, found, err
+		}
+	}
+	return "", false, nil
+}
+
+// write stores a key in this branch's store and removes the other store's copy.
+func (b *Branch) write(name, value string) error {
+	if _, err := git(b.Dir, "config", "--local", key(b.Store, b.Name, name), value); err != nil {
+		return err
+	}
+	// git config exits 5 when there is no such key to unset.
+	if _, err := git(b.Dir, "config", "--local", "--unset", key(b.other(), b.Name, name)); err != nil && exitCode(err) != 5 {
+		return err
+	}
+	return nil
+}
+
+// counter reads a counter: absent is 0, a canonical non-negative integer is itself, and anything else is legacy.
 func (b *Branch) counter(name string) (n int, legacy *string, err error) {
-	raw, found, unscoped, err := b.read(name)
+	raw, found, err := b.read(name)
 	if err != nil || !found {
 		return 0, nil, err
 	}
 	n, convErr := strconv.Atoi(raw)
-	if unscoped || convErr != nil || n < 0 || strconv.Itoa(n) != raw {
+	if convErr != nil || n < 0 || strconv.Itoa(n) != raw {
 		return 0, &raw, nil
 	}
 	return n, nil, nil
@@ -99,10 +114,10 @@ func (b *Branch) counter(name string) (n int, legacy *string, err error) {
 func (b *Branch) Get() (State, error) {
 	s := State{Branch: b.Name, Store: b.Store}
 	var err error
-	if s.Ladder, _, _, err = b.read("ladder"); err != nil {
+	if s.Ladder, _, err = b.read("ladder"); err != nil {
 		return s, err
 	}
-	if s.Reason, _, _, err = b.read("reason"); err != nil {
+	if s.Reason, _, err = b.read("reason"); err != nil {
 		return s, err
 	}
 	for _, c := range []struct {
@@ -125,18 +140,14 @@ func (b *Branch) Get() (State, error) {
 	return s, nil
 }
 
-// Incr adds one to a counter in this branch's store. A legacy value counts as zero, and replaced then carries the text it overwrote.
+// Incr adds one to the attempts or escalations counter. A legacy value counts as zero, and replaced then carries the text it overwrote.
 func (b *Branch) Incr(name string) (next int, replaced *string, err error) {
-	if name != "attempts" && name != "escalations" {
-		return 0, nil, fmt.Errorf("unknown counter %q; want attempts or escalations", name)
-	}
 	// ponytail: read-then-write without a lock assumes one writer per branch; add a lock file under .git if parallel roles ever share a branch's counters.
 	n, replaced, err := b.counter(name)
 	if err != nil {
 		return 0, nil, err
 	}
-	_, err = git(b.Dir, "config", "--local", key(b.Store, b.Name, name), strconv.Itoa(n+1))
-	return n + 1, replaced, err
+	return n + 1, replaced, b.write(name, strconv.Itoa(n+1))
 }
 
 // Escalate records one rabbit-hole trip. The reason is written first, so a failed write never leaves a counted trip that a retry would count again.
@@ -144,15 +155,14 @@ func (b *Branch) Escalate(reason string) (next int, replaced *string, err error)
 	if strings.TrimSpace(reason) == "" {
 		return 0, nil, errors.New("an escalation needs a non-empty reason")
 	}
-	if _, err = git(b.Dir, "config", "--local", key(b.Store, b.Name, "reason"), reason); err != nil {
+	if err = b.write("reason", reason); err != nil {
 		return 0, nil, err
 	}
 	return b.Incr("escalations")
 }
 
 func (b *Branch) SetLadder(text string) error {
-	_, err := git(b.Dir, "config", "--local", key(b.Store, b.Name, "ladder"), text)
-	return err
+	return b.write("ladder", text)
 }
 
 // Prune removes the state of every branch in dir's repository that no longer has a local ref, and returns the git config sections it removed.
@@ -188,7 +198,7 @@ func Prune(dir string) ([]string, error) {
 	return removed, nil
 }
 
-// owner maps a state key to its branch and the config section holding that branch's state. Unscoped legacy keys such as harness.attempts have no branch.
+// owner maps a state key to its branch and the config section holding that branch's state. Unscoped keys such as harness.attempts have no branch.
 func owner(k string) (branch, section string) {
 	if rest, ok := strings.CutPrefix(k, "worktrunk.state."); ok {
 		if i := strings.LastIndex(rest, ".vars."); i > 0 {
