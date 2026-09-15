@@ -21,6 +21,7 @@ Personal dotfiles plus the one Harness AI installation that serves Claude Code a
 | `go.mod`, `cmd/harness/` | The Go module and the `harness` command, the single entry point for operating the harness |
 | `internal/state/` | The per-branch oracle ladder and rabbit-hole counters behind `harness state` |
 | `internal/install/` | The installer and bootstrap behind `harness install` and `harness bootstrap` |
+| `internal/locks/` | The third-party skill locks behind `harness locks` |
 | `harness/` | Canonical policy, commands, skills, status lines, client settings, bench, and tests |
 | `harness/tests/` | Runnable regression checks for the lifecycle reconciler |
 | `harness/bench/` | Session-population measurement for harness changes |
@@ -50,12 +51,11 @@ go test ./...
 go build ./...
 python3 -m unittest discover -s harness/tests
 python3 -m py_compile .github/scripts/reconcile-agent-lifecycle.py
-bash -n macos.sh linux.sh lib/common.sh lib/python.sh harness/locked-skills.sh
-./harness/locked-skills.sh check
+go run ./cmd/harness locks check
 git diff --check
 ```
 
-The first four are the Go rungs: vet, formatting, the command tests that build `harness` and run it against throwaway repositories and home directories, and a compile of every package. The installer tests compare every mode against the goldens in `cmd/harness/testdata/install/`, which list each managed link, so adding or removing a skill or command means rerecording them with `go test ./cmd/harness -run TestInstallerGolden -update` and reading the diff. The Python suite runs the reconciler regression suite. The next two are syntax checks for the Python reconciler and the shell entry points. `locked-skills.sh check` runs a shell syntax check and diff-hygiene checks over tracked files. `git diff --check` catches whitespace errors and conflict markers. The lifecycle workflow in `.github/workflows/agent-lifecycle.yml` runs the reconciler remotely; the unit suite is its local equivalent.
+The first four are the Go rungs: vet, formatting, the command tests that build `harness` and run it against throwaway repositories and home directories, and a compile of every package. The installer tests compare every mode against the goldens in `cmd/harness/testdata/install/`, which list each managed link, so adding or removing a skill or command means rerecording them with `go test ./cmd/harness -run TestInstallerGolden -update` and reading the diff. The Python suite runs the reconciler regression suite. `python3 -m py_compile` syntax-checks the reconciler, and `go run ./cmd/harness locks check` syntax-checks the remaining shell entry points and runs diff-hygiene checks over tracked files, built from this checkout rather than whatever `harness bootstrap` last placed on PATH. `git diff --check` catches whitespace errors and conflict markers. The lifecycle workflow in `.github/workflows/agent-lifecycle.yml` runs the reconciler remotely; the unit suite is its local equivalent.
 
 ## Behavioral acceptance
 
@@ -71,4 +71,4 @@ Neovim health is read through `:checkhealth`, `:Lazy`, `:Mason`, and `:LspInfo` 
 
 Markdown prose is never hard-wrapped. `.editorconfig` owns indentation: two spaces for Markdown, Lua, JSON, and YAML. One plugin per file under `nvim/lua/plugins/<category>/`. Global mappings live in `nvim/lua/core/keymaps.lua`; `KEYMAPS.md` catalogues them. Machine-local git settings belong in `~/.gitconfig.local`, which this repository never tracks. Regenerate the package manifest with `brew bundle dump --describe --force --file=Brewfile` after adding or removing a package.
 
-Locked skill bodies under `harness/skills/` are not edited in place; use `harness/locked-skills.sh` and commit only the reviewed change. This repository's tracker is GitHub, and its lifecycle configuration lives in `docs/agents/harness.json`.
+Locked skill bodies under `harness/skills/` are not edited in place; use `harness locks` and commit only the reviewed change. This repository's tracker is GitHub, and its lifecycle configuration lives in `docs/agents/harness.json`.

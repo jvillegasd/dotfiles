@@ -36,7 +36,6 @@ The two entry points differ only in how packages arrive. Everything after that l
 harness/
 ├── POLICY.md                   # one vendor-neutral global policy
 ├── README.md                   # maintenance and update procedure
-├── locked-skills.sh            # add, update, remove, and check third-party locks
 ├── statusline/                 # one file per provider, named after it
 │   └── claude.sh               # → ~/.claude/statusline.sh; the renderer Claude Code runs
 ├── clients/                    # the client settings the harness owns, reconciled not symlinked
