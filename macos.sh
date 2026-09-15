@@ -41,10 +41,7 @@ ensure_brew() {
     fi
 }
 
-# Brewfile is the manifest for this machine, regenerated with
-# `brew bundle dump --describe --force --file=Brewfile`. Formulae the harness
-# itself needs are installed again by harness/install.sh, which keeps that
-# installer runnable on its own.
+# Brewfile is the manifest for this machine, regenerated with `brew bundle dump --describe --force --file=Brewfile`. Formulae the harness itself needs are installed again by `harness install`, which keeps it runnable on its own.
 install_packages() {
     log "Applying $SCRIPT_DIR/Brewfile"
     brew bundle --file "$SCRIPT_DIR/Brewfile"
@@ -58,8 +55,7 @@ main() {
     ensure_repo
     install_packages
     install_pythons
-    place_configs
-    install_harness
+    bootstrap_harness
     bootstrap_nvim
     summary
     cat <<'EOF'

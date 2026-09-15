@@ -15,12 +15,13 @@ Personal dotfiles plus the one Harness AI installation that serves Claude Code a
 | Path | Holds |
 | --- | --- |
 | `macos.sh`, `linux.sh` | Platform bootstrap and provisioning entry points |
-| `lib/common.sh` | Symlinking, harness call, and Neovim bootstrap, shared by both |
-| `lib/python.sh` | The uv-managed interpreter set, also sourced by `harness/install.sh` |
+| `lib/common.sh` | The hand-off to `harness bootstrap` and the Neovim bootstrap, shared by both |
+| `lib/python.sh` | The uv-managed interpreter set, also asserted by `harness install` |
 | `Brewfile` | macOS package manifest |
 | `go.mod`, `cmd/harness/` | The Go module and the `harness` command, the single entry point for operating the harness |
 | `internal/state/` | The per-branch oracle ladder and rabbit-hole counters behind `harness state` |
-| `harness/` | Canonical policy, commands, skills, installer, status lines, client settings, bench, and tests |
+| `internal/install/` | The installer and bootstrap behind `harness install` and `harness bootstrap` |
+| `harness/` | Canonical policy, commands, skills, status lines, client settings, bench, and tests |
 | `harness/tests/` | Runnable regression checks for the lifecycle reconciler |
 | `harness/bench/` | Session-population measurement for harness changes |
 | `nvim/` | Neovim config: `init.lua`, `lua/core/`, `lua/plugins/<category>/` |
@@ -49,20 +50,20 @@ go test ./...
 go build ./...
 python3 -m unittest discover -s harness/tests
 python3 -m py_compile .github/scripts/reconcile-agent-lifecycle.py
-bash -n macos.sh linux.sh lib/common.sh lib/python.sh harness/install.sh harness/locked-skills.sh
+bash -n macos.sh linux.sh lib/common.sh lib/python.sh harness/locked-skills.sh
 ./harness/locked-skills.sh check
 git diff --check
 ```
 
-The first four are the Go rungs: vet, formatting, the command tests that build `harness` and run it against throwaway repositories, and a compile of every package. The Python suite runs the reconciler regression suite. The next two are syntax checks for the Python reconciler and the shell entry points. `locked-skills.sh check` runs a shell syntax check and diff-hygiene checks over tracked files. `git diff --check` catches whitespace errors and conflict markers. The lifecycle workflow in `.github/workflows/agent-lifecycle.yml` runs the reconciler remotely; the unit suite is its local equivalent.
+The first four are the Go rungs: vet, formatting, the command tests that build `harness` and run it against throwaway repositories and home directories, and a compile of every package. The installer tests compare every mode against the goldens in `cmd/harness/testdata/install/`, which list each managed link, so adding or removing a skill or command means rerecording them with `go test ./cmd/harness -run TestInstallerGolden -update` and reading the diff. The Python suite runs the reconciler regression suite. The next two are syntax checks for the Python reconciler and the shell entry points. `locked-skills.sh check` runs a shell syntax check and diff-hygiene checks over tracked files. `git diff --check` catches whitespace errors and conflict markers. The lifecycle workflow in `.github/workflows/agent-lifecycle.yml` runs the reconciler remotely; the unit suite is its local equivalent.
 
 ## Behavioral acceptance
 
 Some changes cannot be settled by the checks above, because they act on machine state or on a running client: installer symlink reconciliation, the tracked client settings, interactive authentication, Neovim and terminal rendering, and the session metrics a harness change is meant to move. Accept those by running the affected tool and observing it, never by static inspection alone.
 
-`macos.sh`, `linux.sh`, and `harness/install.sh` are provisioning surfaces. Run them when the intent is to change machine state, never merely to validate a change. `--no-backup` deletes collisions instead of archiving them and is unrecoverable.
+`macos.sh`, `linux.sh`, `harness bootstrap`, and `harness install` are provisioning surfaces. Run them when the intent is to change machine state, never merely to validate a change. `--no-backup` deletes collisions instead of archiving them and is unrecoverable.
 
-`./harness/install.sh --links-only` is the same provisioning surface with the package step removed. It reconciles the policy, command, skill, and role agent links, but it still rewrites the Engram and agent-browser MCP registrations and the tracked client settings, so `engram`, `agent-browser`, and `claude` must already be installed. Run it when links need reconciling, not as a validation step.
+`go run ./cmd/harness install --links-only`, run from the checkout root, is the same provisioning surface with the package step removed. `go run` builds the install code from the checkout it reconciles, while the `harness` on PATH carries whatever `harness bootstrap` last built. It reconciles the policy, command, skill, and role agent links, but it still rewrites the Engram and agent-browser MCP registrations and the tracked client settings, so `engram`, `agent-browser`, and `claude` must already be installed. Run it when links need reconciling, not as a validation step.
 
 Neovim health is read through `:checkhealth`, `:Lazy`, `:Mason`, and `:LspInfo` inside the editor. Session-population measurement for a harness change is `python3 harness/bench/measure.py --split <commit-date> --since <window-start>`, documented in `harness/bench/README.md`.
 

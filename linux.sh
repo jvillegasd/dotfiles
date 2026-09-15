@@ -25,11 +25,7 @@ REPO_URL=""
 APT_PACKAGES=(build-essential procps curl file git ca-certificates unzip)
 DNF_PACKAGES=(procps-ng curl file git ca-certificates unzip)
 
-# The macOS side installs from Brewfile, which also carries casks and fonts
-# that do not exist on Linux. This is the subset a Linux box actually needs.
-# No python@ formula on either side: install_pythons provisions the
-# interpreters with uv, which is why uv is here rather than left to
-# harness/install.sh. macOS gets it from Brewfile for the same reason.
+# The macOS side installs from Brewfile, which also carries casks and fonts that do not exist on Linux. This is the subset a Linux box actually needs. No python@ formula on either side: install_pythons provisions the interpreters with uv, which is why uv is here rather than left to `harness install`. go is here because `harness bootstrap` runs from source. macOS gets both from Brewfile for the same reasons.
 BREW_FORMULAE=(
     neovim
     ripgrep
@@ -39,6 +35,7 @@ BREW_FORMULAE=(
     tree
     make
     node
+    go
     uv
     tree-sitter
     tree-sitter-cli
@@ -90,8 +87,7 @@ main() {
     ensure_repo
     install_packages
     install_pythons
-    place_configs
-    install_harness
+    bootstrap_harness
     bootstrap_nvim
     summary
     cat <<'EOF'

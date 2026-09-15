@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 # Shared bootstrap logic for macos.sh and linux.sh.
 #
-# Sourced, never executed. The two entry points differ only in how packages
-# arrive; everything after that (symlinks, the harness, Neovim bootstrap) is
-# the same on both platforms, so it lives here once.
+# Sourced, never executed. The two entry points differ only in how packages arrive; everything after that (the config links and the harness through `harness bootstrap`, then the Neovim bootstrap) is the same on both platforms, so it lives here once.
 
-# Delete a config that is in the way instead of renaming it to
-# <path>.backup.<timestamp>, and pass the same choice to the harness installer.
-# Destructive and unrecoverable.
+# Delete a config that is in the way instead of renaming it to <path>.backup.<timestamp>, and apply the same choice to the harness install. Destructive and unrecoverable.
 NO_BACKUP=false
 
 # If set by the entry point, it will clone the repo into $DOTFILES_DIR when run
@@ -43,7 +39,7 @@ Usage: $(basename "$0") [--no-backup]
 
   --no-backup  Delete configs that are in the way instead of renaming them to
                <path>.backup.<timestamp>, and pass the same choice to the
-               harness installer. Destructive and unrecoverable.
+               harness install. Destructive and unrecoverable.
 EOF
 }
 
@@ -75,52 +71,13 @@ ensure_repo() {
     SCRIPT_DIR="$DOTFILES_DIR"
 }
 
-# Symlinks one tracked path to its destination. A destination that already
-# points where it should is left alone, so re-running is free; anything else is
-# renamed to <path>.backup.<timestamp>, or deleted under --no-backup.
-link_path() {
-    local src="$1" dest="$2"
-    [[ -e "$src" ]] || die "Missing config source: $src"
-
-    if [[ -L "$dest" ]]; then
-        local current
-        current="$(readlink "$dest")"
-        if [[ "$current" == "$src" ]]; then
-            log "Symlink already in place: $dest -> $src"
-            return
-        fi
-        log "Replacing existing symlink: $dest (was -> $current)"
-        rm "$dest"
-    elif [[ -e "$dest" ]]; then
-        if $NO_BACKUP; then
-            log "Removing existing $dest"
-            rm -rf "$dest"
-        else
-            local backup="${dest}.backup.$(date +%Y%m%d-%H%M%S)"
-            log "Backing up existing $dest to $backup"
-            mv "$dest" "$backup"
-        fi
-    fi
-
-    mkdir -p "$(dirname "$dest")"
-    log "Linking $src -> $dest"
-    ln -s "$src" "$dest"
-}
-
-place_configs() {
-    link_path "$SCRIPT_DIR/nvim"                 "$CONFIG_HOME/nvim"
-    link_path "$SCRIPT_DIR/ghostty"              "$CONFIG_HOME/ghostty"
-    link_path "$SCRIPT_DIR/git/gitconfig"        "$HOME/.gitconfig"
-    link_path "$SCRIPT_DIR/git/ignore"           "$CONFIG_HOME/git/ignore"
-    link_path "$SCRIPT_DIR/worktrunk/config.toml" "$CONFIG_HOME/worktrunk/config.toml"
-}
-
-install_harness() {
-    [[ -x "$SCRIPT_DIR/harness/install.sh" ]] || die "Missing harness installer: $SCRIPT_DIR/harness/install.sh"
+# Hands off to Go once the package step has installed it: harness bootstrap links the tracked configs, builds harness into ~/.local/bin, and runs the harness install.
+bootstrap_harness() {
+    have go || die "Go is required before the harness bootstrap; it comes from the package step."
     if $NO_BACKUP; then
-        "$SCRIPT_DIR/harness/install.sh" --no-backup
+        (cd "$SCRIPT_DIR" && go run ./cmd/harness bootstrap --no-backup)
     else
-        "$SCRIPT_DIR/harness/install.sh"
+        (cd "$SCRIPT_DIR" && go run ./cmd/harness bootstrap)
     fi
 }
 

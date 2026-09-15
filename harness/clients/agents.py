@@ -11,7 +11,7 @@ Output paths and their ancestors must not be symlinks; both generation and check
 
 --check writes nothing. It reports each output that is missing, drifted, unmanaged, or no longer carries its access level's restrictions, and exits 1 when it found any.
 
-The output directory is wholly owned: install.sh links client agent paths to these files and never writes a definition into a client directory itself, which is what keeps a private agent beside them untouched.
+The output directory is wholly owned: `harness install` links client agent paths to these files and never writes a definition into a client directory itself, which is what keeps a private agent beside them untouched.
 """
 
 import json

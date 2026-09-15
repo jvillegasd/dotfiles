@@ -7,7 +7,7 @@ One committed source for Claude Code and OpenCode.
 | `POLICY.md` | The routing table, oracle ladder, and escalation contract. Linked to each client's global instruction path. |
 | `commands/` | The workflows, invoked as `/name` in Claude Code and OpenCode. |
 | `skills/` | Protocol, vocabulary, and locked third-party bodies. |
-| `install.sh` | Installs clients and integrations, reconciles links, preserves mutable client state. |
+| `../internal/install/` | The installer behind `harness install`: installs clients and integrations, reconciles links, preserves mutable client state. |
 | `locked-skills.sh` | Adds, updates, removes, and validates third-party skill locks. |
 | `bench/measure.py` | Compares the session population before and after a change. Manual in `bench/README.md`. |
 | `statusline/` | One file per provider that has a status line. |
@@ -106,7 +106,7 @@ A locally authored skill carries both invocation guards in its frontmatter: `dis
 
 `adversarial-review` launches Reviewer A, Reviewer B, and the review refuter as named agents, and a workflow that chooses to delegate implementation launches the `executor`. The reviewers' and the refuter's standing instructions, output format, and read-search intent live once, in `skills/adversarial-review/roles/`; the skill keeps orchestration, scaling, diff delivery, triage, refuter adjudication, and the loop cap. The executor lives in `roles/executor.md` and keeps implementation access: it edits and runs commands inside the slice it was handed, while the delegating workflow keeps scope, commits, review, conformance, and every gate. `clients/agents.py <assignments> <output>` renders one definition per role per client and rewrites nothing that already matches; `--check` reports a missing, drifted, unmanaged, or widened definition.
 
-The installer generates into `harness/.generated/agents/`, gitignored machine state owned by this checkout, and links each definition into its client's agent directory. The only links it claims are ones whose text points into that directory: an install removes a link whose definition was retired, an uninstall removes every such link and the generated directory, and a private agent or another checkout's link beside them is left alone. `check_links` fails on a missing link or on a definition that lost its restrictions.
+The installer generates into `harness/.generated/agents/`, gitignored machine state owned by this checkout, and links each definition into its client's agent directory. The only links it claims are ones whose text points into that directory: an install removes a link whose definition was retired, an uninstall removes every such link and the generated directory, and a private agent or another checkout's link beside them is left alone. The install's link check fails on a missing link or on a definition that lost its restrictions.
 
 | Client | Agents | Path | Control | Not enforced |
 | --- | --- | --- | --- | --- |
@@ -164,7 +164,7 @@ flowchart TD
 | Claude Code | `model:` an alias, `sonnet`, `opus`, `haiku`, or `fable`, or a `claude-` model ID | `effort:` `low`, `medium`, `high`, `xhigh`, or `max` | `model: inherit` and no `effort:` line, so the session's model and effort apply |
 | OpenCode | `model:` a `provider/model` ID | `reasoningEffort:` `none`, `minimal`, `low`, `medium`, `high`, or `xhigh`, only beside an `openai/` model, since OpenCode passes it to the provider | neither line, so the invoking agent's model applies |
 
-A value outside those sets, an unknown or duplicate key, a missing client default, or effort beside a non-OpenAI OpenCode model fails generation before anything is written, and nothing is substituted. A set model or effort prints as `unverified:` until that account is observed running it, because a client's documentation is not proof of access. A role with an assignment and no definition is validated and prints as `pending:`, and no agent is generated until its definition lands. Change an assignment by editing its entry and rerunning `./harness/install.sh --links-only`; never edit a generated file, which `--check` reports as changed.
+A value outside those sets, an unknown or duplicate key, a missing client default, or effort beside a non-OpenAI OpenCode model fails generation before anything is written, and nothing is substituted. A set model or effort prints as `unverified:` until that account is observed running it, because a client's documentation is not proof of access. A role with an assignment and no definition is validated and prints as `pending:`, and no agent is generated until its definition lands. Change an assignment by editing its entry and rerunning `go run ./cmd/harness install --links-only`; never edit a generated file, which `--check` reports as changed.
 
 Acceptance on 2026-09-14 made no model request. `claude plugin validate` in Claude Code 2.1.270 parsed generated agents carrying `model: sonnet`, `effort: high`, and `disallowedTools: Agent`, which proves the frontmatter parses, not that Claude Code applies those fields. `opencode debug agent` in OpenCode 1.18.30 resolved `openai/gpt-5.5` with `reasoningEffort` from both a client default and a role override, and resolved the reviewer and executor denies. Neither proves a request runs on the assigned model or that the account can reach it.
 
@@ -186,10 +186,10 @@ flowchart TD
 
 ## Install
 
-The root `../macos.sh` and `../linux.sh` install the harness by default. To reconcile only policy, commands, and skills:
+The root `../macos.sh` and `../linux.sh` install the harness by default: after their package step they run `harness bootstrap` through `go run`, which links the tracked configs, builds `harness` into `~/.local/bin`, and runs a full install. `harness install` installs the harness of the checkout it runs from, so run it from the checkout root, and through `go run` so the install code matches that checkout: the `harness` on PATH is whatever `harness bootstrap` last built. To reconcile only policy, commands, and skills:
 
 ```sh
-./harness/install.sh --links-only
+go run ./cmd/harness install --links-only
 ```
 
 | Flag | Effect |
@@ -203,13 +203,13 @@ Reconciliation removes as well as adds. A symlink in a managed root is backed up
 
 Managed roots are real directories, so harness links and your private entries sit side by side; a symlink standing in for one is moved aside under `.previous-link`. The OpenCode skills root is normalized but never created, since OpenCode reads `~/.agents/skills`. OpenCode's own three paths follow `XDG_CONFIG_HOME` when set, the same default `../lib/common.sh` resolves. Anything in the way is moved to a timestamped directory under `~/.dotfiles-backups/harness/`, or deleted with `--no-backup`, which the root installer forwards. Each removal is logged.
 
-Both run modes verify what they wrote. `check_links` asserts every skill, command, policy, status line, and role agent link on every run; `check_tools` adds the client, plugin, and interpreter assertions only a full run can satisfy. Its OpenCode assertion reads `opencode debug config` through a temporary file rather than a pipe: that command stops at the 64 KiB pipe capacity whenever stdout is not a regular file, and this config passed 64 KiB once the harness's own command templates went into it, so the piped form failed on a JSON parse error instead of on the assertion. Both run after Engram, which rewrites `settings.json` and `opencode.json`.
+Both run modes verify what they wrote. The link check asserts every skill, command, policy, status line, and role agent link on every run; the tool check adds the client, plugin, and interpreter assertions only a full run can satisfy. Its OpenCode assertion reads `opencode debug config` through a temporary file rather than a pipe: that command stops at the 64 KiB pipe capacity whenever stdout is not a regular file, and this config passed 64 KiB once the harness's own command templates went into it, so the piped form failed on a JSON parse error instead of on the assertion. Both run after Engram, which rewrites `settings.json` and `opencode.json`.
 
 ### MCP servers
 
-Engram is core, not optional: the policy assumes memory survives a session. `install_engram` runs one `engram setup <agent>` per client, as engram's own `docs/AGENT-SETUP.md` (https://github.com/Gentleman-Programming/engram) documents, and is idempotent. Both run modes reconcile it unconditionally rather than probing, because probing sees presence but never whether the pinned absolute binary path still resolves; setup rewrites the pin every time. The claude-code command is answered yes to allowlist Engram's tools; the opencode command takes a closed stdin. The allowlist stays untracked, since a tracked copy of a tool set Engram owns goes stale silently.
+Engram is core, not optional: the policy assumes memory survives a session. The installer runs one `engram setup <agent>` per client, as engram's own `docs/AGENT-SETUP.md` (https://github.com/Gentleman-Programming/engram) documents, and is idempotent. Both run modes reconcile it unconditionally rather than probing, because probing sees presence but never whether the pinned absolute binary path still resolves; setup rewrites the pin every time. The claude-code command is answered yes to allowlist Engram's tools; the opencode command takes a closed stdin. The allowlist stays untracked, since a tracked copy of a tool set Engram owns goes stale silently.
 
-agent-browser (https://github.com/vercel-labs/agent-browser) ships no per-client registrar, so `install_agent_browser` writes both registrations itself: `claude mcp add --scope user`, plus a JSON edit to `opencode.json` for the client whose `opencode mcp add` is interactive. It runs from `reconcile_clients`, after `engram setup`, which would otherwise drop it. `check_tools` asserts both servers per client, so a run that clobbered Engram's entry fails.
+agent-browser (https://github.com/vercel-labs/agent-browser) ships no per-client registrar, so the installer writes both registrations itself: `claude mcp add --scope user`, plus a JSON edit to `opencode.json` for the client whose `opencode mcp add` is interactive. It runs after `engram setup`, which would otherwise drop it. The tool check asserts both servers per client, so a run that clobbered Engram's entry fails.
 
 Registration is global, because a browser driver is a general tool like `gh` rather than a dependency of one repository. Each registration is removed and re-added, so a re-run is idempotent and the pinned path is never stale. The profile is the default, meaning no `--tools` flag, so only `core` loads. Widening to `network`, `state`, `debug`, `tabs`, `react`, `mobile`, or `all` is a one-word edit there, and each would cost context in every session of both clients.
 
@@ -225,7 +225,7 @@ Python belongs to uv rather than Homebrew:
 uv python install 3.14
 ```
 
-`PYTHON_VERSIONS` in `../lib/python.sh` is the one declaration, and sourcing it is the only thing this installer reads from outside `harness/`. The root scripts call `install_pythons`; `check_tools` calls `assert_pythons`, because the harness consumes the interpreters. That check asks `uv python find --managed-python` rather than testing `PATH`, since a shadowing Homebrew `python3.14` would pass while uv had nothing to resolve, and `uv` therefore arrives first, from `Brewfile` on macOS and `linux.sh` on Linux. Nothing here claims the name `python3`: each version also lands as `~/.local/bin/python3.14`, usually behind the pyenv shims. Run `uv python update-shell` to change that.
+`PYTHON_VERSIONS` in `../lib/python.sh` is the one declaration. The root scripts call `install_pythons`; the tool check sources the same file and calls `assert_pythons`, because the harness consumes the interpreters. That check asks `uv python find --managed-python` rather than testing `PATH`, since a shadowing Homebrew `python3.14` would pass while uv had nothing to resolve, and `uv` therefore arrives first, from `Brewfile` on macOS and `linux.sh` on Linux. Nothing here claims the name `python3`: each version also lands as `~/.local/bin/python3.14`, usually behind the pyenv shims. Run `uv python update-shell` to change that.
 
 ### OpenAI models through OpenCode
 
@@ -292,11 +292,11 @@ Locked Matt Pocock skills provide domain and module vocabulary, `improve-codebas
 
 Locked `pbakaus/impeccable` is the one frontend design body. It is description-matchable, so the control is scope rather than a guard: no command or local skill loads it, and `POLICY.md` keeps the project's existing styling layer winning inside `/proto` and `/ship`.
 
-It arrives only through `locked-skills.sh`. Four of its own routes are forbidden, because each writes outside the lock: `npx impeccable install` and `$impeccable hooks on` wire `PostToolUse` and `Stop` hooks into a project unasked, `npx impeccable update` rewrites the locked directory out from under `skills-lock.json`, and `scripts/pin.mjs` mints a `$<command>` shortcut as a real skill directory that `install.sh` would link everywhere and neither sweep would reclaim. The lock covers the body's bytes, not its runtime egress: several scripts call the author's site. At 4.8 MB across 168 files it is the largest thing in `skills/`, against about 99 KB for everything else combined.
+It arrives only through `locked-skills.sh`. Four of its own routes are forbidden, because each writes outside the lock: `npx impeccable install` and `$impeccable hooks on` wire `PostToolUse` and `Stop` hooks into a project unasked, `npx impeccable update` rewrites the locked directory out from under `skills-lock.json`, and `scripts/pin.mjs` mints a `$<command>` shortcut as a real skill directory that `harness install` would link everywhere and neither sweep would reclaim. The lock covers the body's bytes, not its runtime egress: several scripts call the author's site. At 4.8 MB across 168 files it is the largest thing in `skills/`, against about 99 KB for everything else combined.
 
 ### Ponytail
 
-Ponytail is a locked skill body, not a plugin. None of the plugin is installed, and `check_links` asserts the body is present. What replaces its `SessionStart` hook is one line in each command that writes code, `/ship`, `/proto`, `/feedback`, and `/address-review`, plus `adversarial-review` using ponytail violations as a review lens. Lazy mode then applies where code is written rather than to every conversation, and delivers the full `SKILL.md` instead of the hook's level-filtered condensation. The trade is that `/ponytail lite|ultra` switching and the auxiliary skills are gone, and in exchange the body changes only through a reviewed update, where the plugin once moved 4.7.0 to 4.9.0 mid-install with six agent-steering bodies changing unread.
+Ponytail is a locked skill body, not a plugin. None of the plugin is installed, and the install's link check asserts the body is present. What replaces its `SessionStart` hook is one line in each command that writes code, `/ship`, `/proto`, `/feedback`, and `/address-review`, plus `adversarial-review` using ponytail violations as a review lens. Lazy mode then applies where code is written rather than to every conversation, and delivers the full `SKILL.md` instead of the hook's level-filtered condensation. The trade is that `/ponytail lite|ultra` switching and the auxiliary skills are gone, and in exchange the body changes only through a reviewed update, where the plugin once moved 4.7.0 to 4.9.0 mid-install with six agent-steering bodies changing unread.
 
 ## Invocation guards
 

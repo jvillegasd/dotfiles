@@ -1,11 +1,9 @@
 """Regression checks for the generated role agents.
 
-`clients/assignments.json` names every role, its canonical definition, and its model and effort assignments, and clients/agents.py renders one definition per role per client. These checks drive the generator through temporary directories the way install.sh calls it, and pin the protocol lines the skill, the roles, the policy, and the delivery commands share. A pinned line is compared whole, with list indentation stripped only in command files, so a deliberate paraphrase fails the pin, but a paraphrase added elsewhere beside an intact line does not.
+`clients/assignments.json` names every role, its canonical definition, and its model and effort assignments, and clients/agents.py renders one definition per role per client. These checks drive the generator through temporary directories the way `harness install` calls it, and pin the protocol lines the skill, the roles, the policy, and the delivery commands share. A pinned line is compared whole, with list indentation stripped only in command files, so a deliberate paraphrase fails the pin, but a paraphrase added elsewhere beside an intact line does not.
 """
 
 import json
-import os
-import re
 import shutil
 import subprocess
 import sys
@@ -19,7 +17,6 @@ _CONFIG = _HARNESS / "clients/assignments.json"
 _SKILL = _HARNESS / "skills/adversarial-review/SKILL.md"
 _ROLES = _HARNESS / "skills/adversarial-review/roles"
 _POLICY = _HARNESS / "POLICY.md"
-_INSTALL = _HARNESS / "install.sh"
 
 ACCESS = "Read and search only. Read and search the repository to follow callers and context. Never edit a file, run a command, fetch from the web, or delegate to another agent, even where the client would let you."
 
@@ -74,35 +71,6 @@ def config_copy(directory, edit=None):
 
 def frontmatter(text):
     return text.split("---\n")[1]
-
-
-def installer_agents(harness, home, uninstall):
-    """Run install.sh's own agent functions, lifted verbatim, against a temporary HOME and checkout."""
-    text = _INSTALL.read_text()
-    parts = [re.search(r"^AGENT_OUT=.*?^\)\n", text, re.M | re.S).group(0)]
-    for name in ("backup_existing", "link_managed", "ensure_managed_dir", "sweep_agent_links", "install_agents", "check_agents", "remove_agents", "check_agents_removed"):
-        parts.append(re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", text, re.M | re.S).group(0))
-    script = "\n".join(
-        ["set -euo pipefail", "shopt -s nullglob", 'log() { :; }; die() { echo "$*" >&2; exit 1; }', *parts]
-        + ["remove_agents; check_agents_removed" if uninstall else "install_agents >/dev/null; check_agents"]
-    )
-    env = {
-        **os.environ,
-        "HOME": str(home),
-        "HARNESS_DIR": str(harness),
-        "CONFIG_HOME": str(home / ".config"),
-        "UNINSTALL": "true" if uninstall else "false",
-        "NO_BACKUP": "true",
-    }
-    return subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True)
-
-
-def checkout(tmp):
-    harness = tmp / "harness"
-    harness.mkdir()
-    for name in ("clients", "roles", "skills"):
-        (harness / name).symlink_to(_HARNESS / name)
-    return harness
 
 
 class Generation(unittest.TestCase):
@@ -432,93 +400,6 @@ class Assignments(unittest.TestCase):
         result = run("--check", config, self.out)
         self.assertEqual(result.returncode, 1)
         self.assertIn("widened: opencode/reviewer-a.md", result.stdout)
-
-
-class InstallerOwnership(unittest.TestCase):
-    def test_install_and_uninstall_touch_only_this_checkouts_links(self):
-        tmp = Path(tempfile.mkdtemp()).resolve()
-        self.addCleanup(shutil.rmtree, tmp)
-        harness, home = checkout(tmp), tmp / "home"
-        out = harness / ".generated/agents"
-        roots = {"claude": home / ".claude/agents", "opencode": home / ".config/opencode/agents"}
-        roots["claude"].mkdir(parents=True)
-        private = roots["claude"] / "mine.md"
-        private.write_text("mine\n")
-        foreign = roots["claude"] / "foreign.md"
-        foreign.symlink_to("/elsewhere/other-checkout/.generated/agents/claude/foreign.md")
-        retired = roots["claude"] / "retired.md"
-        retired.symlink_to(out / "claude/retired.md")
-        # Only install.sh's agent functions run here, so these prove the agent install and removal path leaves private settings and credentials alone; settings reconciliation is not exercised.
-        configs = {home / ".claude/settings.json": '{"model": "opus", "effortLevel": "medium"}\n', home / ".config/opencode/opencode.json": '{"agent": {"mine": {"model": "openai/gpt-5.5"}}}\n', home / ".local/share/opencode/auth.json": '{"openai": "private-secret"}\n', home / ".claude/.credentials.json": '{"token": "private-secret"}\n'}
-        for path, text in configs.items():
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text)
-
-        result = installer_agents(harness, home, uninstall=False)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        for relative in OUTPUTS:
-            client, name = relative.split("/")
-            self.assertEqual(os.readlink(roots[client] / name), str(out / relative))
-        self.assertFalse(retired.is_symlink())
-        self.assertEqual(private.read_text(), "mine\n")
-        self.assertTrue(foreign.is_symlink())
-        self.assertEqual({path: path.read_text() for path in configs}, configs)
-        generated = [path for path in out.rglob("*") if path.is_file()]
-        self.assertEqual([path for path in generated if re.search(r"auth|credential", path.name) or "private-secret" in path.read_text()], [])
-
-        result = installer_agents(harness, home, uninstall=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        for root in roots.values():
-            self.assertEqual({entry.name for entry in root.iterdir()} - {"mine.md", "foreign.md"}, set())
-        self.assertFalse(out.exists())
-        self.assertEqual(private.read_text(), "mine\n")
-        self.assertTrue(foreign.is_symlink())
-        self.assertEqual({path: path.read_text() for path in configs}, configs)
-
-
-    def test_install_refuses_unowned_collisions_before_linking(self):
-        for kind in ("file", "foreign-link", "root-link"):
-            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory:
-                tmp = Path(directory).resolve()
-                harness, home = checkout(tmp), tmp / "home"
-                root = home / ".config/opencode/agents"
-                root.parent.mkdir(parents=True)
-                private = tmp / "private"
-                private.mkdir()
-                (private / "reviewer-b.md").write_text("private agent\n")
-                if kind == "root-link":
-                    root.symlink_to(private)
-                else:
-                    root.mkdir()
-                    target = root / "reviewer-b.md"
-                    if kind == "file":
-                        target.write_text("private agent\n")
-                    else:
-                        target.symlink_to(private / "reviewer-b.md")
-                result = installer_agents(harness, home, uninstall=False)
-                self.assertNotEqual(result.returncode, 0, result.stdout)
-                self.assertIn(str(root), result.stderr)
-                self.assertEqual((root / "reviewer-b.md").read_text(), "private agent\n")
-                self.assertEqual((private / "reviewer-b.md").read_text(), "private agent\n")
-                self.assertFalse((home / ".claude/agents/reviewer-a.md").exists())
-                if kind == "root-link":
-                    self.assertTrue(root.is_symlink())
-                elif kind == "foreign-link":
-                    self.assertTrue((root / "reviewer-b.md").is_symlink())
-
-    def test_uninstall_fails_by_name_on_a_link_inside_a_symlinked_root(self):
-        tmp = Path(tempfile.mkdtemp()).resolve()
-        self.addCleanup(shutil.rmtree, tmp)
-        harness, home = checkout(tmp), tmp / "home"
-        self.assertEqual(installer_agents(harness, home, uninstall=False).returncode, 0)
-        claude, elsewhere = home / ".claude/agents", tmp / "elsewhere"
-        claude.rename(elsewhere)
-        claude.symlink_to(elsewhere)
-
-        result = installer_agents(harness, home, uninstall=True)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Role agent link survived the uninstall", result.stderr)
-        self.assertTrue((elsewhere / "reviewer-a.md").is_symlink())
 
 
 class Protocol(unittest.TestCase):

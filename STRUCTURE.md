@@ -6,13 +6,13 @@ and one Harness AI installation:
 ```
 macos.sh                        # macOS bootstrap (brew bundle + symlinks + mason + treesitter)
 linux.sh                        # Linux bootstrap (apt/dnf + Homebrew on Linux + the same rest)
-lib/common.sh                   # Sourced by both: symlinks, harness call, nvim bootstrap
-lib/python.sh                   # The uv-managed interpreter set; also sourced by harness/install.sh
+lib/common.sh                   # Sourced by both: harness bootstrap hand-off, nvim bootstrap
+lib/python.sh                   # The uv-managed interpreter set; also asserted by harness install
 Brewfile                        # macOS package manifest, applied by macos.sh
 .editorconfig                   # Editor defaults for this repo
 README.md                       # User-facing docs
 STRUCTURE.md                    # This file
-harness/                        # Canonical policy, skills, installer
+harness/                        # Canonical policy, commands, skills
 skills-lock.json                # Reviewed third-party skill hashes/provenance
 .agents/skills                  # → harness/skills
 .claude/skills/                 # Claude bookkeeping links to .agents/skills
@@ -26,14 +26,9 @@ worktrunk/
     └── config.toml             # → ~/.config/worktrunk/config.toml
 ```
 
-The two entry points differ only in how packages arrive. Everything after
-that lives in `lib/common.sh`, so the link set, the harness call, and the
-Neovim bootstrap have exactly one definition.
+The two entry points differ only in how packages arrive. Everything after that lives in `lib/common.sh`, which runs `harness bootstrap` for the config links and the harness install, so the link set, the harness call, and the Neovim bootstrap have exactly one definition.
 
-`lib/python.sh` is the exception to that split: `harness/install.sh` sources
-it too. The platform scripts install the uv-managed interpreters and the
-harness asserts them, and this is what keeps the version list from being
-declared twice.
+`lib/python.sh` is the exception to that split: `harness install` sources it too. The platform scripts install the uv-managed interpreters and the harness asserts them, and this is what keeps the version list from being declared twice.
 
 ## Harness AI layout
 
@@ -41,12 +36,11 @@ declared twice.
 harness/
 ├── POLICY.md                   # one vendor-neutral global policy
 ├── README.md                   # maintenance and update procedure
-├── install.sh                  # current clients/integrations + safe link reconcile
 ├── locked-skills.sh            # add, update, remove, and check third-party locks
 ├── statusline/                 # one file per provider, named after it
 │   └── claude.sh               # → ~/.claude/statusline.sh; the renderer Claude Code runs
 ├── clients/                    # the client settings the harness owns, reconciled not symlinked
-│   ├── claude.json             # tracked keys install.sh merges into ~/.claude/settings.json
+│   ├── claude.json             # tracked keys harness install merges into ~/.claude/settings.json
 │   ├── assignments.json        # every role's definition plus per-client model and effort
 │   └── agents.py               # renders the assigned roles into linked, untracked client agents
 ├── roles/                      # canonical roles no skill owns: the executor

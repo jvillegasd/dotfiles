@@ -1,4 +1,4 @@
-# Harness AI shell aliases. Sourced from ~/.zshrc by harness/install.sh.
+# Harness AI shell aliases. Sourced from ~/.zshrc by `harness install`.
 #
 # Yolo mode: no approval prompts, for a client running inside a worktree or a
 # container you are willing to lose. The policy's escalation contract is what

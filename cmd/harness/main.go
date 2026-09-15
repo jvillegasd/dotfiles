@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jvillegasd/dotfiles/internal/install"
 	"github.com/jvillegasd/dotfiles/internal/state"
 )
 
@@ -18,7 +19,9 @@ func main() {
 const usage = `Usage: harness <command> [arguments]
 
 Commands:
-  state   Read and write this branch's oracle ladder and rabbit-hole counters
+  bootstrap  Link the tracked configs, build harness into ~/.local/bin, and install the harness
+  install    Install, reconcile, or remove the harness on this machine
+  state      Read and write this branch's oracle ladder and rabbit-hole counters
 `
 
 const stateUsage = `Usage: harness state <operation>
@@ -39,6 +42,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	switch args[0] {
+	case "bootstrap":
+		return install.Bootstrap(args[1:], stdout, stderr)
+	case "install":
+		return install.Command(args[1:], stdout, stderr)
 	case "state":
 		return runState(args[1:], stdout, stderr)
 	case "-h", "--help", "help":

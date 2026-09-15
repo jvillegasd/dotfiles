@@ -1,16 +1,9 @@
 #!/usr/bin/env bash
-# The one declaration of which Python interpreters this machine provisions,
-# shared by the platform bootstrap scripts and the harness installer.
+# The one declaration of which Python interpreters this machine provisions, shared by the platform bootstrap scripts and `harness install`.
 #
-# Sourced, never executed, and always after its caller has defined `log` and
-# `die`: both macos.sh/linux.sh (through lib/common.sh) and harness/install.sh
-# already have their own, and duplicating them here would give a run two
-# different loggers.
+# Sourced, never executed, and always after its caller has defined `log` and `die`: macos.sh and linux.sh get theirs through lib/common.sh, and `harness install` defines both before sourcing it, so a run never has two different loggers.
 #
-# The split of duties is the reason this file exists at all. macos.sh and
-# linux.sh install the interpreters, because packages are what those scripts
-# are for. harness/install.sh only asserts them, because the harness is what
-# consumes them and so is where a missing one has to fail loudly.
+# The split of duties is the reason this file exists at all. macos.sh and linux.sh install the interpreters, because packages are what those scripts are for. `harness install` only asserts them, because the harness is what consumes them and so is where a missing one has to fail loudly.
 
 # Newest first. Homebrew supplies none of these: uv resolves a managed version
 # through its own registry rather than through PATH, so `uv run --python 3.14`

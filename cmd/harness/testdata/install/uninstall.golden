@@ -1,0 +1,163 @@
+run [--links-only]: exit 0
+run [--uninstall]: exit 0
+== commands
+engram setup claude-code <y>
+engram setup opencode <>
+claude mcp remove --scope user agent-browser <>
+claude mcp add --scope user agent-browser -- $SHIMS/agent-browser mcp <>
+claude plugin uninstall engram@engram <>
+claude plugin marketplace remove engram <>
+brew list --formula gentleman-programming/tap/engram <>
+brew uninstall gentleman-programming/tap/engram <>
+claude mcp remove --scope user agent-browser <>
+brew list --formula agent-browser <>
+brew uninstall agent-browser <>
+== home
+D .agents
+D .agents/skills
+D .claude
+D .claude/agents
+F .claude/agents/mine.md
+  |private agent
+  |
+D .claude/commands
+D .claude/mcp
+F .claude/settings.json
+  |{
+  |  "env": {
+  |    "KEEP": "caf\u00e9"
+  |  },
+  |  "permissions": {
+  |    "allow": [
+  |      "Bash(cd ~/src/engram && cargo test)"
+  |    ],
+  |    "defaultMode": "plan"
+  |  },
+  |  "enabledPlugins": {
+  |    "other@market": true
+  |  },
+  |  "extraKnownMarketplaces": {
+  |    "market": {}
+  |  }
+  |}
+  |
+D .claude/skills
+D .claude/skills/mine
+F .claude/skills/mine/SKILL.md
+  |private skill
+  |
+F .claude.json
+  |{"mcpServers": {"other": {}}}
+  |
+D .config
+D .config/opencode
+D .config/opencode/agents
+D .config/opencode/command
+F .config/opencode/opencode.json
+  |{
+  |  "$schema": "https://opencode.ai/config.json",
+  |  "agent": {
+  |    "mine": {
+  |      "model": "openai/gpt-5.5"
+  |    }
+  |  },
+  |  "mcp": {
+  |    "other": {
+  |      "type": "remote"
+  |    }
+  |  },
+  |  "plugin": [
+  |    "other-plugin"
+  |  ]
+  |}
+  |
+D .config/opencode/plugins
+D .config/opencode/skills
+F .config/opencode/tui.json
+  |{
+  |  "plugin": [
+  |    "keep"
+  |  ]
+  |}
+  |
+D .dotfiles-backups
+D .dotfiles-backups/harness
+D .dotfiles-backups/harness/<stamp>
+D .dotfiles-backups/harness/<stamp>/.agents
+D .dotfiles-backups/harness/<stamp>/.agents/skills
+D .dotfiles-backups/harness/<stamp>/.agents/skills/grilling
+F .dotfiles-backups/harness/<stamp>/.agents/skills/grilling/SKILL.md
+  |shadowing copy
+  |
+D .dotfiles-backups/harness/<stamp>/.claude
+F .dotfiles-backups/harness/<stamp>/.claude/CLAUDE.md
+  |a hand-written policy
+  |
+D .dotfiles-backups/harness/<stamp>/.claude/agents
+L .dotfiles-backups/harness/<stamp>/.claude/agents/retired.md -> $CHECKOUT/harness/.generated/agents/claude/retired.md
+D .dotfiles-backups/harness/<stamp>/.claude/commands
+L .dotfiles-backups/harness/<stamp>/.claude/commands/foreign.md -> /nonexistent/foreign.md
+L .dotfiles-backups/harness/<stamp>/.claude/commands/renamed.md -> $CHECKOUT/harness/commands/ship.md
+L .dotfiles-backups/harness/<stamp>/.claude/commands/retired.md -> $CHECKOUT/harness/commands/retired.md
+F .dotfiles-backups/harness/<stamp>/.claude/settings.json.pre-reconcile
+  |{
+  |  "env": {
+  |    "KEEP": "café"
+  |  },
+  |  "model": "sonnet",
+  |  "permissions": {
+  |    "allow": [
+  |      "mcp__plugin_engram_engram__mem_save",
+  |      "Bash(cd ~/src/engram && cargo test)"
+  |    ],
+  |    "deny": [
+  |      "Read(stale)"
+  |    ],
+  |    "defaultMode": "plan"
+  |  },
+  |  "enabledPlugins": {
+  |    "engram@engram": true,
+  |    "other@market": true
+  |  },
+  |  "extraKnownMarketplaces": {
+  |    "engram": {},
+  |    "market": {}
+  |  }
+  |}
+  |
+D .dotfiles-backups/harness/<stamp>/.config
+D .dotfiles-backups/harness/<stamp>/.config/opencode
+L .dotfiles-backups/harness/<stamp>/.config/opencode/command.previous-link -> $BASE/elsewhere
+D .dotfiles-backups/harness/<stamp>/.config/opencode/skills
+D .dotfiles-backups/harness/<stamp>/.config/opencode/skills/grilling
+F .dotfiles-backups/harness/<stamp>/.config/opencode/skills/grilling/SKILL.md
+  |duplicate copy
+  |
+D .dotfiles-backups/harness/<stamp>/.local
+D .dotfiles-backups/harness/<stamp>/.local/bin
+F .dotfiles-backups/harness/<stamp>/.local/bin/claude-seo
+  |#!/bin/sh
+  |
+F .dotfiles-backups/harness/<stamp>/.zshrc.pre-reconcile
+  |export KEEP=1
+  |alias ccyolo='claude'
+  |alias ll='ls -l'
+  |
+  |
+  |
+D .dotfiles-backups/other
+F .dotfiles-backups/other/keep.txt
+  |not the harness's
+  |
+D .local
+D .local/bin
+D .local/share
+D .local/share/opencode
+F .local/share/opencode/auth.json
+  |{"openai": "private-secret"}
+  |
+F .zshrc
+  |export KEEP=1
+  |alias ll='ls -l'
+  |
+== generated
