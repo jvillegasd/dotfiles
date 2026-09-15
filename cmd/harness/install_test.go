@@ -65,12 +65,18 @@ func TestInstallerGolden(t *testing.T) {
 	}
 }
 
-// runInstaller runs the installer under test from the sandbox checkout, with only the shims and the system directories on PATH.
+// runInstaller runs `harness install` from the sandbox checkout.
 func runInstaller(t *testing.T, base string, args ...string) result {
 	t.Helper()
-	cmd := exec.Command(binary, append([]string{"install"}, args...)...)
+	return runHarness(t, base, nil, append([]string{"install"}, args...)...)
+}
+
+// runHarness runs the built binary from the sandbox checkout, with only the shims and the system directories on PATH, plus any extra environment.
+func runHarness(t *testing.T, base string, extra []string, args ...string) result {
+	t.Helper()
+	cmd := exec.Command(binary, args...)
 	cmd.Dir = filepath.Join(base, "checkout")
-	cmd.Env = []string{"HOME=" + filepath.Join(base, "home"), "PATH=" + filepath.Join(base, "shims") + ":/usr/bin:/bin", "SHELL=/bin/zsh"}
+	cmd.Env = append([]string{"HOME=" + filepath.Join(base, "home"), "PATH=" + filepath.Join(base, "shims") + ":/usr/bin:/bin", "SHELL=/bin/zsh"}, extra...)
 	var stdout, stderr strings.Builder
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
@@ -91,7 +97,7 @@ func sandbox(t *testing.T) string {
 		t.Fatal(err)
 	}
 	root := filepath.Join("..", "..")
-	out, err := exec.Command("git", "-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "harness", "lib").Output()
+	out, err := exec.Command("git", "-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "harness", "lib", "cmd", "internal", "go.mod", "nvim", "ghostty", "git", "worktrunk").Output()
 	if err != nil {
 		t.Fatal(err)
 	}

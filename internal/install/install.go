@@ -101,18 +101,30 @@ func (in *installer) warn(format string, args ...any) {
 	fmt.Fprintf(in.stderr, "\033[1;33m[warn]\033[0m "+format+"\n", args...)
 }
 
+// recoverFatal turns a die into the one red line and exit 1 the shell installer's die gave. It works only when deferred directly.
+func recoverFatal(stderr io.Writer, code *int) {
+	if r := recover(); r != nil {
+		msg, ok := r.(fatal)
+		if !ok {
+			panic(r)
+		}
+		fmt.Fprintf(stderr, "\033[1;31m[err]\033[0m %s\n", msg)
+		*code = 1
+	}
+}
+
+func (in *installer) setPaths(checkout string) {
+	in.home = os.Getenv("HOME")
+	in.config = os.Getenv("XDG_CONFIG_HOME")
+	if in.config == "" {
+		in.config = filepath.Join(in.home, ".config")
+	}
+	in.harness = filepath.Join(checkout, "harness")
+}
+
 // Command runs `harness install` with its arguments and returns the exit code.
 func Command(args []string, stdout, stderr io.Writer) (code int) {
-	defer func() {
-		if r := recover(); r != nil {
-			msg, ok := r.(fatal)
-			if !ok {
-				panic(r)
-			}
-			fmt.Fprintf(stderr, "\033[1;31m[err]\033[0m %s\n", msg)
-			code = 1
-		}
-	}()
+	defer recoverFatal(stderr, &code)
 	in := &installer{stdout: stdout, stderr: stderr}
 	clearBackups := false
 	for _, arg := range args {
@@ -140,12 +152,7 @@ func Command(args []string, stdout, stderr io.Writer) (code int) {
 		die("--clear-backups runs on its own; it neither installs nor uninstalls.")
 	}
 	in.noBackup = in.noBackup || in.uninstall
-	in.home = os.Getenv("HOME")
-	in.config = os.Getenv("XDG_CONFIG_HOME")
-	if in.config == "" {
-		in.config = filepath.Join(in.home, ".config")
-	}
-	in.harness = filepath.Join(Checkout(), "harness")
+	in.setPaths(Checkout())
 
 	switch {
 	case clearBackups:

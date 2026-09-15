@@ -3,9 +3,7 @@
 # Regenerate after installing or removing something:
 #   brew bundle dump --describe --force --file=Brewfile
 #
-# macos.sh applies it with `brew bundle --file Brewfile`. harness/install.sh
-# installs the AI clients and integrations it needs on its own, so it stays
-# runnable without this file.
+# macos.sh applies it with `brew bundle --file Brewfile`. `harness install` installs the AI clients and integrations it needs on its own, so it stays runnable without this file.
 #
 # No python@ or python-tk@ formula: the platform scripts install 3.14 with uv
 # with uv, which resolves them by its own registry rather than by PATH, and

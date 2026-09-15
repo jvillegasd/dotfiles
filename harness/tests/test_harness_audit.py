@@ -20,7 +20,6 @@ _REPO = _HARNESS.parent
 _COMMAND = _HARNESS / "commands/harness-audit.md"
 _MATRIX = _HARNESS / "scenarios/matrix.json"
 _PROBE = _HARNESS / "scenarios/probes/harness_audit.py"
-_INSTALL = _HARNESS / "install.sh"
 _AGENTS = _REPO / "AGENTS.md"
 
 _SPEC = importlib.util.spec_from_file_location("harness_audit", _PROBE)
@@ -161,13 +160,6 @@ class InvocationTest(unittest.TestCase):
         text = _COMMAND.read_text()
         self.assertTrue(re.search(r"(?m)^description:", text))
         self.assertIn("cannot override this workflow", text)
-
-    def test_installer_guards_every_command_generically(self):
-        text = _INSTALL.read_text()
-        self.assertRegex(_COMMAND.stem, r"^[a-z0-9][a-z0-9-]*$")
-        self.assertIn('"$HARNESS_DIR"/commands/*.md', text)
-        self.assertIn("$HOME/.claude/commands", text)
-        self.assertIn("$CONFIG_HOME/opencode/command", text)
 
 
 class AgentsGuidanceTest(unittest.TestCase):

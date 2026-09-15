@@ -1,20 +1,16 @@
 """Checks that commands read guarded local skills from their installed path.
 
-Claude Code refuses every model-initiated load of a skill whose frontmatter sets `disable-model-invocation: true`, so a command that tells the model to load one by name cannot be followed there. The guarded set comes from skill frontmatter and is pinned, so a dropped guard fails instead of silently shrinking the set. The path the policy names is checked by running the installer's own link line in a temporary HOME.
+Claude Code refuses every model-initiated load of a skill whose frontmatter sets `disable-model-invocation: true`, so a command that tells the model to load one by name cannot be followed there. The guarded set comes from skill frontmatter and is pinned, so a dropped guard fails instead of silently shrinking the set. The Go command tests check that `harness install` puts every guarded body at the path the policy names.
 """
 
 import json
-import os
 import re
-import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 
 _HARNESS = Path(__file__).resolve().parents[1]
 _COMMANDS = _HARNESS / "commands"
 _POLICY = _HARNESS / "POLICY.md"
-_INSTALL = _HARNESS / "install.sh"
 _LOCK = _HARNESS.parent / "skills-lock.json"
 
 EXPECTED = {"adversarial-review", "evidence", "grilling", "local-tracker", "setup-harness", "workflow-checkpoint"}
@@ -80,25 +76,6 @@ class GuardedSkillsTest(unittest.TestCase):
             with self.subTest(text):
                 self.assertTrue(violations(text, names))
         self.assertEqual(violations("Read and run `adversarial-review` first.\ntell the user to invoke the `setup-harness` skill\n## Skills this loads\n\n- `grilling`, read from its path\n- `ponytail`", names), [])
-
-    def test_policy_path_is_the_installer_link(self):
-        roots = re.findall(r"`~/([^`]+)/<name>/SKILL\.md`", _POLICY.read_text())
-        self.assertEqual(len(roots), 1, roots)
-        text = _INSTALL.read_text()
-        link = f'link_managed "$source" "$HOME/{roots[0]}/$skill"'
-        self.assertIn(link, re.search(r"^install_links\(\) \{\n.*?^\}\n", text, re.M | re.S).group(0))
-        self.assertIn(f'[[ -L "$HOME/{roots[0]}/$name" ]]', text)
-        helpers = [re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", text, re.M | re.S).group(0) for name in ("backup_existing", "link_managed", "ensure_managed_dir")]
-        with tempfile.TemporaryDirectory() as home:
-            script = "\n".join(
-                ["set -euo pipefail", 'log() { :; }; die() { echo "$*" >&2; exit 1; }', *helpers, f'ensure_managed_dir "$HOME/{roots[0]}"']
-                + [f'skill={name}; source="$HARNESS_DIR/skills/$skill"; {link}' for name in sorted(EXPECTED)]
-            )
-            env = {**os.environ, "HOME": home, "HARNESS_DIR": str(_HARNESS), "NO_BACKUP": "true"}
-            result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            for name in sorted(EXPECTED):
-                self.assertTrue((Path(home) / roots[0] / name / "SKILL.md").is_file(), name)
 
 
 if __name__ == "__main__":
