@@ -97,7 +97,7 @@
       "command": "reconcile-agent-lifecycle",
       "prompt": "Apply the frontier decision: a blocked ticket whose blocker is closed by a merged pull request becomes ready-for-agent.",
       "mode": "offline",
-      "check": "python3 \"$HARNESS_ROOT/harness/scenarios/probes/lifecycle_blocked_to_ready.py\"",
+      "check": "cd \"$HARNESS_ROOT\" && go test ./harness/skills/setup-harness/scripts -run TestBlockedTicketBecomesReadyWhenBlockerCloses -count=1",
       "artifacts": {
         "tree_unchanged": false,
         "present": ["artifacts/labels.json"],
@@ -110,8 +110,8 @@
         ]
       },
       "harness_inputs": [
-        "harness/skills/setup-harness/scripts/reconcile-agent-lifecycle.py",
-        "harness/scenarios/probes/lifecycle_blocked_to_ready.py",
+        "harness/skills/setup-harness/scripts/reconcile-agent-lifecycle.go",
+        "harness/skills/setup-harness/scripts/reconcile_agent_lifecycle_test.go",
         "harness/scenarios/runner.py"
       ]
     },

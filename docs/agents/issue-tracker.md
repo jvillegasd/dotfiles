@@ -41,7 +41,7 @@ The tickets an agent may start: open, carrying `ready-for-agent`, with no open b
 
 ## Automatic reconciliation
 
-`.github/workflows/agent-lifecycle.yml` runs `.github/scripts/reconcile-agent-lifecycle.py` whenever an issue is closed or reopened. It walks the closed issue's dependents, moves each newly unblocked one from `blocked` to `ready-for-agent`, and closes a parent once every child is closed. Closing an issue is therefore how the frontier advances; nothing needs to relabel dependents by hand.
+`.github/workflows/agent-lifecycle.yml` installs Go and runs `.github/scripts/reconcile-agent-lifecycle.go` with `go run` whenever an issue is closed or reopened. It walks the closed issue's dependents, moves each newly unblocked one from `blocked` to `ready-for-agent`, and closes a parent once every child is closed. Closing an issue is therefore how the frontier advances; nothing needs to relabel dependents by hand.
 
 The workflow reacts to any issue in this repository, not only to harness tickets, but it only transitions tickets that already carry a lifecycle label. A planning-only ticket with no label keeps no lifecycle label until explicit promotion labels it.
 
