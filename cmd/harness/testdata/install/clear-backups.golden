@@ -1,0 +1,9 @@
+run [--clear-backups]: exit 0
+== commands
+== home
+D .dotfiles-backups
+D .dotfiles-backups/other
+F .dotfiles-backups/other/keep.txt
+  |kept
+  |
+== generated
