@@ -124,7 +124,7 @@ Resolve the concrete commands in this order: the project's own instruction file 
 
 Re-derive the failure list on every pass; never work from a stale one. A missing rung is skipped, never faked: no remote CI means the ladder ends at the local rungs plus an open pull request, and no test suite means a shorter ladder.
 
-Record the resolved ladder so later passes and any supervisor do not re-derive it. Where Worktrunk manages the branch, use its per-branch vars (`git config worktrunk.state.<branch>.vars.ladder`).
+Record the resolved ladder so later passes and any supervisor do not re-derive it: run `harness state ladder set <ladder>` from the branch's worktree, which stores it beside the rabbit-hole counters described under the escalation contract. Where `harness` is not installed, write it to the `ladder` key that section names, with `git config` directly.
 
 Resolving review threads is not a rung. Threads appear only after a human reviews, so `/address-review` owns them.
 
@@ -161,7 +161,7 @@ Stop and escalate the moment any of these trips, whatever step you are on:
 
 On a trip, do not try a fourth thing. Report what was attempted, what each attempt disproved, the smallest next hypothesis, and what you need. A trip is information, not failure.
 
-These counters must survive a restart or a context compaction, or the detector silently resets to zero on exactly the long runs it exists for. Persist them outside the conversation. Where Worktrunk manages the branch, use its per-branch vars (`git config worktrunk.state.<branch>.vars.attempts` and `.escalations`), which live in `.git`; use vars, never the activity marker, because the marker is rewritten on every prompt and would erase an escalation. Where it does not, including an Orca worktree or any repository without Worktrunk, keep the counts in `git config` under `harness.attempts` and `harness.escalations` on the branch's own repository. The detector never degrades to counting in the conversation alone.
+These counters must survive a restart or a context compaction, or the detector silently resets to zero on exactly the long runs it exists for. Persist them outside the conversation with `harness state`, run from the branch's worktree: `harness state incr attempts` after each failed attempt, `harness state escalate --reason <text>` on each trip, and `harness state get` to read them. It stores the `ladder`, `attempts`, `escalations`, and `reason` keys in `.git`, under Worktrunk's per-branch vars (`worktrunk.state.<branch>.vars.<key>`) when `wt list` shows the branch, which it does for any git worktree once Worktrunk is installed, and under `harness.<branch>.<key>` otherwise; use vars, never the activity marker, because the marker is rewritten on every prompt and would erase an escalation. Where `harness` is not installed, write the same key with `git config` directly: `attempts` and `escalations` hold only a non-negative integer, and the latest trip's text goes under `reason`, never into a counter. The detector never degrades to counting in the conversation alone.
 
 ### Surfaces that escalate on first touch
 

@@ -18,6 +18,8 @@ Personal dotfiles plus the one Harness AI installation that serves Claude Code a
 | `lib/common.sh` | Symlinking, harness call, and Neovim bootstrap, shared by both |
 | `lib/python.sh` | The uv-managed interpreter set, also sourced by `harness/install.sh` |
 | `Brewfile` | macOS package manifest |
+| `go.mod`, `cmd/harness/` | The Go module and the `harness` command, the single entry point for operating the harness |
+| `internal/state/` | The per-branch oracle ladder and rabbit-hole counters behind `harness state` |
 | `harness/` | Canonical policy, commands, skills, installer, status lines, client settings, bench, and tests |
 | `harness/tests/` | Runnable regression checks for the lifecycle reconciler |
 | `harness/bench/` | Session-population measurement for harness changes |
@@ -30,7 +32,7 @@ Personal dotfiles plus the one Harness AI installation that serves Claude Code a
 
 ## Prerequisites
 
-macOS or Linux with zsh, Homebrew, Python 3 (the tests run on the system `python3`), Neovim 0.10 or newer, and a Nerd Font. The GitHub tracker operations need the `gh` CLI authenticated with issue write permission. Branch worktrees use Worktrunk (`wt`); Orca is optional. Managed Python interpreters come from `uv`.
+macOS or Linux with zsh, Homebrew, Go 1.26 or newer (from the `Brewfile`), Python 3 (the tests run on the system `python3`), Neovim 0.10 or newer, and a Nerd Font. The GitHub tracker operations need the `gh` CLI authenticated with issue write permission. Branch worktrees use Worktrunk (`wt`) 0.61 or newer, the first release with the `--config-set` flag `harness state` passes; Orca is optional. Managed Python interpreters come from `uv`.
 
 ## Task runners
 
@@ -41,6 +43,10 @@ None. There is no build or task-runner manifest at the root (`Makefile`, `justfi
 These are safe and write no tracked files, and must all pass before a change is handed off:
 
 ```sh
+go vet ./...
+test -z "$(gofmt -l .)"
+go test ./...
+go build ./...
 python3 -m unittest discover -s harness/tests
 python3 -m py_compile .github/scripts/reconcile-agent-lifecycle.py
 bash -n macos.sh linux.sh lib/common.sh lib/python.sh harness/install.sh harness/locked-skills.sh
@@ -48,7 +54,7 @@ bash -n macos.sh linux.sh lib/common.sh lib/python.sh harness/install.sh harness
 git diff --check
 ```
 
-The first runs the reconciler regression suite. The next two are syntax checks for the Python reconciler and the shell entry points. `locked-skills.sh check` runs a shell syntax check and diff-hygiene checks over tracked files. `git diff --check` catches whitespace errors and conflict markers. The lifecycle workflow in `.github/workflows/agent-lifecycle.yml` runs the reconciler remotely; the unit suite is its local equivalent.
+The first four are the Go rungs: vet, formatting, the command tests that build `harness` and run it against throwaway repositories, and a compile of every package. The Python suite runs the reconciler regression suite. The next two are syntax checks for the Python reconciler and the shell entry points. `locked-skills.sh check` runs a shell syntax check and diff-hygiene checks over tracked files. `git diff --check` catches whitespace errors and conflict markers. The lifecycle workflow in `.github/workflows/agent-lifecycle.yml` runs the reconciler remotely; the unit suite is its local equivalent.
 
 ## Behavioral acceptance
 
