@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Linux dotfiles installer — Neovim + git + worktrunk + Harness AI.
+# Linux dotfiles installer — Neovim + git + worktrunk.
 #
 # Same end state as macos.sh, reached differently: the distribution's package
 # manager supplies the build prerequisites, Homebrew on Linux supplies
 # everything after that, and the macOS-only pieces (Xcode CLT, casks, fonts,
 # Ghostty) are skipped.
 #
-# Homebrew is not optional here. Three of the tools the harness requires (opencode, engram, worktrunk) ship only as Homebrew taps, so packaging them a second way for Linux would mean three more update paths to keep honest.
+# Homebrew is not optional here: it supplies the formulae below on Linux, and the AI harness installs its own clients from taps on top of it.
 #
 # Safe to re-run: package installs are idempotent, existing real configs get
 # backed up, and matching symlinks are left alone.
@@ -25,7 +25,7 @@ REPO_URL=""
 APT_PACKAGES=(build-essential procps curl file git ca-certificates unzip)
 DNF_PACKAGES=(procps-ng curl file git ca-certificates unzip)
 
-# The macOS side installs from Brewfile, which also carries casks and fonts that do not exist on Linux. This is the subset a Linux box actually needs. No python@ formula on either side: install_pythons provisions the interpreters with uv, which is why uv is here rather than left to `harness install`. go is here because `harness bootstrap` runs from source. macOS gets both from Brewfile for the same reasons.
+# The macOS side installs from Brewfile, which also carries casks and fonts that do not exist on Linux. This is the subset a Linux box actually needs. No python@ formula on either side: install_pythons provisions the interpreters with uv, which is why uv is here. go is here so the AI harness builds from source.
 BREW_FORMULAE=(
     neovim
     ripgrep
@@ -87,7 +87,7 @@ main() {
     ensure_repo
     install_packages
     install_pythons
-    bootstrap_harness
+    link_configs
     bootstrap_nvim
     summary
     cat <<'EOF'

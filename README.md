@@ -1,10 +1,10 @@
 # dotfiles
 
-Personal dotfiles: **Neovim**, **Ghostty**, **git**, **Worktrunk**, and **Harness AI** for Claude Code and OpenCode. Neovim is built on `lazy.nvim` with a grouped, mnemonic `<leader>` scheme on Space; Ghostty shares its JetBrains Mono Nerd Font and catppuccin-mocha theme so editor and terminal match.
+Personal dotfiles: **Neovim**, **Ghostty**, **git**, and **Worktrunk**. Neovim is built on `lazy.nvim` with a grouped, mnemonic `<leader>` scheme on Space; Ghostty shares its JetBrains Mono Nerd Font and catppuccin-mocha theme so editor and terminal match.
 
 - [`KEYMAPS.md`](KEYMAPS.md): every mapping
-- [`STRUCTURE.md`](STRUCTURE.md): Neovim and harness layout
-- [`harness/README.md`](harness/README.md): the AI workflow, skill supply chain, validation
+- [`STRUCTURE.md`](STRUCTURE.md): the repo tree and the Neovim layout
+- [`jvillegasd/harness`](https://github.com/jvillegasd/harness): the AI workflow, in its own repository
 
 ## Install
 
@@ -13,15 +13,27 @@ Personal dotfiles: **Neovim**, **Ghostty**, **git**, **Worktrunk**, and **Harnes
 ./linux.sh    # Linux
 ```
 
-Each script installs its platform's packages, symlinks the tracked configs, installs the AI clients, links the shared harness, and bootstraps Neovim headlessly. Re-runnable: managed collisions are backed up, matching symlinks left alone, unrelated private skills preserved. `--no-backup` deletes what is in the way instead of renaming it, which is unrecoverable.
+Each script installs its platform's packages, symlinks the tracked configs, and bootstraps Neovim headlessly. Re-runnable: managed collisions are backed up and matching symlinks are left alone. `--no-backup` deletes what is in the way instead of renaming it, which is unrecoverable.
 
-Both share `lib/common.sh`, which hands the config links and the harness install to `harness bootstrap`, then bootstraps Neovim. Only the package step differs: `macos.sh` applies `Brewfile` via `brew bundle`, `linux.sh` installs build prerequisites with the distribution's package manager and everything after with Homebrew. Python comes from neither: `lib/python.sh` declares the uv-managed interpreter set once, and `harness install` sources the same file to assert it.
+Both share `lib/common.sh`, which links the tracked configs and then bootstraps Neovim. Only the package step differs: `macos.sh` applies `Brewfile` via `brew bundle`, `linux.sh` installs build prerequisites with the distribution's package manager and everything after with Homebrew. Python is not a formula on either: `lib/python.sh` installs the uv-managed interpreter set the AI harness consumes.
 
-Ghostty picks up `ghostty/config` automatically. Authentication stays interactive, and the installer prints what is left to do.
+Ghostty picks up `ghostty/config` automatically.
 
 Requires macOS or Linux, Homebrew (installed when missing), Neovim ≥ 0.10, and a Nerd Font (installed on macOS, bring your own on Linux).
 
 After installing or removing a package, regenerate the manifest with `brew bundle dump --describe --force --file=Brewfile`.
+
+## Harness AI
+
+The AI workflow that used to live in this repository now has its own: [**jvillegasd/harness**](https://github.com/jvillegasd/harness). It carries the vendor-neutral policy, the commands and skills, and the Go `harness` CLI that installs and operates them for Claude Code and OpenCode. This repository keeps only the editor, terminal, and git configs.
+
+Install it separately, after the dotfiles:
+
+```bash
+git clone https://github.com/jvillegasd/harness
+cd harness
+go run ./cmd/harness bootstrap
+```
 
 ## macOS setup
 
@@ -37,13 +49,9 @@ Note that `<C-...>` here means Control, never Command; `<D-...>` only works in G
 
 ```
 macos.sh / linux.sh       # platform bootstrap
-lib/common.sh             # harness bootstrap hand-off, nvim bootstrap, shared
-lib/python.sh             # uv-managed interpreter set, shared with harness install
+lib/common.sh             # config links, nvim bootstrap, shared
+lib/python.sh             # uv-managed interpreter set
 Brewfile                  # macOS package manifest
-harness/                  # two-client policy, commands, skills
-skills-lock.json          # reviewed standalone third-party skill lock
-.agents/skills            # symlink to the canonical harness/skills
-.claude/skills            # skills.sh/Claude bookkeeping symlinks
 nvim/                     # → ~/.config/nvim   (init.lua, lazy-lock.json, lua/core + lua/plugins)
 ghostty/                  # → ~/.config/ghostty
 git/                      # gitconfig → ~/.gitconfig, ignore → ~/.config/git/ignore
