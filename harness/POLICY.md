@@ -206,7 +206,7 @@ These instructions load in two clients, so anything client-specific written here
 
 ## Validating harness changes
 
-This policy, these commands, and these skills are themselves a surface with an oracle: the real sessions they produce. Validate a change to `harness/` by comparing the session population before and after its commit date with `harness/bench/measure.py`, which reads every client's own session store.
+This policy, these commands, and these skills are themselves a surface with an oracle: the real sessions they produce. Validate a change to `harness/` by comparing the session population before and after its commit date with `harness bench`, which reads every client's own session store.
 
 Cost and friction are the measured part; quality stays a human judgment made by reading transcripts. Compare populations, not pairs: a single session proves nothing.
 

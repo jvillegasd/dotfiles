@@ -53,7 +53,7 @@ harness/
 │   ├── local-tracker/          # tracker operations when the tracker is committed files
 │   ├── adversarial-review|evidence/  # review and evidence protocols the delivery commands load; roles/ holds the canonical reviewers and refuter
 │   └── workflow-checkpoint/    # one branch-scoped Engram checkpoint protocol, canonical in the skill
-├── bench/                      # session-population comparison for harness changes, with its own README
+├── bench/                      # cohort config and the manual for the `harness bench` session-population comparison
 └── tests/                      # runnable regression checks, run with python3 -m unittest discover
 ```
 

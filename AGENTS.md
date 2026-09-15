@@ -22,9 +22,10 @@ Personal dotfiles plus the one Harness AI installation that serves Claude Code a
 | `internal/state/` | The per-branch oracle ladder and rabbit-hole counters behind `harness state` |
 | `internal/install/` | The installer and bootstrap behind `harness install` and `harness bootstrap` |
 | `internal/locks/` | The third-party skill locks behind `harness locks` |
+| `internal/bench/` | The session-population comparison behind `harness bench` |
 | `harness/` | Canonical policy, commands, skills, status lines, client settings, bench, and tests |
 | `harness/tests/` | Runnable regression checks for the lifecycle reconciler |
-| `harness/bench/` | Session-population measurement for harness changes |
+| `harness/bench/` | Cohort config and the manual for `harness bench` |
 | `nvim/` | Neovim config: `init.lua`, `lua/core/`, `lua/plugins/<category>/` |
 | `ghostty/`, `git/`, `worktrunk/` | Configs symlinked into the home directory |
 | `docs/agents/` | This repository's tracker and lifecycle configuration |
@@ -65,7 +66,7 @@ Some changes cannot be settled by the checks above, because they act on machine 
 
 `go run ./cmd/harness install --links-only`, run from the checkout root, is the same provisioning surface with the package step removed. `go run` builds the install code from the checkout it reconciles, while the `harness` on PATH carries whatever `harness bootstrap` last built. It reconciles the policy, command, skill, and role agent links, but it still rewrites the Engram and agent-browser MCP registrations and the tracked client settings, so `engram`, `agent-browser`, and `claude` must already be installed. Run it when links need reconciling, not as a validation step.
 
-Neovim health is read through `:checkhealth`, `:Lazy`, `:Mason`, and `:LspInfo` inside the editor. Session-population measurement for a harness change is `python3 harness/bench/measure.py --split <commit-date> --since <window-start>`, documented in `harness/bench/README.md`.
+Neovim health is read through `:checkhealth`, `:Lazy`, `:Mason`, and `:LspInfo` inside the editor. Session-population measurement for a harness change is `harness bench --split <commit-date> --since <window-start>`, documented in `harness/bench/README.md`.
 
 ## Conventions
 

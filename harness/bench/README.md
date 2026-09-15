@@ -1,14 +1,16 @@
 # bench
 
-`measure.py` answers one question: did a change to `harness/` move cost and friction in the sessions it actually produced? `POLICY.md` makes this the oracle for a harness change, because re-reading prose and judging it plausible proves nothing. Quality stays a human read of the transcripts.
+`harness bench` answers one question: did a change to `harness/` move cost and friction in the sessions it actually produced? `POLICY.md` makes this the oracle for a harness change, because re-reading prose and judging it plausible proves nothing. Quality stays a human read of the transcripts.
 
 Deliberately not a synthetic task battery. Synthetic control tasks can swing between identical runs and contaminate their own fixture. Real sessions cost something else, arriving slowly and mixing variables no experiment controls, which is what `THIN` and the caveats below are for.
 
 ## Usage
 
 ```sh
-python3 harness/bench/measure.py --split <commit-date> --since <window-start>
+harness bench --split <commit-date> --since <window-start>
 ```
+
+Run it from inside the checkout; the work patterns come from `harness/bench/cohorts.json` there. That file is gitignored, so a fresh worktree carries only the committed empty `cohorts.example.json` until you copy it in, and the report splits nothing until a pattern matches.
 
 | Flag | Meaning |
 | --- | --- |
@@ -47,7 +49,7 @@ Each client records a project differently: a dashed slug or a `directory` column
 
 ## Where the sessions come from
 
-- **Claude Code**, `~/.claude/projects/<slug>/<session>.jsonl`. The only client recording all eight metrics. Interrupts and denials come from matching `CLAUDE_INTERRUPT` and `CLAUDE_DENIALS` in `measure.py`.
+- **Claude Code**, `~/.claude/projects/<slug>/<session>.jsonl`. The only client recording all eight metrics. Interrupts and denials come from matching `claudeInterrupt` and `claudeDenials` in `internal/bench/bench.go`.
 - **OpenCode**, `~/.local/share/opencode/opencode.db`, opened read-only and immutable because a client may be running. No interrupt, denial, failed result, or slash command, so those four are absent.
 
 **A subagent is delegation, not a session.** Claude Code writes `<session-id>/subagents/*.jsonl` beside the session file, and OpenCode gives a subagent a `session` row carrying the parent's id, so a recursive glob or an unfiltered query counts them as sessions: on this machine, 273 sidecars against 209 real sessions, and 77 against 36. Both are excluded and counted as the parent's `delegation`. The inline `isSidechain` flag those entries used to carry is still written and now always false, so a reader still looking there reports no delegation rather than reporting it cannot see any.
@@ -79,4 +81,4 @@ Populations, not pairs, and require a real gap rather than a nudge: a `--split` 
 
 ## Sharing
 
-`measure.py` writes no files. The aggregate report names nothing and is fine to paste anywhere. `--rows` is not: each row carries the project the session ran in, which on a work machine is a client or an employer. `cohorts.json` is gitignored for the same reason.
+`harness bench` writes no files. The aggregate report names nothing and is fine to paste anywhere. `--rows` is not: each row carries the project the session ran in, which on a work machine is a client or an employer. `cohorts.json` is gitignored for the same reason.

@@ -27,7 +27,7 @@ Read each source where it exists. Report one line per source: what it held, or w
 | `pull_request_bodies` | `Closes` references and the `## Contract` and `## Checks` sections |
 | `commits` | Conventional Commit subjects and their rung results |
 | `tracker_state` | mapped lifecycle labels on the tickets the residue names |
-| `benchmark_results` | `harness/bench/measure.py` session populations |
+| `benchmark_results` | `harness bench` session populations |
 | `session_evidence` | bounded named signals from recorded transcripts |
 
 `setup-harness` owns tracker and lifecycle configuration. This command reads tracker state and reports it; it never creates a label, writes `docs/agents/harness.json`, copies a workflow, or configures anything.
