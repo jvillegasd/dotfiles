@@ -15,7 +15,7 @@ Personal dotfiles: **Neovim**, **Ghostty**, **git**, **Worktrunk**, and **Harnes
 
 Each script installs its platform's packages, symlinks the tracked configs, installs the AI clients, links the shared harness, and bootstraps Neovim headlessly. Re-runnable: managed collisions are backed up, matching symlinks left alone, unrelated private skills preserved. `--no-backup` deletes what is in the way instead of renaming it, which is unrecoverable.
 
-Both share `lib/common.sh`, which owns symlinking, the harness call, and the Neovim bootstrap. Only the package step differs: `macos.sh` applies `Brewfile` via `brew bundle`, `linux.sh` installs build prerequisites with the distribution's package manager and everything after with Homebrew. Python comes from neither: `lib/python.sh` declares the uv-managed interpreter set once, and `harness/install.sh` sources the same file to assert it.
+Both share `lib/common.sh`, which hands the config links and the harness install to `harness bootstrap`, then bootstraps Neovim. Only the package step differs: `macos.sh` applies `Brewfile` via `brew bundle`, `linux.sh` installs build prerequisites with the distribution's package manager and everything after with Homebrew. Python comes from neither: `lib/python.sh` declares the uv-managed interpreter set once, and `harness install` sources the same file to assert it.
 
 Ghostty picks up `ghostty/config` automatically. Authentication stays interactive, and the installer prints what is left to do.
 
@@ -37,10 +37,10 @@ Note that `<C-...>` here means Control, never Command; `<D-...>` only works in G
 
 ```
 macos.sh / linux.sh       # platform bootstrap
-lib/common.sh             # symlinking, harness call, nvim bootstrap, shared
-lib/python.sh             # uv-managed interpreter set, shared with harness/install.sh
+lib/common.sh             # harness bootstrap hand-off, nvim bootstrap, shared
+lib/python.sh             # uv-managed interpreter set, shared with harness install
 Brewfile                  # macOS package manifest
-harness/                  # two-client policy, commands, skills, installer
+harness/                  # two-client policy, commands, skills
 skills-lock.json          # reviewed standalone third-party skill lock
 .agents/skills            # symlink to the canonical harness/skills
 .claude/skills            # skills.sh/Claude bookkeeping symlinks
