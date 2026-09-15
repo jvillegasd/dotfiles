@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-# macOS dotfiles installer — Neovim + Ghostty + git + worktrunk + the portable
-# AI harness.
+# macOS dotfiles installer — Neovim + Ghostty + git + worktrunk.
 #
-# Installs everything in Brewfile, symlinks the tracked configs, installs the
-# harness for Claude Code and OpenCode, and bootstraps Neovim plugins
-# and LSPs headlessly so the first `nvim` launch is instant.
+# Installs everything in Brewfile, symlinks the tracked configs, and bootstraps
+# Neovim plugins and LSPs headlessly so the first `nvim` launch is instant.
 #
 # Safe to re-run: brew bundle is idempotent, existing real configs get backed
 # up, and matching symlinks are left alone.
@@ -55,7 +53,7 @@ main() {
     ensure_repo
     install_packages
     install_pythons
-    bootstrap_harness
+    link_configs
     bootstrap_nvim
     summary
     cat <<'EOF'

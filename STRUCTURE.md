@@ -1,21 +1,17 @@
 # Structure
 
-Organization guide for this dotfiles repo. It holds the application configs
-and one Harness AI installation:
+Organization guide for this dotfiles repo. It holds the application configs;
+the AI harness lives in its own repository, https://github.com/jvillegasd/harness.
 
 ```
 macos.sh                        # macOS bootstrap (brew bundle + symlinks + mason + treesitter)
 linux.sh                        # Linux bootstrap (apt/dnf + Homebrew on Linux + the same rest)
-lib/common.sh                   # Sourced by both: harness bootstrap hand-off, nvim bootstrap
-lib/python.sh                   # The uv-managed interpreter set; also asserted by harness install
+lib/common.sh                   # Sourced by both: config links, nvim bootstrap
+lib/python.sh                   # The uv-managed interpreter set, installed by both
 Brewfile                        # macOS package manifest, applied by macos.sh
 .editorconfig                   # Editor defaults for this repo
 README.md                       # User-facing docs
 STRUCTURE.md                    # This file
-harness/                        # Canonical policy, commands, skills
-skills-lock.json                # Reviewed third-party skill hashes/provenance
-.agents/skills                  # → harness/skills
-.claude/skills/                 # Claude bookkeeping links to .agents/skills
 nvim/                           # → ~/.config/nvim
 ghostty/                        # → ~/.config/ghostty
     └── config                  # font, theme, padding, macOS Option-as-Alt
@@ -26,44 +22,9 @@ worktrunk/
     └── config.toml             # → ~/.config/worktrunk/config.toml
 ```
 
-The two entry points differ only in how packages arrive. Everything after that lives in `lib/common.sh`, which runs `harness bootstrap` for the config links and the harness install, so the link set, the harness call, and the Neovim bootstrap have exactly one definition.
+The two entry points differ only in how packages arrive. Everything after that lives in `lib/common.sh`, which links the tracked configs and then bootstraps Neovim, so the link set and the Neovim bootstrap have exactly one definition.
 
-`lib/python.sh` is the exception to that split: `harness install` sources it too. The platform scripts install the uv-managed interpreters and the harness asserts them, and this is what keeps the version list from being declared twice.
-
-## Harness AI layout
-
-```
-harness/
-├── POLICY.md                   # one vendor-neutral global policy
-├── README.md                   # maintenance and update procedure
-├── statusline/                 # one file per provider, named after it
-│   └── claude.sh               # → ~/.claude/statusline.sh; the renderer Claude Code runs
-├── clients/                    # the client settings the harness owns, reconciled not symlinked
-│   ├── claude.json             # tracked keys harness install merges into ~/.claude/settings.json
-│   ├── assignments.json        # every role's definition plus per-client model and effort
-│   └── agents.py               # renders the assigned roles into linked, untracked client agents
-├── roles/                      # canonical roles no skill owns: the executor
-├── aliases.sh                  # yolo-mode launchers, sourced from ~/.zshrc
-├── commands/                   # canonical workflows, invoked as /name
-├── skills/
-│   ├── <locked>/               # pristine skills.sh-managed upstream bodies
-│   ├── setup-harness/          # config + GitHub lifecycle templates; local markdown copies none
-│   ├── grilling/               # the one interview protocol, interactive and self-grill
-│   ├── grill-with-docs/        # that interview plus domain-modeling, for decisions that must persist
-│   ├── local-tracker/          # tracker operations when the tracker is committed files
-│   ├── adversarial-review|evidence/  # review and evidence protocols the delivery commands load; roles/ holds the canonical reviewers and refuter
-│   └── workflow-checkpoint/    # one branch-scoped Engram checkpoint protocol, canonical in the skill
-├── bench/                      # cohort config and the manual for the `harness bench` session-population comparison
-└── tests/                      # runnable regression checks, run with python3 -m unittest discover
-```
-
-Nothing inside a locked directory is editable: an edit there is clobbered by the next `skills update`, with the lockfile rewritten to record the loss as correct.
-
-Global mutable client configs are reconciled during installation but are not tracked wholesale: `harness/clients/` declares the keys the harness owns, and every other key in `~/.claude/settings.json` belongs to the machine and to the tools that write there. The harness writes last, after `engram setup`, so a tracked key wins over whatever else wrote it: an in-session `/model` or `/config` change is reverted by the next install, which is what tracking a preference means.
-
-Per-project lifecycle configuration lives under `docs/agents/` only after `setup-harness` is explicitly invoked in that project, and what it writes there is that project's configuration, not a template. The templates `setup-harness` copies into any project stay in `harness/skills/setup-harness/`. This repository is configured for GitHub mode, so its own copy is checked in under `docs/agents/` alongside the lifecycle workflow and reconcile script in `.github/`.
-
-In local markdown mode `setup-harness` configures no tracker service, so specs and tickets are committed files under the configured `spec_home`, `docs/specs` by default, one directory per feature holding `spec.md` beside `issues/<NN>-<slug>.md`. That is the point of the mode: the contract is versioned with the code that satisfies it, which a `.scratch` path outside version control would give up.
+`lib/python.sh` declares the uv-managed interpreter set, which both platform scripts install and the AI harness consumes from its own copy of the same file.
 
 The rest of this document describes the `nvim/` subtree — the Neovim config.
 

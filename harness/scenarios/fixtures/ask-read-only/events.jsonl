@@ -1,2 +1,0 @@
-{"type": "tool_use", "tool": "read", "path": "harness/bench/README.md"}
-{"type": "tool_result", "ok": true}

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Shared bootstrap logic for macos.sh and linux.sh.
 #
-# Sourced, never executed. The two entry points differ only in how packages arrive; everything after that (the config links and the harness through `harness bootstrap`, then the Neovim bootstrap) is the same on both platforms, so it lives here once.
+# Sourced, never executed. The two entry points differ only in how packages arrive; everything after that (the config links, then the Neovim bootstrap) is the same on both platforms, so it lives here once.
 
-# Delete a config that is in the way instead of renaming it to <path>.backup.<timestamp>, and apply the same choice to the harness install. Destructive and unrecoverable.
+# Delete a config that is in the way instead of renaming it to <path>.backup.<timestamp>. Destructive and unrecoverable.
 NO_BACKUP=false
 
 # If set by the entry point, it will clone the repo into $DOTFILES_DIR when run
@@ -38,8 +38,7 @@ usage() {
 Usage: $(basename "$0") [--no-backup]
 
   --no-backup  Delete configs that are in the way instead of renaming them to
-               <path>.backup.<timestamp>, and pass the same choice to the
-               harness install. Destructive and unrecoverable.
+               <path>.backup.<timestamp>. Destructive and unrecoverable.
 EOF
 }
 
@@ -55,7 +54,7 @@ parse_args() {
 }
 
 ensure_repo() {
-    if [[ -d "$SCRIPT_DIR/nvim" && -d "$SCRIPT_DIR/harness" ]]; then
+    if [[ -d "$SCRIPT_DIR/nvim" && -d "$SCRIPT_DIR/ghostty" ]]; then
         return
     fi
 
@@ -71,14 +70,38 @@ ensure_repo() {
     SCRIPT_DIR="$DOTFILES_DIR"
 }
 
-# Hands off to Go once the package step has installed it: harness bootstrap links the tracked configs, builds harness into ~/.local/bin, and runs the harness install.
-bootstrap_harness() {
-    have go || die "Go is required before the harness bootstrap; it comes from the package step."
-    if $NO_BACKUP; then
-        (cd "$SCRIPT_DIR" && go run ./cmd/harness bootstrap --no-backup)
-    else
-        (cd "$SCRIPT_DIR" && go run ./cmd/harness bootstrap)
+# Symlinks one tracked config into place. A matching link is left alone, another link is replaced, and anything else is renamed to <path>.backup.<timestamp> or deleted under --no-backup.
+link_config() {
+    local source="$1" dest="$2"
+    [[ -e "$source" ]] || die "Missing config source: $source"
+    if [[ -L "$dest" ]]; then
+        if [[ "$(readlink "$dest")" == "$source" ]]; then
+            log "Symlink already in place: $dest -> $source"
+            return
+        fi
+        log "Replacing existing symlink: $dest (was -> $(readlink "$dest"))"
+        rm "$dest"
+    elif [[ -e "$dest" ]]; then
+        if $NO_BACKUP; then
+            log "Removing existing $dest"
+            rm -rf "$dest"
+        else
+            local backup="$dest.backup.$(date +%Y%m%d-%H%M%S)"
+            log "Backing up existing $dest to $backup"
+            mv "$dest" "$backup"
+        fi
     fi
+    mkdir -p "$(dirname "$dest")"
+    log "Linking $source -> $dest"
+    ln -s "$source" "$dest"
+}
+
+link_configs() {
+    link_config "$SCRIPT_DIR/nvim" "$CONFIG_HOME/nvim"
+    link_config "$SCRIPT_DIR/ghostty" "$CONFIG_HOME/ghostty"
+    link_config "$SCRIPT_DIR/git/gitconfig" "$HOME/.gitconfig"
+    link_config "$SCRIPT_DIR/git/ignore" "$CONFIG_HOME/git/ignore"
+    link_config "$SCRIPT_DIR/worktrunk/config.toml" "$CONFIG_HOME/worktrunk/config.toml"
 }
 
 bootstrap_nvim() {
@@ -103,15 +126,16 @@ Configs linked:
   $HOME/.gitconfig                     -> $SCRIPT_DIR/git/gitconfig
   $CONFIG_HOME/git/ignore              -> $SCRIPT_DIR/git/ignore
   $CONFIG_HOME/worktrunk/config.toml   -> $SCRIPT_DIR/worktrunk/config.toml
-  AI harness policy and skills         -> Claude Code and OpenCode
 
 Next steps:
   1. Launch: nvim
   2. Sanity: :checkhealth   ·   :Lazy   ·   :Mason
-  3. Authenticate when needed: claude auth login · gh auth login · OpenCode: /connect,
+  3. Install the AI harness, which lives in its own repository:
+     git clone https://github.com/jvillegasd/harness && cd harness && go run ./cmd/harness bootstrap
+  4. Authenticate when needed: claude auth login · gh auth login · OpenCode: /connect,
      then OpenAI, then ChatGPT Plus/Pro ("Manually enter API Key" bills the API)
-  4. Restart Claude Code and OpenCode.
-  5. Machine-local git settings go in ~/.gitconfig.local, which git/gitconfig includes and this repo never tracks.
+  5. Restart Claude Code and OpenCode.
+  6. Machine-local git settings go in ~/.gitconfig.local, which git/gitconfig includes and this repo never tracks.
 
 EOF
 }
