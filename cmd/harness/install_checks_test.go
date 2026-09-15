@@ -233,6 +233,10 @@ func TestBootstrapLinksConfigsBuildsHarnessAndInstalls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	modcache, err := exec.Command("go", "env", "GOMODCACHE").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
 	base := sandbox(t)
 	seedFull(t, base)
 	home, checkout := filepath.Join(base, "home"), filepath.Join(base, "checkout")
@@ -240,7 +244,7 @@ func TestBootstrapLinksConfigsBuildsHarnessAndInstalls(t *testing.T) {
 	writeMode(t, filepath.Join(home, ".gitconfig"), "[user]\n\tname = mine\n", 0o644)
 	symlink(t, filepath.Join(base, "elsewhere"), filepath.Join(home, ".config", "nvim"))
 
-	ok(t, runHarness(t, base, []string{"GOCACHE=" + strings.TrimSpace(string(cache))}, "bootstrap"), "bootstrap")
+	ok(t, runHarness(t, base, []string{"GOCACHE=" + strings.TrimSpace(string(cache)), "GOMODCACHE=" + strings.TrimSpace(string(modcache))}, "bootstrap"), "bootstrap")
 
 	for dest, source := range map[string]string{".config/nvim": "nvim", ".config/ghostty": "ghostty", ".gitconfig": "git/gitconfig", ".config/git/ignore": "git/ignore", ".config/worktrunk/config.toml": "worktrunk/config.toml"} {
 		if got, want := linkText(filepath.Join(home, dest)), filepath.Join(checkout, source); got != want {
