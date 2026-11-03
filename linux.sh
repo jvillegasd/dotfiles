@@ -89,6 +89,7 @@ main() {
     install_pythons
     link_configs
     bootstrap_nvim
+    install_harness
     summary
     cat <<'EOF'
 Not installed here, unlike on macOS: Ghostty, JetBrainsMono Nerd Font, and

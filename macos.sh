@@ -55,6 +55,7 @@ main() {
     install_pythons
     link_configs
     bootstrap_nvim
+    install_harness
     summary
     cat <<'EOF'
 Ghostty: JetBrainsMono Nerd Font (default) plus the Catppuccin theme

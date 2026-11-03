@@ -132,6 +132,10 @@ cask "font-monocraft"
 cask "ghostty"
 # Web browser
 cask "google-chrome"
+# Orca development environment
+cask "orca"
+# Zed code editor
+cask "zed"
 go "golang.org/x/tools/gopls"
 go "honnef.co/go/tools/cmd/staticcheck"
 uv "pre-commit"
