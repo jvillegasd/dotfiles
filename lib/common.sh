@@ -115,6 +115,17 @@ bootstrap_nvim() {
     nvim --headless "+TSUpdateSync" +qa
 }
 
+install_harness() {
+    local harness_dir="$(dirname "$DOTFILES_DIR")/harness"
+    if [[ ! -d "$harness_dir/.git" ]]; then
+        [[ ! -e "$harness_dir" ]] || die "$harness_dir exists but is not a Git checkout. Move it aside before installing Harness."
+        log "Cloning https://github.com/jvillegasd/harness into $harness_dir"
+        git clone https://github.com/jvillegasd/harness "$harness_dir"
+    fi
+    log "Bootstrapping Harness from $harness_dir"
+    (cd "$harness_dir" && go run ./cmd/harness install)
+}
+
 summary() {
     cat <<EOF
 
@@ -130,12 +141,10 @@ Configs linked:
 Next steps:
   1. Launch: nvim
   2. Sanity: :checkhealth   ·   :Lazy   ·   :Mason
-  3. Install the AI harness, which lives in its own repository:
-     git clone https://github.com/jvillegasd/harness && cd harness && go run ./cmd/harness bootstrap
-  4. Authenticate when needed: claude auth login · gh auth login · OpenCode: /connect,
+  3. Authenticate when needed: claude auth login · gh auth login · OpenCode: /connect,
      then OpenAI, then ChatGPT Plus/Pro ("Manually enter API Key" bills the API)
-  5. Restart Claude Code and OpenCode.
-  6. Machine-local git settings go in ~/.gitconfig.local, which git/gitconfig includes and this repo never tracks.
+  4. Restart Claude Code and OpenCode.
+  5. Machine-local git settings go in ~/.gitconfig.local, which git/gitconfig includes and this repo never tracks.
 
 EOF
 }
