@@ -136,10 +136,6 @@ cask "google-chrome"
 cask "orca"
 # Zed code editor
 cask "zed"
-# Orca development environment
-cask "orca"
-# Zed code editor
-cask "zed"
 go "golang.org/x/tools/gopls"
 go "honnef.co/go/tools/cmd/staticcheck"
 uv "pre-commit"

@@ -102,6 +102,7 @@ link_configs() {
     link_config "$SCRIPT_DIR/git/gitconfig" "$HOME/.gitconfig"
     link_config "$SCRIPT_DIR/git/ignore" "$CONFIG_HOME/git/ignore"
     link_config "$SCRIPT_DIR/worktrunk/config.toml" "$CONFIG_HOME/worktrunk/config.toml"
+    link_config "$SCRIPT_DIR/zed/settings.json" "$CONFIG_HOME/zed/settings.json"
 }
 
 bootstrap_nvim() {

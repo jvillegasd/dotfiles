@@ -15,7 +15,7 @@ Personal dotfiles: **Neovim**, **Ghostty**, **git**, and **Worktrunk**. Neovim i
 
 Each script installs its platform's packages, symlinks the tracked configs, bootstraps Neovim headlessly, and clones and installs Harness. Re-runnable: managed collisions are backed up and matching symlinks are left alone. `--no-backup` deletes what is in the way instead of renaming it, which is unrecoverable.
 
-Both share `lib/common.sh`, which links the tracked configs, bootstraps Neovim, then clones and installs Harness into the sibling `harness` directory. Only the package step differs: `macos.sh` applies `Brewfile` via `brew bundle`, `linux.sh` installs build prerequisites with the distribution's package manager and everything after with Homebrew. Python is not a formula on either: `lib/python.sh` installs the uv-managed interpreter set the AI harness consumes.
+Both share `lib/common.sh`, which links the tracked configs, including Zed settings, bootstraps Neovim, then clones and installs Harness into the sibling `harness` directory. Only the package step differs: `macos.sh` applies `Brewfile` via `brew bundle`, `linux.sh` installs build prerequisites with the distribution's package manager and everything after with Homebrew. Python is not a formula on either: `lib/python.sh` installs the uv-managed interpreter set the AI harness consumes.
 
 Ghostty picks up `ghostty/config` automatically.
 
@@ -56,6 +56,7 @@ nvim/                     # → ~/.config/nvim   (init.lua, lazy-lock.json, lua/
 ghostty/                  # → ~/.config/ghostty
 git/                      # gitconfig → ~/.gitconfig, ignore → ~/.config/git/ignore
 worktrunk/                # config.toml → ~/.config/worktrunk/config.toml
+zed/                      # settings.json → ~/.config/zed/settings.json
 ```
 
 Machine-local git settings go in `~/.gitconfig.local`, which `git/gitconfig` includes and this repo never tracks.

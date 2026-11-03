@@ -20,6 +20,8 @@ git/
     └── ignore                  # → ~/.config/git/ignore
 worktrunk/
     └── config.toml             # → ~/.config/worktrunk/config.toml
+zed/
+    └── settings.json           # → ~/.config/zed/settings.json
 ```
 
 The two entry points differ only in how packages arrive. Everything after that lives in `lib/common.sh`, which links the tracked configs and then bootstraps Neovim, so the link set and the Neovim bootstrap have exactly one definition.
